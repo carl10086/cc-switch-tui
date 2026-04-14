@@ -27,4 +27,7 @@ pub trait Dao {
 
     /// 设置当前选中的实例
     fn set_current_instance(&mut self, id: &str) -> Result<(), AppError>;
+
+    /// 更新实例的 API Key，如果实例不存在则返回错误
+    fn update_instance(&mut self, id: &str, api_key: String) -> Result<(), AppError>;
 }

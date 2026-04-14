@@ -71,4 +71,11 @@ impl Dao for MemoryDaoImpl {
         self.current_instance_id = Some(id.to_string());
         Ok(())
     }
+
+    fn update_instance(&mut self, id: &str, api_key: String) -> Result<(), AppError> {
+        let instance = self.instances.get_mut(id)
+            .ok_or_else(|| AppError::InstanceNotFound(id.to_string()))?;
+        instance.api_key = api_key;
+        Ok(())
+    }
 }

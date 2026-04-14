@@ -100,3 +100,24 @@ fn test_get_template() {
     assert_eq!(t.id, "minimax");
     assert!(dao.get_template("not-exist").is_none());
 }
+
+#[test]
+fn test_update_instance() {
+    let template = create_test_template();
+    let mut dao = MemoryDaoImpl::new(vec![template]);
+    let instance = create_test_instance();
+
+    dao.create_instance(instance).unwrap();
+    dao.update_instance("minimax-m1", "new-key".to_string()).unwrap();
+    let updated = dao.get_instance("minimax-m1").unwrap();
+    assert_eq!(updated.api_key, "new-key");
+}
+
+#[test]
+fn test_update_nonexistent_instance_fails() {
+    let template = create_test_template();
+    let mut dao = MemoryDaoImpl::new(vec![template]);
+
+    let result = dao.update_instance("not-exist", "key".to_string());
+    assert_eq!(result, Err(AppError::InstanceNotFound("not-exist".to_string())));
+}
