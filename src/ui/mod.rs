@@ -8,6 +8,7 @@ use ratatui::Frame;
 
 /// 根据 App 状态分发渲染逻辑
 pub fn draw(frame: &mut Frame, app: &App) {
+    tracing::trace!("render frame, state={:?}", app.state);
     match &app.state {
         AppState::List => list::draw_list(frame, app),
         AppState::CreateProvider
