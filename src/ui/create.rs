@@ -1,0 +1,87 @@
+use crate::app::state::{App, AppState};
+use crate::dao::Dao;
+use ratatui::{
+    layout::Rect,
+    style::{Color, Style},
+    text::{Line, Span},
+    widgets::{Block, Borders, Clear, List, ListItem, Paragraph},
+    Frame,
+};
+
+/// 根据当前 AppState 渲染新建向导的对应页面
+pub fn draw_create(frame: &mut Frame, app: &App) {
+    match &app.state {
+        AppState::CreateProvider => draw_provider_select(frame, app),
+        AppState::CreateModel { .. } => draw_model_select(frame, app),
+        AppState::CreateApiKey { .. } => draw_api_key_input(frame, app),
+        _ => {}
+    }
+}
+
+fn centered_rect(frame: &Frame, width: u16, height: u16) -> Rect {
+    let area = frame.size();
+    Rect {
+        x: area.width.saturating_sub(width) / 2,
+        y: area.height.saturating_sub(height) / 2,
+        width: width.min(area.width),
+        height: height.min(area.height),
+    }
+}
+
+fn draw_provider_select(frame: &mut Frame, app: &App) {
+    let area = centered_rect(frame, 40, 12);
+    frame.render_widget(Clear, area);
+
+    let templates = app.dao.get_templates();
+    let items: Vec<ListItem> = templates.iter().enumerate().map(|(i, t)| {
+        let style = if i == app.provider_index {
+            Style::default().bg(Color::Blue).fg(Color::White)
+        } else {
+            Style::default()
+        };
+        ListItem::new(t.name.clone()).style(style)
+    }).collect();
+
+    let list = List::new(items)
+        .block(Block::default().title("选择 Provider").borders(Borders::ALL));
+    frame.render_widget(list, area);
+}
+
+fn draw_model_select(frame: &mut Frame, app: &App) {
+    let area = centered_rect(frame, 40, 12);
+    frame.render_widget(Clear, area);
+
+    if let Some(template) = app.current_provider() {
+        let items: Vec<ListItem> = template.models.iter().enumerate().map(|(i, m)| {
+            let style = if i == app.model_index {
+                Style::default().bg(Color::Blue).fg(Color::White)
+            } else {
+                Style::default()
+            };
+            ListItem::new(m.name.clone()).style(style)
+        }).collect();
+
+        let list = List::new(items)
+            .block(Block::default().title(format!("选择 Model - {}", template.name)).borders(Borders::ALL));
+        frame.render_widget(list, area);
+    }
+}
+
+fn draw_api_key_input(frame: &mut Frame, app: &App) {
+    let area = centered_rect(frame, 50, 7);
+    frame.render_widget(Clear, area);
+
+    let text = vec![
+        Line::from("请输入 API Key:"),
+        Line::from(""),
+        Line::from(vec![
+            Span::raw("> "),
+            Span::raw(app.api_key_input.value.clone()),
+            Span::styled("_", Style::default().fg(Color::Yellow)),
+        ]),
+    ];
+
+    let paragraph = Paragraph::new(text)
+        .block(Block::default().title("输入 API Key").borders(Borders::ALL));
+    frame.render_widget(paragraph, area);
+}
