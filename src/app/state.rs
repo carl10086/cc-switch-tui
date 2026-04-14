@@ -157,6 +157,7 @@ impl App {
     /// 处理键盘事件
     pub fn on_key(&mut self, key: KeyEvent) {
         self.error_message = None;
+        tracing::debug!("key_event = {:?}", key);
         match &self.state.clone() {
             AppState::List => self.handle_list(key),
             AppState::CreateProvider => self.handle_create_provider(key),
@@ -170,13 +171,18 @@ impl App {
     fn handle_list(&mut self, key: KeyEvent) {
         let instances = self.get_sorted_instances();
         match key.code {
-            KeyCode::Char('q') => self.should_quit = true,
+            KeyCode::Char('q') => {
+                tracing::debug!("state transition: List -> Quit");
+                self.should_quit = true;
+            }
             KeyCode::Char('n') => {
+                tracing::debug!("state transition: List -> CreateProvider");
                 self.state = AppState::CreateProvider;
                 self.provider_index = 0;
             }
             KeyCode::Char('e') => {
                 if let Some(instance) = self.current_instance() {
+                    tracing::debug!("state transition: List -> Edit({})", instance.id);
                     let api_key = instance.api_key.clone();
                     let instance_id = instance.id.clone();
                     self.edit_input = InputState::new(api_key);
@@ -185,6 +191,7 @@ impl App {
             }
             KeyCode::Char('d') => {
                 if let Some(instance) = self.current_instance() {
+                    tracing::debug!("state transition: List -> DeleteConfirm({})", instance.id);
                     self.state = AppState::DeleteConfirm { instance_id: instance.id.clone() };
                 }
             }
@@ -281,7 +288,7 @@ impl App {
         if let AppState::CreateApiKey { template_id, model_id } = self.state.clone() {
             let id = format!("{}-{}", template_id, model_id);
             let instance = ProviderInstance {
-                id,
+                id: id.clone(),
                 template_id,
                 model_id,
                 api_key: self.api_key_input.value.clone(),
@@ -289,6 +296,7 @@ impl App {
             };
             match self.dao.create_instance(instance) {
                 Ok(()) => {
+                    tracing::info!("create instance success: id={}", id);
                     self.state = AppState::List;
                     self.list_index = self.get_sorted_instances().len().saturating_sub(1);
                 }
@@ -311,6 +319,8 @@ impl App {
                 if let AppState::Edit { instance_id } = self.state.clone() {
                     if let Err(e) = self.dao.update_instance(&instance_id, self.edit_input.value.clone()) {
                         self.error_message = Some(e.to_string());
+                    } else {
+                        tracing::info!("update api_key: id={}", instance_id);
                     }
                     self.state = AppState::List;
                 }
@@ -330,6 +340,7 @@ impl App {
                     if let Err(e) = self.dao.delete_instance(&instance_id) {
                         self.error_message = Some(e.to_string());
                     } else {
+                        tracing::info!("delete instance: id={}", instance_id);
                         let instances = self.get_sorted_instances();
                         if self.list_index >= instances.len() && self.list_index > 0 {
                             self.list_index -= 1;
