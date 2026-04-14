@@ -10,6 +10,24 @@ use std::io;
 use std::time::Duration;
 
 fn main() -> io::Result<()> {
+    let log_file = std::fs::OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open("app.log")
+        .expect("无法创建日志文件");
+
+    tracing_subscriber::fmt()
+        .with_writer(move || log_file.try_clone().unwrap())
+        .with_env_filter(
+            tracing_subscriber::EnvFilter::try_from_default_env()
+                .unwrap_or_else(|_| tracing_subscriber::EnvFilter::new("INFO"))
+        )
+        .with_ansi(false)
+        .with_target(true)
+        .init();
+
+    tracing::info!("cc-switch-tui starting");
+
     enable_raw_mode()?;
     let mut stdout = io::stdout();
     crossterm::execute!(stdout, EnterAlternateScreen, EnableMouseCapture)?;
@@ -31,6 +49,7 @@ fn main() -> io::Result<()> {
         eprintln!("Error: {}", e);
     }
 
+    tracing::info!("cc-switch-tui exiting");
     Ok(())
 }
 
