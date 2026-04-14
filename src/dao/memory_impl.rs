@@ -44,7 +44,9 @@ impl Dao for MemoryDaoImpl {
         if self.instances.contains_key(&instance.id) {
             return Err(AppError::InstanceAlreadyExists(instance.id.clone()));
         }
-        self.instances.insert(instance.id.clone(), instance);
+        let id = instance.id.clone();
+        self.instances.insert(id.clone(), instance);
+        tracing::info!("dao create_instance: id={}", id);
         Ok(())
     }
 
@@ -52,6 +54,7 @@ impl Dao for MemoryDaoImpl {
         if self.instances.remove(id).is_none() {
             return Err(AppError::InstanceNotFound(id.to_string()));
         }
+        tracing::info!("dao delete_instance: id={}", id);
         if self.current_instance_id.as_deref() == Some(id) {
             self.current_instance_id = None;
         }
@@ -76,6 +79,7 @@ impl Dao for MemoryDaoImpl {
         let instance = self.instances.get_mut(id)
             .ok_or_else(|| AppError::InstanceNotFound(id.to_string()))?;
         instance.api_key = api_key;
+        tracing::info!("dao update_instance: id={}", id);
         Ok(())
     }
 }
