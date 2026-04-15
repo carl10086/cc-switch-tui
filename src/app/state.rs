@@ -299,6 +299,7 @@ impl<D: Dao> App<D> {
                 model_id,
                 api_key: self.api_key_input.value.clone(),
                 created_at: chrono::Utc::now(),
+                alias: String::new(),
             };
             match self.dao.create_instance(instance) {
                 Ok(()) => {

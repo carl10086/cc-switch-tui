@@ -56,6 +56,7 @@ impl SqliteDaoImpl {
                         Box::new(e),
                     ))?
                     .with_timezone(&chrono::Utc),
+                alias: String::new(),
             })
         })?;
         self.instances.clear();
@@ -158,6 +159,10 @@ impl Dao for SqliteDaoImpl {
         self.refresh_instances()
             .map_err(|e| AppError::Database(e.to_string()))?;
         Ok(())
+    }
+
+    fn set_alias(&mut self, _id: &str, _alias: String) -> Result<(), AppError> {
+        todo!()
     }
 }
 
