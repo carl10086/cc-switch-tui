@@ -3,7 +3,7 @@ use std::collections::HashMap;
 
 /// 注册并返回所有内置的 Provider 模板
 pub fn register_templates() -> Vec<ProviderTemplate> {
-    vec![minimax_template()]
+    vec![minimax_template(), kimi_template()]
 }
 
 /// 构建 minimax Provider 模板
@@ -45,6 +45,26 @@ fn minimax_template() -> ProviderTemplate {
             id: "MiniMax-M2.7-highspeed".to_string(),
             name: "MiniMax M2.7 Highspeed".to_string(),
             env_overrides,
+        }],
+    }
+}
+
+/// 构建 kimi Provider 模板
+fn kimi_template() -> ProviderTemplate {
+    let mut default_env = HashMap::new();
+    default_env.insert(
+        "ANTHROPIC_BASE_URL".to_string(),
+        "https://api.kimi.com/coding/".to_string(),
+    );
+
+    ProviderTemplate {
+        id: "kimi".to_string(),
+        name: "Kimi".to_string(),
+        default_env,
+        models: vec![ModelTemplate {
+            id: "kimi-for-coding".to_string(),
+            name: "Kimi for Coding".to_string(),
+            env_overrides: HashMap::new(),
         }],
     }
 }
