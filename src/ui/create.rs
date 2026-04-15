@@ -15,6 +15,7 @@ pub fn draw_create<D: Dao>(frame: &mut Frame, app: &App<D>) {
         AppState::CreateProvider => draw_provider_select(frame, app),
         AppState::CreateModel { .. } => draw_model_select(frame, app),
         AppState::CreateApiKey { .. } => draw_api_key_input(frame, app),
+        AppState::CreateAlias { .. } => draw_alias_input(frame, app),
         _ => {}
     }
 }
@@ -87,5 +88,25 @@ fn draw_api_key_input<D: Dao>(frame: &mut Frame, app: &App<D>) {
 
     let paragraph = Paragraph::new(text)
         .block(Block::default().title("输入 API Key").borders(Borders::ALL));
+    frame.render_widget(paragraph, area);
+}
+
+fn draw_alias_input<D: Dao>(frame: &mut Frame, app: &App<D>) {
+    let area = centered_rect(frame, 50, 7);
+    frame.render_widget(Clear, area);
+
+    let t = theme::theme();
+    let text = vec![
+        Line::from("请输入别名（必须以 cl- 开头）："),
+        Line::from(""),
+        Line::from(vec![
+            Span::raw("> "),
+            Span::raw(app.edit_input.value.clone()),
+            Span::styled("_", Style::default().fg(t.warning())),
+        ]),
+    ];
+
+    let paragraph = Paragraph::new(text)
+        .block(Block::default().title("输入别名").borders(Borders::ALL));
     frame.render_widget(paragraph, area);
 }

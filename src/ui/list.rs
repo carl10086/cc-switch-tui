@@ -23,7 +23,7 @@ pub fn draw_list<D: Dao>(frame: &mut Frame, app: &App<D>) {
 
     draw_instance_list(frame, content_layout[0], app);
     draw_info_panel(frame, content_layout[1], app);
-    draw_help_bar(frame, main_layout[1]);
+    draw_help_bar(frame, main_layout[1], app);
 
     if let Some(ref msg) = app.error_message {
         draw_error_popup(frame, msg);
@@ -85,6 +85,11 @@ fn draw_info_panel<D: Dao>(frame: &mut Frame, area: ratatui::layout::Rect, app: 
     let t = theme::theme();
     let mut text = vec![];
 
+    let focus_index = match &app.state {
+        crate::app::state::AppState::EditInfoPanel { focus_index, .. } => Some(*focus_index),
+        _ => None,
+    };
+
     if let Some(instance) = app.current_instance() {
         if let Some(template) = app.dao.get_template(&instance.template_id) {
             let model = template.models.iter()
@@ -100,10 +105,37 @@ fn draw_info_panel<D: Dao>(frame: &mut Frame, area: ratatui::layout::Rect, app: 
             text.push(Line::from(format!("ID: {}", instance.id)));
             text.push(Line::from(format!("Provider: {}", template.name)));
             text.push(Line::from(format!("Model: {}", model)));
-            text.push(Line::from(format!(
-                "API Key: {}*******",
-                &instance.api_key.chars().take(3).collect::<String>()
-            )));
+            text.push(Line::from(""));
+
+            // Alias 字段（可编辑）
+            let alias_display = if instance.alias.is_empty() {
+                "(未设置)".to_string()
+            } else {
+                instance.alias.clone()
+            };
+            let alias_style = if focus_index == Some(0) {
+                Style::default().bg(t.selection_bg()).fg(t.selection_fg())
+            } else {
+                Style::default()
+            };
+            text.push(Line::from(vec![
+                Span::raw("Alias: "),
+                Span::styled(alias_display, alias_style),
+            ]));
+
+            // API Key 字段（可编辑）
+            let api_key_masked = format!("{}*******",
+                &instance.api_key.chars().take(3).collect::<String>());
+            let api_style = if focus_index == Some(1) {
+                Style::default().bg(t.selection_bg()).fg(t.selection_fg())
+            } else {
+                Style::default()
+            };
+            text.push(Line::from(vec![
+                Span::raw("API Key: "),
+                Span::styled(api_key_masked, api_style),
+            ]));
+
             text.push(Line::from(""));
             text.push(Line::from(vec![Span::styled(
                 "环境变量",
@@ -138,9 +170,14 @@ fn draw_info_panel<D: Dao>(frame: &mut Frame, area: ratatui::layout::Rect, app: 
     frame.render_widget(paragraph, area);
 }
 
-fn draw_help_bar(frame: &mut Frame, area: ratatui::layout::Rect) {
+fn draw_help_bar<D: Dao>(frame: &mut Frame, area: ratatui::layout::Rect, app: &App<D>) {
     let t = theme::theme();
-    let help = "↑↓:移动  n:新建  e:编辑  d:删除  q:退出";
+    let help = match &app.state {
+        crate::app::state::AppState::EditInfoPanel { .. } => {
+            "↑↓:切换字段  Enter:编辑  Esc:退出编辑"
+        }
+        _ => "↑↓:移动  Enter:激活  n:新建  e:编辑详情  d:删除  q:退出",
+    };
     let paragraph = Paragraph::new(help)
         .style(Style::default().bg(t.muted()).fg(t.selection_fg()));
     frame.render_widget(paragraph, area);

@@ -12,22 +12,18 @@ use ratatui::Frame;
 pub fn draw<D: Dao>(frame: &mut Frame, app: &App<D>) {
     tracing::trace!("render frame, state={:?}", app.state);
     match &app.state {
-        AppState::List => list::draw_list(frame, app),
+        AppState::List | AppState::EditInfoPanel { .. } => list::draw_list(frame, app),
         AppState::CreateProvider
         | AppState::CreateModel { .. }
-        | AppState::CreateApiKey { .. } => {
+        | AppState::CreateApiKey { .. }
+        | AppState::CreateAlias { .. } => {
             list::draw_list(frame, app);
             create::draw_create(frame, app);
         }
         AppState::Edit { .. }
-        | AppState::EditInfoPanel { .. }
         | AppState::EditField { .. } => {
             list::draw_list(frame, app);
             edit::draw_edit(frame, app);
-        }
-        AppState::CreateAlias { .. } => {
-            list::draw_list(frame, app);
-            create::draw_create(frame, app);
         }
         AppState::DeleteConfirm { .. } => {
             list::draw_list(frame, app);
