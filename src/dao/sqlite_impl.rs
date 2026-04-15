@@ -26,10 +26,16 @@ impl SqliteDaoImpl {
                 model_id TEXT NOT NULL,
                 api_key TEXT NOT NULL,
                 created_at TEXT NOT NULL,
+                alias TEXT NOT NULL DEFAULT '',
                 is_current INTEGER NOT NULL DEFAULT 0
             )",
             [],
         )?;
+        // 兼容旧表：如果 alias 列不存在则添加
+        let _ = conn.execute(
+            "ALTER TABLE instances ADD COLUMN alias TEXT NOT NULL DEFAULT ''",
+            [],
+        );
         conn.execute(
             "CREATE UNIQUE INDEX IF NOT EXISTS idx_current ON instances(is_current) WHERE is_current = 1",
             [],
@@ -41,7 +47,7 @@ impl SqliteDaoImpl {
 
     fn refresh_instances(&mut self) -> Result<(), rusqlite::Error> {
         let mut stmt = self.conn.prepare(
-            "SELECT id, template_id, model_id, api_key, created_at FROM instances"
+            "SELECT id, template_id, model_id, api_key, created_at, alias FROM instances"
         )?;
         let rows = stmt.query_map([], |row| {
             Ok(ProviderInstance {
@@ -56,7 +62,7 @@ impl SqliteDaoImpl {
                         Box::new(e),
                     ))?
                     .with_timezone(&chrono::Utc),
-                alias: String::new(),
+                alias: row.get(5)?,
             })
         })?;
         self.instances.clear();
@@ -87,14 +93,15 @@ impl Dao for SqliteDaoImpl {
     fn create_instance(&mut self, instance: ProviderInstance) -> Result<(), AppError> {
         let created_at_str = instance.created_at.to_rfc3339();
         match self.conn.execute(
-            "INSERT INTO instances (id, template_id, model_id, api_key, created_at, is_current)
-             VALUES (?1, ?2, ?3, ?4, ?5, 0)",
+            "INSERT INTO instances (id, template_id, model_id, api_key, created_at, alias, is_current)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, 0)",
             rusqlite::params![
                 &instance.id,
                 &instance.template_id,
                 &instance.model_id,
                 &instance.api_key,
                 created_at_str,
+                &instance.alias,
             ],
         ) {
             Ok(_) => {
@@ -161,8 +168,17 @@ impl Dao for SqliteDaoImpl {
         Ok(())
     }
 
-    fn set_alias(&mut self, _id: &str, _alias: String) -> Result<(), AppError> {
-        todo!()
+    fn set_alias(&mut self, id: &str, alias: String) -> Result<(), AppError> {
+        let changes = self.conn.execute(
+            "UPDATE instances SET alias = ?1 WHERE id = ?2",
+            [alias, id.to_string()],
+        ).map_err(|e| AppError::Database(e.to_string()))?;
+        if changes == 0 {
+            return Err(AppError::InstanceNotFound(id.to_string()));
+        }
+        self.refresh_instances()
+            .map_err(|e| AppError::Database(e.to_string()))?;
+        Ok(())
     }
 }
 
@@ -192,6 +208,7 @@ mod tests {
             model_id: "MiniMax-M2.7-highspeed".to_string(),
             api_key: "test-key".to_string(),
             created_at: chrono::Utc::now(),
+            alias: String::new(),
         };
         dao.create_instance(instance.clone()).unwrap();
         let found = dao.get_instance(&instance.id).unwrap();
@@ -208,6 +225,7 @@ mod tests {
             model_id: "MiniMax-M2.7-highspeed".to_string(),
             api_key: "key".to_string(),
             created_at: chrono::Utc::now(),
+            alias: String::new(),
         };
         dao.create_instance(instance).unwrap();
         dao.conn.execute(
@@ -220,6 +238,23 @@ mod tests {
     }
 
     #[test]
+    fn test_set_alias_updates_alias() {
+        let mut dao = create_test_dao();
+        let instance = ProviderInstance {
+            id: "minimax-MiniMax-M2.7-highspeed".to_string(),
+            template_id: "minimax".to_string(),
+            model_id: "MiniMax-M2.7-highspeed".to_string(),
+            api_key: "key".to_string(),
+            created_at: chrono::Utc::now(),
+            alias: String::new(),
+        };
+        dao.create_instance(instance).unwrap();
+        dao.set_alias("minimax-MiniMax-M2.7-highspeed", "cl-mini".to_string()).unwrap();
+        let found = dao.get_instance("minimax-MiniMax-M2.7-highspeed").unwrap();
+        assert_eq!(found.alias, "cl-mini");
+    }
+
+    #[test]
     fn test_update_instance_changes_api_key() {
         let mut dao = create_test_dao();
         let instance = ProviderInstance {
@@ -228,6 +263,7 @@ mod tests {
             model_id: "MiniMax-M2.7-highspeed".to_string(),
             api_key: "old-key".to_string(),
             created_at: chrono::Utc::now(),
+            alias: String::new(),
         };
         dao.create_instance(instance).unwrap();
         dao.update_instance("minimax-MiniMax-M2.7-highspeed", "new-key".to_string()).unwrap();
@@ -251,6 +287,7 @@ mod tests {
             model_id: "MiniMax-M2.7-highspeed".to_string(),
             api_key: "key".to_string(),
             created_at: chrono::Utc::now(),
+            alias: String::new(),
         };
         dao.create_instance(instance).unwrap();
         dao.delete_instance("minimax-MiniMax-M2.7-highspeed").unwrap();
@@ -273,6 +310,7 @@ mod tests {
             model_id: "MiniMax-M2.7-highspeed".to_string(),
             api_key: "key".to_string(),
             created_at: chrono::Utc::now(),
+            alias: String::new(),
         };
         dao.create_instance(instance).unwrap();
         dao.set_current_instance("minimax-MiniMax-M2.7-highspeed").unwrap();
@@ -296,6 +334,7 @@ mod tests {
             model_id: "MiniMax-M2.7-highspeed".to_string(),
             api_key: "key".to_string(),
             created_at: chrono::Utc::now(),
+            alias: String::new(),
         };
         dao.create_instance(instance).unwrap();
         dao.set_current_instance("minimax-MiniMax-M2.7-highspeed").unwrap();
@@ -313,6 +352,7 @@ mod tests {
             model_id: "MiniMax-M2.7-highspeed".to_string(),
             api_key: "key1".to_string(),
             created_at: chrono::Utc::now(),
+            alias: String::new(),
         };
         let instance2 = ProviderInstance {
             id: "minimax-OtherModel".to_string(),
@@ -320,6 +360,7 @@ mod tests {
             model_id: "OtherModel".to_string(),
             api_key: "key2".to_string(),
             created_at: chrono::Utc::now(),
+            alias: String::new(),
         };
         dao.create_instance(instance1).unwrap();
         dao.create_instance(instance2).unwrap();
@@ -338,6 +379,7 @@ mod tests {
             model_id: "MiniMax-M2.7-highspeed".to_string(),
             api_key: "key".to_string(),
             created_at: chrono::Utc::now(),
+            alias: String::new(),
         };
         dao.create_instance(instance.clone()).unwrap();
         let result = dao.create_instance(instance);

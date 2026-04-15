@@ -24,6 +24,7 @@ fn create_test_instance() -> ProviderInstance {
         model_id: "m1".to_string(),
         api_key: "test-key".to_string(),
         created_at: Utc::now(),
+        alias: String::new(),
     }
 }
 
