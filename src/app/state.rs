@@ -171,6 +171,17 @@ impl<D: Dao> App<D> {
         let provider = self.current_provider()?;
         provider.models.get(self.model_index)
     }
+
+    /// 重新生成 aliases.zsh（静默忽略错误）
+    fn regenerate_aliases(&self) {
+        let home = dirs::home_dir().unwrap_or_else(|| std::path::PathBuf::from("."));
+        let _ = crate::shell::generate_aliases(
+            &home.join(".cc-switch-tui"),
+            &self.dao.list_instances().into_iter().cloned().collect::<Vec<_>>(),
+            &self.dao.get_templates().into_iter().cloned().collect::<Vec<_>>(),
+            self.dao.get_current_instance().map(|i| i.id.as_str()),
+        );
+    }
 }
 
 use crossterm::event::{KeyCode, KeyEvent};
@@ -230,14 +241,7 @@ impl<D: Dao> App<D> {
                         if let Err(e) = self.dao.set_current_instance(&instance_id) {
                             self.error_message = Some(e.to_string());
                         } else {
-                            // 激活后重新生成 aliases.zsh
-                            let home = dirs::home_dir().unwrap_or_else(|| std::path::PathBuf::from("."));
-                            let _ = crate::shell::generate_aliases(
-                                &home.join(".cc-switch-tui"),
-                                &self.dao.list_instances().into_iter().cloned().collect::<Vec<_>>(),
-                                &self.dao.get_templates().into_iter().cloned().collect::<Vec<_>>(),
-                                Some(&instance_id),
-                            );
+                            self.regenerate_aliases();
                             self.error_message = Some(format!("已激活 {}，新终端中 claude 命令将使用该配置", alias));
                         }
                     }
@@ -381,6 +385,7 @@ impl<D: Dao> App<D> {
             match self.dao.create_instance(instance) {
                 Ok(()) => {
                     tracing::info!("create instance success: id={}", id);
+                    self.regenerate_aliases();
                     self.state = AppState::List;
                     self.list_index = self.get_sorted_instances().len().saturating_sub(1);
                 }
@@ -510,6 +515,7 @@ impl<D: Dao> App<D> {
                     };
                     match result {
                         Ok(()) => {
+                            self.regenerate_aliases();
                             self.state = AppState::EditInfoPanel {
                                 instance_id,
                                 focus_index: 0,
@@ -537,6 +543,7 @@ impl<D: Dao> App<D> {
                         self.error_message = Some(e.to_string());
                     } else {
                         tracing::info!("delete instance: id={}", instance_id);
+                        self.regenerate_aliases();
                         let instances = self.get_sorted_instances();
                         if self.list_index >= instances.len() && self.list_index > 0 {
                             self.list_index -= 1;
