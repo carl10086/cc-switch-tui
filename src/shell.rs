@@ -61,10 +61,10 @@ fn format_alias_cmd(name: &str, env: &HashMap<String, String>) -> String {
 fn shell_escape(s: &str) -> String {
     if s.contains('\'') {
         format!("'{}'", s.replace('\'', "'\"'\"'"))
-    } else if s.contains(' ') || s.contains('$') || s.contains('&') || s.contains('|') || s.contains(';') || s.contains('<') || s.contains('>') {
-        format!("'{}'", s)
-    } else {
+    } else if s.chars().all(|c| c.is_ascii_alphanumeric() || "_.:-/".contains(c)) {
         s.to_string()
+    } else {
+        format!("'{}'", s)
     }
 }
 
