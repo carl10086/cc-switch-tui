@@ -326,7 +326,7 @@ impl<D: Dao> App<D> {
                         model_id,
                         api_key,
                     };
-                    self.api_key_input = InputState::new(String::new());
+                    self.edit_input = InputState::new(String::new());
                 }
             }
             KeyCode::Backspace => self.api_key_input.backspace(),
@@ -351,17 +351,17 @@ impl<D: Dao> App<D> {
             KeyCode::Enter => {
                 self.submit_create();
             }
-            KeyCode::Backspace => self.api_key_input.backspace(),
-            KeyCode::Left => self.api_key_input.move_left(),
-            KeyCode::Right => self.api_key_input.move_right(),
-            KeyCode::Char(c) => self.api_key_input.insert_char(c),
+            KeyCode::Backspace => self.edit_input.backspace(),
+            KeyCode::Left => self.edit_input.move_left(),
+            KeyCode::Right => self.edit_input.move_right(),
+            KeyCode::Char(c) => self.edit_input.insert_char(c),
             _ => {}
         }
     }
 
     fn submit_create(&mut self) {
         if let AppState::CreateAlias { template_id, model_id, api_key } = self.state.clone() {
-            let alias = self.api_key_input.value.clone();
+            let alias = self.edit_input.value.clone();
             if let Err(e) = self.validate_alias(&alias) {
                 self.error_message = Some(e.to_string());
                 return;
@@ -479,10 +479,14 @@ impl<D: Dao> App<D> {
     fn handle_edit_field(&mut self, key: KeyEvent) {
         match key.code {
             KeyCode::Esc => {
-                if let AppState::EditField { instance_id, .. } = self.state.clone() {
+                if let AppState::EditField { instance_id, field } = self.state.clone() {
+                    let focus_index = match field {
+                        EditField::Alias => 0,
+                        EditField::ApiKey => 1,
+                    };
                     self.state = AppState::EditInfoPanel {
                         instance_id,
-                        focus_index: 0,
+                        focus_index,
                     };
                 }
             }
