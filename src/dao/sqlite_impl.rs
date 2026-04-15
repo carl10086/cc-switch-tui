@@ -110,7 +110,13 @@ impl Dao for SqliteDaoImpl {
     }
 
     fn delete_instance(&mut self, _id: &str) -> Result<(), AppError> { Ok(()) }
-    fn get_current_instance(&self) -> Option<&ProviderInstance> { None }
+    fn get_current_instance(&self) -> Option<&ProviderInstance> {
+        let mut stmt = self.conn.prepare(
+            "SELECT id FROM instances WHERE is_current = 1"
+        ).ok()?;
+        let id: String = stmt.query_row([], |row| row.get(0)).ok()?;
+        self.instances.iter().find(|i| i.id == id)
+    }
     fn set_current_instance(&mut self, _id: &str) -> Result<(), AppError> { Ok(()) }
     fn update_instance(&mut self, _id: &str, _api_key: String) -> Result<(), AppError> { Ok(()) }
 }
@@ -146,5 +152,25 @@ mod tests {
         let found = dao.get_instance(&instance.id).unwrap();
         assert_eq!(found.id, instance.id);
         assert_eq!(found.api_key, instance.api_key);
+    }
+
+    #[test]
+    fn test_get_current_instance() {
+        let mut dao = create_test_dao();
+        let instance = ProviderInstance {
+            id: "minimax-MiniMax-M2.7-highspeed".to_string(),
+            template_id: "minimax".to_string(),
+            model_id: "MiniMax-M2.7-highspeed".to_string(),
+            api_key: "key".to_string(),
+            created_at: chrono::Utc::now(),
+        };
+        dao.create_instance(instance).unwrap();
+        dao.conn.execute(
+            "UPDATE instances SET is_current = 1 WHERE id = ?1",
+            ["minimax-MiniMax-M2.7-highspeed"],
+        ).unwrap();
+        dao.refresh_instances().unwrap();
+        let current = dao.get_current_instance().unwrap();
+        assert_eq!(current.id, "minimax-MiniMax-M2.7-highspeed");
     }
 }
