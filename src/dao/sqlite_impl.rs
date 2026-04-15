@@ -97,7 +97,8 @@ impl Dao for SqliteDaoImpl {
             ],
         ) {
             Ok(_) => {
-                self.refresh_instances().expect("Failed to refresh instances after create");
+                self.refresh_instances()
+                    .map_err(|e| AppError::Database(e.to_string()))?;
                 Ok(())
             }
             Err(rusqlite::Error::SqliteFailure(ref err, _))
@@ -105,7 +106,7 @@ impl Dao for SqliteDaoImpl {
             {
                 Err(AppError::InstanceAlreadyExists(instance.id.clone()))
             }
-            Err(e) => panic!("Database error in create_instance: {}", e),
+            Err(e) => Err(AppError::Database(e.to_string())),
         }
     }
 

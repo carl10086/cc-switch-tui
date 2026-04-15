@@ -14,4 +14,7 @@ pub enum AppError {
 
     #[error("模型不存在: {0}")]
     ModelNotFound(String),
+
+    #[error("Database error: {0}")]
+    Database(String),
 }
