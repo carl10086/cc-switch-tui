@@ -1,8 +1,9 @@
 use crate::app::state::{App, AppState};
 use crate::dao::Dao;
+use crate::ui::theme;
 use ratatui::{
     layout::Rect,
-    style::{Color, Style},
+    style::Style,
     text::{Line, Span},
     widgets::{Block, Borders, Clear, List, ListItem, Paragraph},
     Frame,
@@ -32,14 +33,15 @@ fn draw_provider_select(frame: &mut Frame, app: &App) {
     let area = centered_rect(frame, 40, 12);
     frame.render_widget(Clear, area);
 
+    let t = theme::theme();
     let templates = app.dao.get_templates();
-    let items: Vec<ListItem> = templates.iter().enumerate().map(|(i, t)| {
+    let items: Vec<ListItem> = templates.iter().enumerate().map(|(i, template)| {
         let style = if i == app.provider_index {
-            Style::default().bg(Color::Blue).fg(Color::White)
+            Style::default().bg(t.selection_bg()).fg(t.selection_fg())
         } else {
             Style::default()
         };
-        ListItem::new(t.name.clone()).style(style)
+        ListItem::new(template.name.clone()).style(style)
     }).collect();
 
     let list = List::new(items)
@@ -52,9 +54,10 @@ fn draw_model_select(frame: &mut Frame, app: &App) {
     frame.render_widget(Clear, area);
 
     if let Some(template) = app.current_provider() {
+        let t = theme::theme();
         let items: Vec<ListItem> = template.models.iter().enumerate().map(|(i, m)| {
             let style = if i == app.model_index {
-                Style::default().bg(Color::Blue).fg(Color::White)
+                Style::default().bg(t.selection_bg()).fg(t.selection_fg())
             } else {
                 Style::default()
             };
@@ -71,13 +74,14 @@ fn draw_api_key_input(frame: &mut Frame, app: &App) {
     let area = centered_rect(frame, 50, 7);
     frame.render_widget(Clear, area);
 
+    let t = theme::theme();
     let text = vec![
         Line::from("请输入 API Key:"),
         Line::from(""),
         Line::from(vec![
             Span::raw("> "),
             Span::raw(app.api_key_input.value.clone()),
-            Span::styled("_", Style::default().fg(Color::Yellow)),
+            Span::styled("_", Style::default().fg(t.warning())),
         ]),
     ];
 

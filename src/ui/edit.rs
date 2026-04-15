@@ -1,7 +1,9 @@
 use crate::app::state::App;
+use crate::ui::theme;
 use ratatui::{
     layout::Rect,
-    text::Line,
+    style::Style,
+    text::{Line, Span},
     widgets::{Block, Borders, Clear, Paragraph},
     Frame,
 };
@@ -17,13 +19,15 @@ pub fn draw_edit(frame: &mut Frame, app: &App) {
     };
     frame.render_widget(Clear, popup_area);
 
+    let t = theme::theme();
     let text = vec![
         Line::from("修改 API Key:"),
         Line::from(""),
-        Line::from(format!("> {}{}",
-            app.edit_input.value,
-            "_"
-        )),
+        Line::from(vec![
+            Span::raw("> "),
+            Span::raw(app.edit_input.value.clone()),
+            Span::styled("_", Style::default().fg(t.warning())),
+        ]),
     ];
 
     let paragraph = Paragraph::new(text)

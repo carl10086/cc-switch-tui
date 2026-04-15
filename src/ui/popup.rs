@@ -1,7 +1,8 @@
 use crate::app::state::App;
+use crate::ui::theme;
 use ratatui::{
     layout::Rect,
-    style::{Color, Style},
+    style::Style,
     text::Line,
     widgets::{Block, Borders, Clear, Paragraph},
     Frame,
@@ -23,6 +24,7 @@ pub fn draw_delete_confirm(frame: &mut Frame, app: &App) {
         _ => return,
     };
 
+    let t = theme::theme();
     let text = vec![
         Line::from(format!("确定删除 {} 的实例吗？", instance_id)),
         Line::from(""),
@@ -31,6 +33,6 @@ pub fn draw_delete_confirm(frame: &mut Frame, app: &App) {
 
     let paragraph = Paragraph::new(text)
         .block(Block::default().title("确认删除").borders(Borders::ALL))
-        .style(Style::default().fg(Color::Red));
+        .style(Style::default().fg(t.error()));
     frame.render_widget(paragraph, popup_area);
 }

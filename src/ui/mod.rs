@@ -2,6 +2,7 @@ pub mod create;
 pub mod edit;
 pub mod list;
 pub mod popup;
+pub mod theme;
 
 use crate::app::state::{App, AppState};
 use ratatui::Frame;

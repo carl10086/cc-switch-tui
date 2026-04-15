@@ -1,8 +1,9 @@
 use crate::app::state::App;
 use crate::dao::Dao;
+use crate::ui::theme;
 use ratatui::{
     layout::{Constraint, Direction, Layout},
-    style::{Color, Style},
+    style::Style,
     text::{Line, Span},
     widgets::{Block, Borders, Clear, List, ListItem, Paragraph, Wrap},
     Frame,
@@ -30,6 +31,7 @@ pub fn draw_list(frame: &mut Frame, app: &App) {
 }
 
 fn draw_instance_list(frame: &mut Frame, area: ratatui::layout::Rect, app: &App) {
+    let t = theme::theme();
     let templates = app.dao.get_templates();
     let mut items: Vec<ListItem> = Vec::new();
     let mut flat_index = 0;
@@ -49,7 +51,7 @@ fn draw_instance_list(frame: &mut Frame, area: ratatui::layout::Rect, app: &App)
         items.push(ListItem::new(Line::from(vec![
             Span::styled(
                 format!("[{}]", template.name),
-                Style::default().fg(Color::Cyan).add_modifier(ratatui::style::Modifier::BOLD),
+                Style::default().fg(t.heading()).add_modifier(ratatui::style::Modifier::BOLD),
             ),
         ])));
 
@@ -61,7 +63,7 @@ fn draw_instance_list(frame: &mut Frame, area: ratatui::layout::Rect, app: &App)
 
             let is_selected = flat_index == app.list_index;
             let style = if is_selected {
-                Style::default().bg(Color::Blue).fg(Color::White)
+                Style::default().bg(t.selection_bg()).fg(t.selection_fg())
             } else {
                 Style::default()
             };
@@ -80,6 +82,7 @@ fn draw_instance_list(frame: &mut Frame, area: ratatui::layout::Rect, app: &App)
 }
 
 fn draw_info_panel(frame: &mut Frame, area: ratatui::layout::Rect, app: &App) {
+    let t = theme::theme();
     let mut text = vec![];
 
     if let Some(instance) = app.current_instance() {
@@ -91,7 +94,7 @@ fn draw_info_panel(frame: &mut Frame, area: ratatui::layout::Rect, app: &App) {
 
             text.push(Line::from(vec![Span::styled(
                 "实例详情",
-                Style::default().fg(Color::Cyan).add_modifier(ratatui::style::Modifier::BOLD),
+                Style::default().fg(t.heading()).add_modifier(ratatui::style::Modifier::BOLD),
             )]));
             text.push(Line::from(""));
             text.push(Line::from(format!("ID: {}", instance.id)));
@@ -104,7 +107,7 @@ fn draw_info_panel(frame: &mut Frame, area: ratatui::layout::Rect, app: &App) {
             text.push(Line::from(""));
             text.push(Line::from(vec![Span::styled(
                 "环境变量",
-                Style::default().fg(Color::Cyan).add_modifier(ratatui::style::Modifier::BOLD),
+                Style::default().fg(t.heading()).add_modifier(ratatui::style::Modifier::BOLD),
             )]));
             text.push(Line::from(""));
 
@@ -117,7 +120,12 @@ fn draw_info_panel(frame: &mut Frame, area: ratatui::layout::Rect, app: &App) {
             let mut keys: Vec<_> = env.keys().collect();
             keys.sort();
             for key in keys {
-                text.push(Line::from(format!("{}={}", key, env.get(key).unwrap())));
+                let value = if key == "ANTHROPIC_AUTH_TOKEN" {
+                    format!("{}*******", &env.get(key).unwrap().chars().take(3).collect::<String>())
+                } else {
+                    env.get(key).unwrap().clone()
+                };
+                text.push(Line::from(format!("{}={}", key, value)));
             }
         }
     } else {
@@ -131,13 +139,15 @@ fn draw_info_panel(frame: &mut Frame, area: ratatui::layout::Rect, app: &App) {
 }
 
 fn draw_help_bar(frame: &mut Frame, area: ratatui::layout::Rect) {
+    let t = theme::theme();
     let help = "↑↓:移动  n:新建  e:编辑  d:删除  q:退出";
     let paragraph = Paragraph::new(help)
-        .style(Style::default().bg(Color::DarkGray).fg(Color::White));
+        .style(Style::default().bg(t.muted()).fg(t.selection_fg()));
     frame.render_widget(paragraph, area);
 }
 
 fn draw_error_popup(frame: &mut Frame, msg: &str) {
+    let t = theme::theme();
     let area = frame.size();
     let popup_area = ratatui::layout::Rect {
         x: area.width / 4,
@@ -148,6 +158,6 @@ fn draw_error_popup(frame: &mut Frame, msg: &str) {
     frame.render_widget(Clear, popup_area);
     let paragraph = Paragraph::new(msg)
         .block(Block::default().title("错误").borders(Borders::ALL))
-        .style(Style::default().fg(Color::Red));
+        .style(Style::default().fg(t.error()));
     frame.render_widget(paragraph, popup_area);
 }
