@@ -14,10 +14,23 @@ pub enum AppState {
     CreateModel { template_id: String },
     /// 新建向导：输入 API Key
     CreateApiKey { template_id: String, model_id: String },
-    /// 编辑页面
+    /// 新建向导最后一页：输入别名
+    CreateAlias { template_id: String, model_id: String, api_key: String },
+    /// 原有 Edit 保留给 API Key 弹窗（兼容现有 draw_edit）
     Edit { instance_id: String },
+    /// 编辑右侧信息面板
+    EditInfoPanel { instance_id: String, focus_index: usize },
+    /// 编辑具体字段弹窗
+    EditField { instance_id: String, field: EditField },
     /// 删除确认对话框
     DeleteConfirm { instance_id: String },
+}
+
+/// 编辑字段类型
+#[derive(Debug, Clone, PartialEq)]
+pub enum EditField {
+    Alias,
+    ApiKey,
 }
 
 /// 输入框状态，用于 API Key 输入和编辑
@@ -169,7 +182,10 @@ impl<D: Dao> App<D> {
             AppState::CreateProvider => self.handle_create_provider(key),
             AppState::CreateModel { .. } => self.handle_create_model(key),
             AppState::CreateApiKey { .. } => self.handle_create_api_key(key),
+            AppState::CreateAlias { .. } => self.handle_create_alias(key),
             AppState::Edit { .. } => self.handle_edit(key),
+            AppState::EditInfoPanel { .. } => self.handle_edit_info_panel(key),
+            AppState::EditField { .. } => self.handle_edit_field(key),
             AppState::DeleteConfirm { .. } => self.handle_delete_confirm(key),
         }
     }
@@ -188,17 +204,40 @@ impl<D: Dao> App<D> {
             }
             KeyCode::Char('e') => {
                 if let Some(instance) = self.current_instance() {
-                    tracing::debug!("state transition: List -> Edit({})", instance.id);
-                    let api_key = instance.api_key.clone();
-                    let instance_id = instance.id.clone();
-                    self.edit_input = InputState::new(api_key);
-                    self.state = AppState::Edit { instance_id };
+                    tracing::debug!("state transition: List -> EditInfoPanel({})", instance.id);
+                    self.state = AppState::EditInfoPanel {
+                        instance_id: instance.id.clone(),
+                        focus_index: 0,
+                    };
                 }
             }
             KeyCode::Char('d') => {
                 if let Some(instance) = self.current_instance() {
                     tracing::debug!("state transition: List -> DeleteConfirm({})", instance.id);
                     self.state = AppState::DeleteConfirm { instance_id: instance.id.clone() };
+                }
+            }
+            KeyCode::Enter => {
+                if let Some(instance) = self.current_instance() {
+                    let instance_id = instance.id.clone();
+                    let alias = instance.alias.clone();
+                    if alias.is_empty() {
+                        self.error_message = Some("请先按 e 进入编辑模式设置别名".to_string());
+                    } else {
+                        if let Err(e) = self.dao.set_current_instance(&instance_id) {
+                            self.error_message = Some(e.to_string());
+                        } else {
+                            // 激活后重新生成 aliases.zsh
+                            let home = dirs::home_dir().unwrap_or_else(|| std::path::PathBuf::from("."));
+                            let _ = crate::shell::generate_aliases(
+                                &home.join(".cc-switch-tui"),
+                                &self.dao.list_instances().into_iter().cloned().collect::<Vec<_>>(),
+                                &self.dao.get_templates().into_iter().cloned().collect::<Vec<_>>(),
+                                Some(&instance_id),
+                            );
+                            self.error_message = Some(format!("已激活 {}，新终端中 claude 命令将使用该配置", alias));
+                        }
+                    }
                 }
             }
             KeyCode::Up => {
@@ -280,6 +319,36 @@ impl<D: Dao> App<D> {
                 }
             }
             KeyCode::Enter => {
+                if let AppState::CreateApiKey { template_id, model_id } = self.state.clone() {
+                    let api_key = self.api_key_input.value.clone();
+                    self.state = AppState::CreateAlias {
+                        template_id,
+                        model_id,
+                        api_key,
+                    };
+                    self.api_key_input = InputState::new(String::new());
+                }
+            }
+            KeyCode::Backspace => self.api_key_input.backspace(),
+            KeyCode::Left => self.api_key_input.move_left(),
+            KeyCode::Right => self.api_key_input.move_right(),
+            KeyCode::Char(c) => self.api_key_input.insert_char(c),
+            _ => {}
+        }
+    }
+
+    fn handle_create_alias(&mut self, key: KeyEvent) {
+        match key.code {
+            KeyCode::Esc => {
+                if let AppState::CreateAlias { template_id, model_id, api_key } = self.state.clone() {
+                    self.state = AppState::CreateApiKey {
+                        template_id,
+                        model_id,
+                    };
+                    self.api_key_input = InputState::new(api_key);
+                }
+            }
+            KeyCode::Enter => {
                 self.submit_create();
             }
             KeyCode::Backspace => self.api_key_input.backspace(),
@@ -291,15 +360,20 @@ impl<D: Dao> App<D> {
     }
 
     fn submit_create(&mut self) {
-        if let AppState::CreateApiKey { template_id, model_id } = self.state.clone() {
+        if let AppState::CreateAlias { template_id, model_id, api_key } = self.state.clone() {
+            let alias = self.api_key_input.value.clone();
+            if let Err(e) = self.validate_alias(&alias) {
+                self.error_message = Some(e.to_string());
+                return;
+            }
             let id = format!("{}-{}", template_id, model_id);
             let instance = ProviderInstance {
                 id: id.clone(),
                 template_id,
                 model_id,
-                api_key: self.api_key_input.value.clone(),
+                api_key,
                 created_at: chrono::Utc::now(),
-                alias: String::new(),
+                alias,
             };
             match self.dao.create_instance(instance) {
                 Ok(()) => {
@@ -319,6 +393,23 @@ impl<D: Dao> App<D> {
         }
     }
 
+    fn validate_alias(&self, alias: &str) -> Result<(), AppError> {
+        if alias.is_empty() {
+            return Err(AppError::InvalidAlias("alias cannot be empty".to_string()));
+        }
+        if !alias.starts_with("cl-") {
+            return Err(AppError::InvalidAlias("alias must start with 'cl-'".to_string()));
+        }
+        if !alias.chars().all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_') {
+            return Err(AppError::InvalidAlias("alias contains invalid characters".to_string()));
+        }
+        let instances = self.dao.list_instances();
+        if instances.iter().any(|i| i.alias == alias) {
+            return Err(AppError::AliasAlreadyExists(alias.to_string()));
+        }
+        Ok(())
+    }
+
     fn handle_edit(&mut self, key: KeyEvent) {
         match key.code {
             KeyCode::Esc => self.state = AppState::List,
@@ -330,6 +421,97 @@ impl<D: Dao> App<D> {
                         tracing::info!("update api_key: id={}", instance_id);
                     }
                     self.state = AppState::List;
+                }
+            }
+            KeyCode::Backspace => self.edit_input.backspace(),
+            KeyCode::Left => self.edit_input.move_left(),
+            KeyCode::Right => self.edit_input.move_right(),
+            KeyCode::Char(c) => self.edit_input.insert_char(c),
+            _ => {}
+        }
+    }
+
+    fn handle_edit_info_panel(&mut self, key: KeyEvent) {
+        let max_index = 1; // alias=0, api_key=1
+        match key.code {
+            KeyCode::Esc => self.state = AppState::List,
+            KeyCode::Up => {
+                if let AppState::EditInfoPanel { instance_id, focus_index } = self.state.clone() {
+                    if focus_index > 0 {
+                        self.state = AppState::EditInfoPanel {
+                            instance_id,
+                            focus_index: focus_index - 1,
+                        };
+                    }
+                }
+            }
+            KeyCode::Down => {
+                if let AppState::EditInfoPanel { instance_id, focus_index } = self.state.clone() {
+                    if focus_index < max_index {
+                        self.state = AppState::EditInfoPanel {
+                            instance_id,
+                            focus_index: focus_index + 1,
+                        };
+                    }
+                }
+            }
+            KeyCode::Enter => {
+                if let AppState::EditInfoPanel { instance_id, focus_index } = self.state.clone() {
+                    let field = match focus_index {
+                        0 => EditField::Alias,
+                        1 => EditField::ApiKey,
+                        _ => return,
+                    };
+                    if let Some(instance) = self.dao.get_instance(&instance_id) {
+                        let value = match field {
+                            EditField::Alias => instance.alias.clone(),
+                            EditField::ApiKey => instance.api_key.clone(),
+                        };
+                        self.edit_input = InputState::new(value);
+                    }
+                    self.state = AppState::EditField { instance_id, field };
+                }
+            }
+            _ => {}
+        }
+    }
+
+    fn handle_edit_field(&mut self, key: KeyEvent) {
+        match key.code {
+            KeyCode::Esc => {
+                if let AppState::EditField { instance_id, .. } = self.state.clone() {
+                    self.state = AppState::EditInfoPanel {
+                        instance_id,
+                        focus_index: 0,
+                    };
+                }
+            }
+            KeyCode::Enter => {
+                if let AppState::EditField { instance_id, field } = self.state.clone() {
+                    let value = self.edit_input.value.clone();
+                    let result = match field {
+                        EditField::Alias => {
+                            if let Err(e) = self.validate_alias(&value) {
+                                Err(e)
+                            } else {
+                                self.dao.set_alias(&instance_id, value)
+                            }
+                        }
+                        EditField::ApiKey => {
+                            self.dao.update_instance(&instance_id, value)
+                        }
+                    };
+                    match result {
+                        Ok(()) => {
+                            self.state = AppState::EditInfoPanel {
+                                instance_id,
+                                focus_index: 0,
+                            };
+                        }
+                        Err(e) => {
+                            self.error_message = Some(e.to_string());
+                        }
+                    }
                 }
             }
             KeyCode::Backspace => self.edit_input.backspace(),

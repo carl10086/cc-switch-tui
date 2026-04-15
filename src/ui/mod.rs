@@ -19,9 +19,15 @@ pub fn draw<D: Dao>(frame: &mut Frame, app: &App<D>) {
             list::draw_list(frame, app);
             create::draw_create(frame, app);
         }
-        AppState::Edit { .. } => {
+        AppState::Edit { .. }
+        | AppState::EditInfoPanel { .. }
+        | AppState::EditField { .. } => {
             list::draw_list(frame, app);
             edit::draw_edit(frame, app);
+        }
+        AppState::CreateAlias { .. } => {
+            list::draw_list(frame, app);
+            create::draw_create(frame, app);
         }
         AppState::DeleteConfirm { .. } => {
             list::draw_list(frame, app);
