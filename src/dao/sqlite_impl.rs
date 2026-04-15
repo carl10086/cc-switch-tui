@@ -143,6 +143,8 @@ impl Dao for SqliteDaoImpl {
         }
         tx.commit()
             .map_err(|e| AppError::Database(e.to_string()))?;
+        self.refresh_instances()
+            .map_err(|e| AppError::Database(e.to_string()))?;
         Ok(())
     }
     fn update_instance(&mut self, id: &str, api_key: String) -> Result<(), AppError> {
