@@ -10,7 +10,7 @@ use ratatui::{
 };
 
 /// 根据当前 AppState 渲染新建向导的对应页面
-pub fn draw_create(frame: &mut Frame, app: &App) {
+pub fn draw_create<D: Dao>(frame: &mut Frame, app: &App<D>) {
     match &app.state {
         AppState::CreateProvider => draw_provider_select(frame, app),
         AppState::CreateModel { .. } => draw_model_select(frame, app),
@@ -29,7 +29,7 @@ fn centered_rect(frame: &Frame, width: u16, height: u16) -> Rect {
     }
 }
 
-fn draw_provider_select(frame: &mut Frame, app: &App) {
+fn draw_provider_select<D: Dao>(frame: &mut Frame, app: &App<D>) {
     let area = centered_rect(frame, 40, 12);
     frame.render_widget(Clear, area);
 
@@ -49,7 +49,7 @@ fn draw_provider_select(frame: &mut Frame, app: &App) {
     frame.render_widget(list, area);
 }
 
-fn draw_model_select(frame: &mut Frame, app: &App) {
+fn draw_model_select<D: Dao>(frame: &mut Frame, app: &App<D>) {
     let area = centered_rect(frame, 40, 12);
     frame.render_widget(Clear, area);
 
@@ -70,7 +70,7 @@ fn draw_model_select(frame: &mut Frame, app: &App) {
     }
 }
 
-fn draw_api_key_input(frame: &mut Frame, app: &App) {
+fn draw_api_key_input<D: Dao>(frame: &mut Frame, app: &App<D>) {
     let area = centered_rect(frame, 50, 7);
     frame.render_widget(Clear, area);
 

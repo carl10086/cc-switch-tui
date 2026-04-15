@@ -1,4 +1,5 @@
 use crate::app::state::App;
+use crate::dao::Dao;
 use crate::ui::theme;
 use ratatui::{
     layout::Rect,
@@ -9,7 +10,7 @@ use ratatui::{
 };
 
 /// 渲染编辑 API Key 的弹窗
-pub fn draw_edit(frame: &mut Frame, app: &App) {
+pub fn draw_edit<D: Dao>(frame: &mut Frame, app: &App<D>) {
     let area = frame.size();
     let popup_area = Rect {
         x: area.width / 4,

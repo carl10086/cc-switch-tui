@@ -1,4 +1,5 @@
 use cc_switch_tui::app::state::App;
+use cc_switch_tui::dao::MemoryDaoImpl;
 use cc_switch_tui::ui;
 use crossterm::{
     event::{self, DisableMouseCapture, EnableMouseCapture, Event},
@@ -55,7 +56,7 @@ fn main() -> io::Result<()> {
 
 fn run_app<B: ratatui::backend::Backend>(
     terminal: &mut Terminal<B>,
-    app: &mut App,
+    app: &mut App<MemoryDaoImpl>,
 ) -> io::Result<()> {
     let tick_rate = Duration::from_millis(100);
 

@@ -1,4 +1,5 @@
 use crate::app::state::App;
+use crate::dao::Dao;
 use crate::ui::theme;
 use ratatui::{
     layout::Rect,
@@ -9,7 +10,7 @@ use ratatui::{
 };
 
 /// 渲染删除确认对话框
-pub fn draw_delete_confirm(frame: &mut Frame, app: &App) {
+pub fn draw_delete_confirm<D: Dao>(frame: &mut Frame, app: &App<D>) {
     let area = frame.size();
     let popup_area = Rect {
         x: area.width / 4,

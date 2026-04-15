@@ -1,5 +1,7 @@
 pub mod memory_impl;
 
+pub use self::memory_impl::MemoryDaoImpl;
+
 use crate::domain::{AppError, ProviderInstance, ProviderTemplate};
 
 /// 数据访问对象接口，抽象 provider 配置和实例的存储

@@ -10,7 +10,7 @@ use ratatui::{
 };
 
 /// 渲染主界面：左侧实例列表 + 右侧信息面板 + 底部帮助栏
-pub fn draw_list(frame: &mut Frame, app: &App) {
+pub fn draw_list<D: Dao>(frame: &mut Frame, app: &App<D>) {
     let main_layout = Layout::default()
         .direction(Direction::Vertical)
         .constraints([Constraint::Min(0), Constraint::Length(1)])
@@ -30,7 +30,7 @@ pub fn draw_list(frame: &mut Frame, app: &App) {
     }
 }
 
-fn draw_instance_list(frame: &mut Frame, area: ratatui::layout::Rect, app: &App) {
+fn draw_instance_list<D: Dao>(frame: &mut Frame, area: ratatui::layout::Rect, app: &App<D>) {
     let t = theme::theme();
     let templates = app.dao.get_templates();
     let mut items: Vec<ListItem> = Vec::new();
@@ -81,7 +81,7 @@ fn draw_instance_list(frame: &mut Frame, area: ratatui::layout::Rect, app: &App)
     frame.render_widget(list, area);
 }
 
-fn draw_info_panel(frame: &mut Frame, area: ratatui::layout::Rect, app: &App) {
+fn draw_info_panel<D: Dao>(frame: &mut Frame, area: ratatui::layout::Rect, app: &App<D>) {
     let t = theme::theme();
     let mut text = vec![];
 

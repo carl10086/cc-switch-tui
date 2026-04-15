@@ -79,9 +79,9 @@ impl InputState {
 }
 
 /// 应用主结构体，包含 Dao、状态、输入、列表索引等
-pub struct App {
+pub struct App<D: Dao> {
     /// 数据访问对象
-    pub dao: MemoryDaoImpl,
+    pub dao: D,
     /// 当前页面状态
     pub state: AppState,
     /// 实例列表中当前高亮的索引
@@ -100,12 +100,18 @@ pub struct App {
     pub should_quit: bool,
 }
 
-impl App {
+impl App<MemoryDaoImpl> {
     /// 创建新的 App 实例
     pub fn new() -> Self {
         let templates = register_templates();
+        Self::new_with_dao(MemoryDaoImpl::new(templates))
+    }
+}
+
+impl<D: Dao> App<D> {
+    pub fn new_with_dao(dao: D) -> Self {
         Self {
-            dao: MemoryDaoImpl::new(templates),
+            dao,
             state: AppState::List,
             list_index: 0,
             provider_index: 0,
@@ -153,7 +159,7 @@ impl App {
 
 use crossterm::event::{KeyCode, KeyEvent};
 
-impl App {
+impl<D: Dao> App<D> {
     /// 处理键盘事件
     pub fn on_key(&mut self, key: KeyEvent) {
         self.error_message = None;
