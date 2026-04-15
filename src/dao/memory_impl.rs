@@ -82,4 +82,11 @@ impl Dao for MemoryDaoImpl {
         tracing::info!("dao update_instance: id={}", id);
         Ok(())
     }
+
+    fn set_alias(&mut self, id: &str, alias: String) -> Result<(), AppError> {
+        let instance = self.instances.get_mut(id)
+            .ok_or_else(|| AppError::InstanceNotFound(id.to_string()))?;
+        instance.alias = alias;
+        Ok(())
+    }
 }

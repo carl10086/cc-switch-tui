@@ -13,4 +13,6 @@ pub struct ProviderInstance {
     pub api_key: String,
     /// 实例创建时间
     pub created_at: DateTime<Utc>,
+    /// 实例别名
+    pub alias: String,
 }

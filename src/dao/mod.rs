@@ -34,4 +34,7 @@ pub trait Dao {
 
     /// 更新实例的 API Key，如果实例不存在则返回错误
     fn update_instance(&mut self, id: &str, api_key: String) -> Result<(), AppError>;
+
+    /// 更新实例别名
+    fn set_alias(&mut self, id: &str, alias: String) -> Result<(), AppError>;
 }

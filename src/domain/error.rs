@@ -17,4 +17,10 @@ pub enum AppError {
 
     #[error("Database error: {0}")]
     Database(String),
+
+    #[error("Invalid alias: {0}")]
+    InvalidAlias(String),
+
+    #[error("Alias already exists: {0}")]
+    AliasAlreadyExists(String),
 }
