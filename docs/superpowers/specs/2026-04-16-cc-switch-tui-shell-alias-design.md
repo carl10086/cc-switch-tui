@@ -25,9 +25,8 @@ src/
 │   └── state.rs             # 新增 Alias 输入状态、激活逻辑、别名编辑
 ├── ui/
 │   ├── create.rs            # 创建向导增加 Alias 输入页
-│   ├── list.rs              # 帮助栏增加 a:编辑别名 Enter:激活
-│   ├── edit_alias.rs        # 新增：编辑别名弹窗
-│   └── mod.rs               # 导出 edit_alias
+│   ├── list.rs              # 帮助栏更新、信息面板支持查看/编辑双模式
+│   └── mod.rs
 ├── shell.rs                 # 重写：负责 aliases.zsh 生成和 zshrc 注入
 └── main.rs                  # TUI 启动前调用 shell 注入检查
 ```
@@ -109,6 +108,15 @@ TUI 启动时（`main.rs`）先调用 `ensure_zshrc_source()`，如果返回 `tr
 pub enum AppState {
     // ... existing states ...
     CreateAlias { template_id: String, model_id: String, api_key: String },
+    /// 编辑右侧信息面板中的字段
+    EditInfoPanel { instance_id: String, focus_index: usize },
+    /// 编辑某个具体字段的弹窗（从 EditInfoPanel 进入）
+    EditField { instance_id: String, field: EditField },
+}
+
+pub enum EditField {
+    Alias,
+    ApiKey,
 }
 ```
 
@@ -127,25 +135,67 @@ pub enum AppState {
 
 ### 7.2 列表页新增操作
 
-帮助栏更新为：
+帮助栏分两种状态显示：
+
+**正常模式：**
 ```
-↑↓:移动  Enter:激活  n:新建  a:编辑别名  e:编辑Key  d:删除  q:退出
+↑↓:移动  Enter:激活  n:新建  e:编辑详情  d:删除  q:退出
 ```
+
+**编辑模式（按 `e` 进入右侧信息面板编辑）：**
+```
+↑↓:切换字段  Enter:编辑  Esc:退出编辑
+```
+
+#### 正常模式操作
 
 - **`Enter`**：激活当前实例
   - 设置 `current_instance_id`
   - 调用 `shell::generate_aliases()`
   - 底部显示临时提示：`已激活 <alias>，新终端中 claude 命令将使用该配置`
 
-- **`a`**：编辑别名
-  - 弹出单行输入框（类似编辑 API Key）
-  - 修改后更新数据库并重新生成 `aliases.zsh`
+- **`e`**：进入右侧信息面板的**编辑模式**
+  - `AppState` 变为 `EditInfoPanel { instance_id, focus_index: 0 }`
+  - 右侧信息面板高亮第一个可编辑字段（Alias）
+
+#### 编辑模式操作
+
+进入编辑模式后，右侧信息面板变成可导航的表单：
+
+```
+┌─ 信息面板 ─┐
+│ 实例详情   │
+│            │
+│ Alias:     │
+│ > cl-mini  │  ← 高亮（focus_index = 0）
+│            │
+│ API Key:   │
+│ sk-xxx***  │
+│            │
+│ [其他只读] │
+└────────────┘
+```
+
+**当前阶段支持的可编辑字段：**
+1. **Alias**（focus_index = 0）
+2. **API Key**（focus_index = 1）
+
+**预留未来扩展：**
+3. 环境变量列表（新增/编辑/删除）
+
+编辑模式内的按键：
+- `↑` / `↓`：在可编辑字段之间移动高亮
+- `Enter`：进入当前字段的**行内编辑**
+  - Alias / API Key 使用底部单行输入弹窗（复用现有编辑弹窗样式）
+  - 输入完成后按 `Enter` 保存，`Esc` 取消
+  - 保存成功后自动重新生成 `aliases.zsh`
+- `Esc`：退出编辑模式，回到正常查看模式
 
 ### 7.3 无别名实例的处理
 
 如果当前高亮实例的 `alias` 为空字符串（旧数据）：
-- 按 `Enter` 尝试激活时，弹出错误提示：`请先按 a 设置别名`
-- 按 `a` 正常弹出别名编辑框
+- 按 `Enter` 尝试激活时，弹出错误提示：`请先按 e 进入编辑模式设置别名`
+- 按 `e` 进入编辑模式后，Alias 字段显示为空占位符，可直接编辑
 
 ## 8. Dao trait 变更
 
@@ -157,6 +207,9 @@ pub trait Dao {
     fn set_alias(&mut self, id: &str, alias: String) -> Result<(), AppError>;
 }
 ```
+
+由于 `update_instance` 已存在且仅用于更新 `api_key`，我们保留它。
+别名更新通过新增 `set_alias` 完成，避免破坏现有调用。
 
 ## 9. 错误处理
 
@@ -184,3 +237,7 @@ AliasAlreadyExists(String),
 - `app/state.rs`：
   1. 测试创建流程能到达 `CreateAlias` 状态
   2. 测试 alias 校验逻辑（通过 `submit_create` 的边界条件）
+  3. 测试 `e` 键能进入 `EditInfoPanel`，`Esc` 能返回 `List`
+
+- `ui/list.rs`：
+  1. 测试 `draw_info_panel` 在 `EditInfoPanel` 状态下正确高亮 focus_index 对应的字段（通过运行测试覆盖编译，手动验证渲染）
