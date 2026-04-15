@@ -45,12 +45,12 @@ source ~/.cc-switch-tui/aliases.zsh
 
 ## 键盘快捷键
 
-```
-j/↑    上一项
-k/↓    下一项
-Enter  选择/确认
-n      创建新 Instance
-e      编辑选中 Instance
-d      删除选中 Instance
-q      退出
-```
+| 按键   | 功能               |
+|--------|--------------------|
+| j/↑   | 上一项             |
+| k/↓   | 下一项             |
+| Enter | 选择/确认          |
+| n     | 创建新 Instance    |
+| e     | 编辑选中 Instance  |
+| d     | 删除选中 Instance  |
+| q     | 退出               |
