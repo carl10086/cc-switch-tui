@@ -1,5 +1,6 @@
 use cc_switch_tui::app::state::App;
-use cc_switch_tui::dao::MemoryDaoImpl;
+use cc_switch_tui::app::templates::register_templates;
+use cc_switch_tui::dao::sqlite_impl::SqliteDaoImpl;
 use cc_switch_tui::ui;
 use crossterm::{
     event::{self, DisableMouseCapture, EnableMouseCapture, Event},
@@ -35,7 +36,11 @@ fn main() -> io::Result<()> {
     let backend = CrosstermBackend::new(stdout);
     let mut terminal = Terminal::new(backend)?;
 
-    let mut app = App::new();
+    let db_path = ".cc-switch-tui/db.sqlite";
+    let templates = register_templates();
+    let dao = SqliteDaoImpl::new(db_path, templates).expect("无法初始化数据库");
+    let mut app = App::new_with_dao(dao);
+
     let res = run_app(&mut terminal, &mut app);
 
     disable_raw_mode()?;
@@ -56,7 +61,7 @@ fn main() -> io::Result<()> {
 
 fn run_app<B: ratatui::backend::Backend>(
     terminal: &mut Terminal<B>,
-    app: &mut App<MemoryDaoImpl>,
+    app: &mut App<SqliteDaoImpl>,
 ) -> io::Result<()> {
     let tick_rate = Duration::from_millis(100);
 
