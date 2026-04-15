@@ -111,6 +111,8 @@ pub struct App<D: Dao> {
     pub error_message: Option<String>,
     /// 是否退出应用
     pub should_quit: bool,
+    /// ~/.zshrc 是否在本次启动时被自动修改
+    pub zshrc_modified: bool,
 }
 
 impl App<MemoryDaoImpl> {
@@ -133,6 +135,7 @@ impl<D: Dao> App<D> {
             edit_input: InputState::new(String::new()),
             error_message: None,
             should_quit: false,
+            zshrc_modified: false,
         }
     }
 

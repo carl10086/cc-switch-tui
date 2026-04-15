@@ -1,6 +1,7 @@
 use cc_switch_tui::app::state::App;
 use cc_switch_tui::app::templates::register_templates;
 use cc_switch_tui::dao::sqlite_impl::SqliteDaoImpl;
+use cc_switch_tui::shell;
 use cc_switch_tui::ui;
 use crossterm::{
     event::{self, DisableMouseCapture, EnableMouseCapture, Event},
@@ -30,6 +31,11 @@ fn main() -> io::Result<()> {
 
     tracing::info!("cc-switch-tui starting");
 
+    let zshrc_modified = shell::ensure_zshrc_source(
+        &dirs::home_dir().unwrap_or_else(|| std::path::PathBuf::from(".")).join(".zshrc"),
+    )
+    .unwrap_or(false);
+
     enable_raw_mode()?;
     let mut stdout = io::stdout();
     crossterm::execute!(stdout, EnterAlternateScreen, EnableMouseCapture)?;
@@ -40,6 +46,7 @@ fn main() -> io::Result<()> {
     let templates = register_templates();
     let dao = SqliteDaoImpl::new(db_path, templates).expect("无法初始化数据库");
     let mut app = App::new_with_dao(dao);
+    app.zshrc_modified = zshrc_modified;
 
     let res = run_app(&mut terminal, &mut app);
 

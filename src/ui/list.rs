@@ -11,9 +11,15 @@ use ratatui::{
 
 /// 渲染主界面：左侧实例列表 + 右侧信息面板 + 底部帮助栏
 pub fn draw_list<D: Dao>(frame: &mut Frame, app: &App<D>) {
+    let constraints = if app.zshrc_modified {
+        vec![Constraint::Min(0), Constraint::Length(1), Constraint::Length(1)]
+    } else {
+        vec![Constraint::Min(0), Constraint::Length(1)]
+    };
+
     let main_layout = Layout::default()
         .direction(Direction::Vertical)
-        .constraints([Constraint::Min(0), Constraint::Length(1)])
+        .constraints(constraints)
         .split(frame.size());
 
     let content_layout = Layout::default()
@@ -23,7 +29,15 @@ pub fn draw_list<D: Dao>(frame: &mut Frame, app: &App<D>) {
 
     draw_instance_list(frame, content_layout[0], app);
     draw_info_panel(frame, content_layout[1], app);
-    draw_help_bar(frame, main_layout[1], app);
+
+    if app.zshrc_modified {
+        let t = theme::theme();
+        let msg = Paragraph::new("已自动配置 ~/.zshrc，请执行 source ~/.zshrc 生效")
+            .style(Style::default().fg(t.warning()));
+        frame.render_widget(msg, main_layout[main_layout.len() - 2]);
+    }
+
+    draw_help_bar(frame, *main_layout.last().unwrap(), app);
 
     if let Some(ref msg) = app.error_message {
         draw_error_popup(frame, msg);
