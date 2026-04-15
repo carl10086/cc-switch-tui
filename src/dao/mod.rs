@@ -1,6 +1,8 @@
 pub mod memory_impl;
+pub mod sqlite_impl;
 
 pub use self::memory_impl::MemoryDaoImpl;
+pub use self::sqlite_impl::SqliteDaoImpl;
 
 use crate::domain::{AppError, ProviderInstance, ProviderTemplate};
 
