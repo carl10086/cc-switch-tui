@@ -292,8 +292,34 @@ mod tests {
         };
         dao.create_instance(instance).unwrap();
         dao.set_current_instance("minimax-MiniMax-M2.7-highspeed").unwrap();
+        assert!(dao.get_current_instance().is_some());
         dao.delete_instance("minimax-MiniMax-M2.7-highspeed").unwrap();
         assert!(dao.get_current_instance().is_none());
+    }
+
+    #[test]
+    fn test_set_current_instance_clears_old() {
+        let mut dao = create_test_dao();
+        let instance1 = ProviderInstance {
+            id: "minimax-MiniMax-M2.7-highspeed".to_string(),
+            template_id: "minimax".to_string(),
+            model_id: "MiniMax-M2.7-highspeed".to_string(),
+            api_key: "key1".to_string(),
+            created_at: chrono::Utc::now(),
+        };
+        let instance2 = ProviderInstance {
+            id: "minimax-OtherModel".to_string(),
+            template_id: "minimax".to_string(),
+            model_id: "OtherModel".to_string(),
+            api_key: "key2".to_string(),
+            created_at: chrono::Utc::now(),
+        };
+        dao.create_instance(instance1).unwrap();
+        dao.create_instance(instance2).unwrap();
+        dao.set_current_instance("minimax-MiniMax-M2.7-highspeed").unwrap();
+        assert_eq!(dao.get_current_instance().unwrap().id, "minimax-MiniMax-M2.7-highspeed");
+        dao.set_current_instance("minimax-OtherModel").unwrap();
+        assert_eq!(dao.get_current_instance().unwrap().id, "minimax-OtherModel");
     }
 
     #[test]
