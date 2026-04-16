@@ -11,8 +11,13 @@
 
 ### 安装
 
+从 [Releases](https://github.com/carl10086/cc-switch-tui/releases) 下载二进制文件。
+
+**macOS 安全提示**：首次运行可能会提示"无法验证开发者"。在终端执行以下命令即可运行：
+
 ```bash
-cargo install cc-switch-tui
+xattr -d com.apple.quarantine cc-switch-tui-macos-arm64
+./cc-switch-tui-macos-arm64
 ```
 
 ### 初始配置
