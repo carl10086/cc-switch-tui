@@ -1,5 +1,5 @@
 BINARY_NAME = cc-switch-tui
-VERSION ?= 0.1.0
+VERSION ?= $(shell grep '^version' Cargo.toml | sed 's/.*"\(.*\)".*/\1/')
 DIST_DIR = dist
 
 .PHONY: build tag release publish clean help
