@@ -44,6 +44,7 @@ fn build_env(instance: &ProviderInstance, templates: &[ProviderTemplate]) -> Has
         }
     }
     env.insert("ANTHROPIC_AUTH_TOKEN".to_string(), instance.api_key.clone());
+    env.insert("CMUX_PRESERVE_CLAUDE_AUTH_SELECTION_ENV".to_string(), "1".to_string());
     env
 }
 
