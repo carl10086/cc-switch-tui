@@ -192,10 +192,10 @@ impl Dao for SqliteDaoImpl {
             return Err(AppError::InstanceAlreadyExists(new_id.to_string()));
         }
 
-        // Get current is_current status
-        let is_current = old_instance.id == self.get_current_instance()
-            .map(|i| i.id.clone())
-            .unwrap_or_default();
+        // Check if this instance is the current one
+        let is_current = self.get_current_instance()
+            .map(|i| i.id == old_instance.id)
+            .unwrap_or(false);
 
         // Delete old instance
         let changes = self.conn.execute(
