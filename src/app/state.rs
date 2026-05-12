@@ -373,7 +373,7 @@ impl<D: Dao> App<D> {
                 self.error_message = Some(e.to_string());
                 return;
             }
-            let id = format!("{}-{}", template_id, model_id);
+            let id = format!("{}-{}-{}", template_id, model_id, alias);
             let instance = ProviderInstance {
                 id: id.clone(),
                 template_id,
