@@ -72,27 +72,6 @@ fn test_delete_nonexistent_instance_fails() {
 }
 
 #[test]
-fn test_set_and_get_current_instance() {
-    let template = create_test_template();
-    let mut dao = MemoryDaoImpl::new(vec![template]);
-    let instance = create_test_instance();
-
-    dao.create_instance(instance).unwrap();
-    dao.set_current_instance("minimax-m1").unwrap();
-    let current = dao.get_current_instance().unwrap();
-    assert_eq!(current.id, "minimax-m1");
-}
-
-#[test]
-fn test_set_current_nonexistent_instance_fails() {
-    let template = create_test_template();
-    let mut dao = MemoryDaoImpl::new(vec![template]);
-
-    let result = dao.set_current_instance("not-exist");
-    assert_eq!(result, Err(AppError::InstanceNotFound("not-exist".to_string())));
-}
-
-#[test]
 fn test_get_template() {
     let template = create_test_template();
     let dao = MemoryDaoImpl::new(vec![template]);

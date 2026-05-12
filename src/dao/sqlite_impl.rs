@@ -26,8 +26,7 @@ impl SqliteDaoImpl {
                 model_id TEXT NOT NULL,
                 api_key TEXT NOT NULL,
                 created_at TEXT NOT NULL,
-                alias TEXT NOT NULL DEFAULT '',
-                is_current INTEGER NOT NULL DEFAULT 0
+                alias TEXT NOT NULL DEFAULT ''
             )",
             [],
         )?;
@@ -36,10 +35,6 @@ impl SqliteDaoImpl {
             "ALTER TABLE instances ADD COLUMN alias TEXT NOT NULL DEFAULT ''",
             [],
         );
-        conn.execute(
-            "CREATE UNIQUE INDEX IF NOT EXISTS idx_current ON instances(is_current) WHERE is_current = 1",
-            [],
-        )?;
         let mut dao = Self { conn, templates, instances: Vec::new() };
         dao.refresh_instances()?;
         Ok(dao)
@@ -93,8 +88,8 @@ impl Dao for SqliteDaoImpl {
     fn create_instance(&mut self, instance: ProviderInstance) -> Result<(), AppError> {
         let created_at_str = instance.created_at.to_rfc3339();
         match self.conn.execute(
-            "INSERT INTO instances (id, template_id, model_id, api_key, created_at, alias, is_current)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, 0)",
+            "INSERT INTO instances (id, template_id, model_id, api_key, created_at, alias)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
             rusqlite::params![
                 &instance.id,
                 &instance.template_id,
@@ -130,31 +125,7 @@ impl Dao for SqliteDaoImpl {
             .map_err(|e| AppError::Database(e.to_string()))?;
         Ok(())
     }
-    fn get_current_instance(&self) -> Option<&ProviderInstance> {
-        let mut stmt = self.conn.prepare(
-            "SELECT id FROM instances WHERE is_current = 1"
-        ).ok()?;
-        let id: String = stmt.query_row([], |row| row.get(0)).ok()?;
-        self.instances.iter().find(|i| i.id == id)
-    }
-    fn set_current_instance(&mut self, id: &str) -> Result<(), AppError> {
-        let tx = self.conn.transaction()
-            .map_err(|e| AppError::Database(e.to_string()))?;
-        tx.execute("UPDATE instances SET is_current = 0", [])
-            .map_err(|e| AppError::Database(e.to_string()))?;
-        let changes = tx.execute(
-            "UPDATE instances SET is_current = 1 WHERE id = ?1",
-            [id],
-        ).map_err(|e| AppError::Database(e.to_string()))?;
-        if changes == 0 {
-            return Err(AppError::InstanceNotFound(id.to_string()));
-        }
-        tx.commit()
-            .map_err(|e| AppError::Database(e.to_string()))?;
-        self.refresh_instances()
-            .map_err(|e| AppError::Database(e.to_string()))?;
-        Ok(())
-    }
+
     fn update_instance(&mut self, id: &str, api_key: String) -> Result<(), AppError> {
         let changes = self.conn.execute(
             "UPDATE instances SET api_key = ?1 WHERE id = ?2",
@@ -192,11 +163,6 @@ impl Dao for SqliteDaoImpl {
             return Err(AppError::InstanceAlreadyExists(new_id.to_string()));
         }
 
-        // Check if this instance is the current one
-        let is_current = self.get_current_instance()
-            .map(|i| i.id == old_instance.id)
-            .unwrap_or(false);
-
         // Delete old instance
         let changes = self.conn.execute(
             "DELETE FROM instances WHERE id = ?1",
@@ -209,8 +175,8 @@ impl Dao for SqliteDaoImpl {
         // Insert new instance
         let created_at_str = old_instance.created_at.to_rfc3339();
         self.conn.execute(
-            "INSERT INTO instances (id, template_id, model_id, api_key, created_at, alias, is_current)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
+            "INSERT INTO instances (id, template_id, model_id, api_key, created_at, alias)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
             rusqlite::params![
                 new_id,
                 old_instance.template_id,
@@ -218,7 +184,6 @@ impl Dao for SqliteDaoImpl {
                 old_instance.api_key,
                 created_at_str,
                 alias,
-                is_current as i32,
             ],
         ).map_err(|e| AppError::Database(e.to_string()))?;
 
@@ -261,27 +226,6 @@ mod tests {
         let found = dao.get_instance(&instance.id).unwrap();
         assert_eq!(found.id, instance.id);
         assert_eq!(found.api_key, instance.api_key);
-    }
-
-    #[test]
-    fn test_get_current_instance() {
-        let mut dao = create_test_dao();
-        let instance = ProviderInstance {
-            id: "minimax-MiniMax-M2.7-highspeed".to_string(),
-            template_id: "minimax".to_string(),
-            model_id: "MiniMax-M2.7-highspeed".to_string(),
-            api_key: "key".to_string(),
-            created_at: chrono::Utc::now(),
-            alias: String::new(),
-        };
-        dao.create_instance(instance).unwrap();
-        dao.conn.execute(
-            "UPDATE instances SET is_current = 1 WHERE id = ?1",
-            ["minimax-MiniMax-M2.7-highspeed"],
-        ).unwrap();
-        dao.refresh_instances().unwrap();
-        let current = dao.get_current_instance().unwrap();
-        assert_eq!(current.id, "minimax-MiniMax-M2.7-highspeed");
     }
 
     #[test]
@@ -346,75 +290,6 @@ mod tests {
         let mut dao = create_test_dao();
         let result = dao.delete_instance("nonexistent");
         assert!(matches!(result, Err(AppError::InstanceNotFound(_))));
-    }
-
-    #[test]
-    fn test_set_current_instance() {
-        let mut dao = create_test_dao();
-        let instance = ProviderInstance {
-            id: "minimax-MiniMax-M2.7-highspeed".to_string(),
-            template_id: "minimax".to_string(),
-            model_id: "MiniMax-M2.7-highspeed".to_string(),
-            api_key: "key".to_string(),
-            created_at: chrono::Utc::now(),
-            alias: String::new(),
-        };
-        dao.create_instance(instance).unwrap();
-        dao.set_current_instance("minimax-MiniMax-M2.7-highspeed").unwrap();
-        let current = dao.get_current_instance().unwrap();
-        assert_eq!(current.id, "minimax-MiniMax-M2.7-highspeed");
-    }
-
-    #[test]
-    fn test_set_current_instance_not_found() {
-        let mut dao = create_test_dao();
-        let result = dao.set_current_instance("nonexistent");
-        assert!(matches!(result, Err(AppError::InstanceNotFound(_))));
-    }
-
-    #[test]
-    fn test_delete_current_instance_clears_current() {
-        let mut dao = create_test_dao();
-        let instance = ProviderInstance {
-            id: "minimax-MiniMax-M2.7-highspeed".to_string(),
-            template_id: "minimax".to_string(),
-            model_id: "MiniMax-M2.7-highspeed".to_string(),
-            api_key: "key".to_string(),
-            created_at: chrono::Utc::now(),
-            alias: String::new(),
-        };
-        dao.create_instance(instance).unwrap();
-        dao.set_current_instance("minimax-MiniMax-M2.7-highspeed").unwrap();
-        assert!(dao.get_current_instance().is_some());
-        dao.delete_instance("minimax-MiniMax-M2.7-highspeed").unwrap();
-        assert!(dao.get_current_instance().is_none());
-    }
-
-    #[test]
-    fn test_set_current_instance_clears_old() {
-        let mut dao = create_test_dao();
-        let instance1 = ProviderInstance {
-            id: "minimax-MiniMax-M2.7-highspeed".to_string(),
-            template_id: "minimax".to_string(),
-            model_id: "MiniMax-M2.7-highspeed".to_string(),
-            api_key: "key1".to_string(),
-            created_at: chrono::Utc::now(),
-            alias: String::new(),
-        };
-        let instance2 = ProviderInstance {
-            id: "minimax-OtherModel".to_string(),
-            template_id: "minimax".to_string(),
-            model_id: "OtherModel".to_string(),
-            api_key: "key2".to_string(),
-            created_at: chrono::Utc::now(),
-            alias: String::new(),
-        };
-        dao.create_instance(instance1).unwrap();
-        dao.create_instance(instance2).unwrap();
-        dao.set_current_instance("minimax-MiniMax-M2.7-highspeed").unwrap();
-        assert_eq!(dao.get_current_instance().unwrap().id, "minimax-MiniMax-M2.7-highspeed");
-        dao.set_current_instance("minimax-OtherModel").unwrap();
-        assert_eq!(dao.get_current_instance().unwrap().id, "minimax-OtherModel");
     }
 
     #[test]
