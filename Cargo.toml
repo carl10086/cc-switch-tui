@@ -2,6 +2,7 @@
 name = "cc-switch-tui"
 version = "0.1.1"
 edition = "2024"
+default-run = "cc-switch-tui"
 
 [dependencies]
 chrono = { version = "0.4", features = ["serde"] }
@@ -15,3 +16,7 @@ dirs = "5"
 
 [dev-dependencies]
 tempfile = "3"
+
+[[bin]]
+name = "migrate_instances_id"
+path = "tools/migrate_instances_id.rs"

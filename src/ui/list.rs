@@ -47,15 +47,14 @@ pub fn draw_list<D: Dao>(frame: &mut Frame, app: &App<D>) {
 fn draw_instance_list<D: Dao>(frame: &mut Frame, area: ratatui::layout::Rect, app: &App<D>) {
     let t = theme::theme();
     let templates = app.dao.get_templates();
+    let instances = app.dao.list_instances();
     let mut items: Vec<ListItem> = Vec::new();
     let mut flat_index = 0;
 
     for template in templates {
-        let group_instances: Vec<_> = template.models.iter()
-            .filter_map(|m| {
-                let id = format!("{}-{}", template.id, m.id);
-                app.dao.get_instance(&id)
-            })
+        // Get all instances that belong to this template
+        let group_instances: Vec<_> = instances.iter()
+            .filter(|i| i.template_id == template.id)
             .collect();
 
         if group_instances.is_empty() {

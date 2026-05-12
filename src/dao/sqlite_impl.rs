@@ -180,6 +180,53 @@ impl Dao for SqliteDaoImpl {
             .map_err(|e| AppError::Database(e.to_string()))?;
         Ok(())
     }
+
+    fn rename_instance(&mut self, old_id: &str, new_id: &str, alias: String) -> Result<(), AppError> {
+        // Check if old_id exists
+        let old_instance = self.instances.iter()
+            .find(|i| i.id == old_id)
+            .ok_or_else(|| AppError::InstanceNotFound(old_id.to_string()))?;
+
+        // Check if new_id already exists
+        if self.instances.iter().any(|i| i.id == new_id) {
+            return Err(AppError::InstanceAlreadyExists(new_id.to_string()));
+        }
+
+        // Check if this instance is the current one
+        let is_current = self.get_current_instance()
+            .map(|i| i.id == old_instance.id)
+            .unwrap_or(false);
+
+        // Delete old instance
+        let changes = self.conn.execute(
+            "DELETE FROM instances WHERE id = ?1",
+            [old_id],
+        ).map_err(|e| AppError::Database(e.to_string()))?;
+        if changes == 0 {
+            return Err(AppError::InstanceNotFound(old_id.to_string()));
+        }
+
+        // Insert new instance
+        let created_at_str = old_instance.created_at.to_rfc3339();
+        self.conn.execute(
+            "INSERT INTO instances (id, template_id, model_id, api_key, created_at, alias, is_current)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
+            rusqlite::params![
+                new_id,
+                old_instance.template_id,
+                old_instance.model_id,
+                old_instance.api_key,
+                created_at_str,
+                alias,
+                is_current as i32,
+            ],
+        ).map_err(|e| AppError::Database(e.to_string()))?;
+
+        self.refresh_instances()
+            .map_err(|e| AppError::Database(e.to_string()))?;
+        tracing::info!("dao rename_instance: {} -> {}", old_id, new_id);
+        Ok(())
+    }
 }
 
 #[cfg(test)]
@@ -384,5 +431,74 @@ mod tests {
         dao.create_instance(instance.clone()).unwrap();
         let result = dao.create_instance(instance);
         assert!(matches!(result, Err(AppError::InstanceAlreadyExists(_))));
+    }
+
+    #[test]
+    fn test_rename_instance_updates_id_and_alias() {
+        let mut dao = create_test_dao();
+        let instance = ProviderInstance {
+            id: "minimax-MiniMax-M2.7-highspeed".to_string(),
+            template_id: "minimax".to_string(),
+            model_id: "MiniMax-M2.7-highspeed".to_string(),
+            api_key: "key".to_string(),
+            created_at: chrono::Utc::now(),
+            alias: String::new(),
+        };
+        dao.create_instance(instance).unwrap();
+
+        // Rename: update id and alias together
+        dao.rename_instance(
+            "minimax-MiniMax-M2.7-highspeed",
+            "minimax-MiniMax-M2.7-highspeed-cl-mini",
+            "cl-mini".to_string(),
+        ).unwrap();
+
+        // Old id should not exist
+        assert!(dao.get_instance("minimax-MiniMax-M2.7-highspeed").is_none());
+        // New id should exist with new alias
+        let found = dao.get_instance("minimax-MiniMax-M2.7-highspeed-cl-mini").unwrap();
+        assert_eq!(found.alias, "cl-mini");
+    }
+
+    #[test]
+    fn test_rename_instance_new_id_conflict() {
+        let mut dao = create_test_dao();
+        let instance1 = ProviderInstance {
+            id: "minimax-MiniMax-M2.7-highspeed".to_string(),
+            template_id: "minimax".to_string(),
+            model_id: "MiniMax-M2.7-highspeed".to_string(),
+            api_key: "key1".to_string(),
+            created_at: chrono::Utc::now(),
+            alias: String::new(),
+        };
+        let instance2 = ProviderInstance {
+            id: "minimax-MiniMax-M2.7-highspeed-cl-mini".to_string(),
+            template_id: "minimax".to_string(),
+            model_id: "MiniMax-M2.7-highspeed".to_string(),
+            api_key: "key2".to_string(),
+            created_at: chrono::Utc::now(),
+            alias: "cl-mini".to_string(),
+        };
+        dao.create_instance(instance1).unwrap();
+        dao.create_instance(instance2).unwrap();
+
+        // Try to rename instance1 to instance2's id - should fail
+        let result = dao.rename_instance(
+            "minimax-MiniMax-M2.7-highspeed",
+            "minimax-MiniMax-M2.7-highspeed-cl-mini",
+            "cl-mini".to_string(),
+        );
+        assert!(matches!(result, Err(AppError::InstanceAlreadyExists(_))));
+    }
+
+    #[test]
+    fn test_rename_instance_not_found() {
+        let mut dao = create_test_dao();
+        let result = dao.rename_instance(
+            "nonexistent",
+            "some-new-id",
+            "cl-new".to_string(),
+        );
+        assert!(matches!(result, Err(AppError::InstanceNotFound(_))));
     }
 }

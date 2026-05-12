@@ -118,7 +118,7 @@ mod tests {
             }],
         };
         let instance = ProviderInstance {
-            id: "minimax-MiniMax-M2.7-highspeed".to_string(),
+            id: "minimax-MiniMax-M2.7-highspeed-cl-mini".to_string(),
             template_id: "minimax".to_string(),
             model_id: "MiniMax-M2.7-highspeed".to_string(),
             api_key: "sk-test".to_string(),
@@ -129,7 +129,7 @@ mod tests {
             temp.path(),
             &[instance],
             &[template],
-            Some("minimax-MiniMax-M2.7-highspeed"),
+            Some("minimax-MiniMax-M2.7-highspeed-cl-mini"),
         ).unwrap();
 
         let content = std::fs::read_to_string(temp.path().join("aliases.zsh")).unwrap();
