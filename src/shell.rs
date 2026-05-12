@@ -82,7 +82,7 @@ fn format_function(name: &str, env: &HashMap<String, String>, unset_vars: &[Stri
         .join("\n");
 
     format!(
-        "function {} {{\n{}\n{}\n  command claude\n}}",
+        "function {} {{\n{}\n{}\n  command claude \"$@\"\n}}",
         name,
         unset_line,
         export_lines
@@ -166,7 +166,7 @@ mod tests {
         assert!(content.contains("function cl-mini {"));
         assert!(content.contains("unset"));
         assert!(content.contains("export"));
-        assert!(content.contains("command claude"));
+        assert!(content.contains("command claude \"$@\""));
     }
 
     #[test]
