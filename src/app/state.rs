@@ -501,23 +501,30 @@ impl<D: Dao> App<D> {
             KeyCode::Enter => {
                 if let AppState::EditField { instance_id, field } = self.state.clone() {
                     let value = self.edit_input.value.clone();
-                    let result = match field {
+                    let (result, new_instance_id) = match field {
                         EditField::Alias => {
                             if let Err(e) = self.validate_alias(&value) {
-                                Err(e)
+                                (Err(e), instance_id.clone())
                             } else {
-                                self.dao.set_alias(&instance_id, value)
+                                // Get old instance to compute new id
+                                let old_instance = match self.dao.get_instance(&instance_id) {
+                                    Some(i) => i,
+                                    None => return,
+                                };
+                                let new_id = format!("{}-{}-{}", old_instance.template_id, old_instance.model_id, value);
+                                let result = self.dao.rename_instance(&instance_id, &new_id, value);
+                                (result, new_id)
                             }
                         }
                         EditField::ApiKey => {
-                            self.dao.update_instance(&instance_id, value)
+                            (self.dao.update_instance(&instance_id, value), instance_id.clone())
                         }
                     };
                     match result {
                         Ok(()) => {
                             self.regenerate_aliases();
                             self.state = AppState::EditInfoPanel {
-                                instance_id,
+                                instance_id: new_instance_id,
                                 focus_index: 0,
                             };
                         }
