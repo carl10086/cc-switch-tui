@@ -15,3 +15,7 @@ dirs = "5"
 
 [dev-dependencies]
 tempfile = "3"
+
+[[bin]]
+name = "migrate_instances_id"
+path = "tools/migrate_instances_id.rs"
