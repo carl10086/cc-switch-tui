@@ -179,7 +179,6 @@ impl<D: Dao> App<D> {
             &home.join(".cc-switch-tui"),
             &self.dao.list_instances().into_iter().cloned().collect::<Vec<_>>(),
             &self.dao.get_templates().into_iter().cloned().collect::<Vec<_>>(),
-            self.dao.get_current_instance().map(|i| i.id.as_str()),
         );
     }
 }
@@ -233,17 +232,12 @@ impl<D: Dao> App<D> {
             }
             KeyCode::Enter => {
                 if let Some(instance) = self.current_instance() {
-                    let instance_id = instance.id.clone();
                     let alias = instance.alias.clone();
                     if alias.is_empty() {
                         self.error_message = Some("请先按 e 进入编辑模式设置别名".to_string());
                     } else {
-                        if let Err(e) = self.dao.set_current_instance(&instance_id) {
-                            self.error_message = Some(e.to_string());
-                        } else {
-                            self.regenerate_aliases();
-                            self.error_message = Some(format!("已激活 {}，新终端中 claude 命令将使用该配置", alias));
-                        }
+                        self.regenerate_aliases();
+                        self.error_message = Some(format!("已激活 {}，新终端中 claude 命令将使用该配置", alias));
                     }
                 }
             }

@@ -55,8 +55,7 @@ fn main() -> io::Result<()> {
         .join(".cc-switch-tui");
     let instances: Vec<_> = app.dao.list_instances().into_iter().cloned().collect();
     let templates: Vec<_> = app.dao.get_templates().into_iter().cloned().collect();
-    let current_id = app.dao.get_current_instance().map(|i| i.id.clone());
-    let _ = shell::generate_aliases(&alias_dir, &instances, &templates, current_id.as_deref());
+    let _ = shell::generate_aliases(&alias_dir, &instances, &templates);
 
     let res = run_app(&mut terminal, &mut app);
 

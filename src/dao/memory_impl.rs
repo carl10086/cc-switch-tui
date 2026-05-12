@@ -8,8 +8,6 @@ pub struct MemoryDaoImpl {
     templates: Vec<ProviderTemplate>,
     /// 用户创建的实例映射，key 为 instance.id
     instances: HashMap<String, ProviderInstance>,
-    /// 当前选中的实例 ID
-    current_instance_id: Option<String>,
 }
 
 impl MemoryDaoImpl {
@@ -18,7 +16,6 @@ impl MemoryDaoImpl {
         Self {
             templates,
             instances: HashMap::new(),
-            current_instance_id: None,
         }
     }
 }
@@ -55,23 +52,6 @@ impl Dao for MemoryDaoImpl {
             return Err(AppError::InstanceNotFound(id.to_string()));
         }
         tracing::info!("dao delete_instance: id={}", id);
-        if self.current_instance_id.as_deref() == Some(id) {
-            self.current_instance_id = None;
-        }
-        Ok(())
-    }
-
-    fn get_current_instance(&self) -> Option<&ProviderInstance> {
-        self.current_instance_id
-            .as_ref()
-            .and_then(|id| self.instances.get(id))
-    }
-
-    fn set_current_instance(&mut self, id: &str) -> Result<(), AppError> {
-        if !self.instances.contains_key(id) {
-            return Err(AppError::InstanceNotFound(id.to_string()));
-        }
-        self.current_instance_id = Some(id.to_string());
         Ok(())
     }
 
@@ -114,11 +94,6 @@ impl Dao for MemoryDaoImpl {
             alias,
         };
         self.instances.insert(new_id.to_string(), new_instance);
-
-        // Update current_instance_id if it was pointing to the old id
-        if self.current_instance_id.as_deref() == Some(old_id) {
-            self.current_instance_id = Some(new_id.to_string());
-        }
 
         tracing::info!("dao rename_instance: {} -> {}", old_id, new_id);
         Ok(())
