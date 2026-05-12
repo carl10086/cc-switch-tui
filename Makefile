@@ -36,7 +36,7 @@ publish: ## Create GitHub release and upload binary (requires gh CLI)
 		echo "  Uploading $$f..."; \
 		gh release upload v$(VERSION) $$f; \
 	done
-	@echo "Done! Release: https://github.com/$$(gh repo --jq .owner.login)/$$(gh repo --jq .name)/releases/tag/v$(VERSION)"
+	@echo "Done! Release: https://github.com/$$(gh repo view --json nameWithOwner --jq .nameWithOwner)/releases/tag/v$(VERSION)"
 
 clean: ## Clean build artifacts
 	cargo clean
