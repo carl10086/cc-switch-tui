@@ -37,4 +37,7 @@ pub trait Dao {
 
     /// 更新实例别名
     fn set_alias(&mut self, id: &str, alias: String) -> Result<(), AppError>;
+
+    /// 重命名实例（同时更新 id 和 alias）
+    fn rename_instance(&mut self, old_id: &str, new_id: &str, alias: String) -> Result<(), AppError>;
 }

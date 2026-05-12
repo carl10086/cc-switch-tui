@@ -89,4 +89,38 @@ impl Dao for MemoryDaoImpl {
         instance.alias = alias;
         Ok(())
     }
+
+    fn rename_instance(&mut self, old_id: &str, new_id: &str, alias: String) -> Result<(), AppError> {
+        // Get the old instance
+        let instance = self.instances.get(old_id)
+            .ok_or_else(|| AppError::InstanceNotFound(old_id.to_string()))?
+            .clone();
+
+        // Check if new_id already exists (and it's not the same as old_id)
+        if self.instances.contains_key(new_id) {
+            return Err(AppError::InstanceAlreadyExists(new_id.to_string()));
+        }
+
+        // Remove old instance
+        self.instances.remove(old_id);
+
+        // Insert new instance with updated id and alias
+        let new_instance = ProviderInstance {
+            id: new_id.to_string(),
+            template_id: instance.template_id,
+            model_id: instance.model_id,
+            api_key: instance.api_key,
+            created_at: instance.created_at,
+            alias,
+        };
+        self.instances.insert(new_id.to_string(), new_instance);
+
+        // Update current_instance_id if it was pointing to the old id
+        if self.current_instance_id.as_deref() == Some(old_id) {
+            self.current_instance_id = Some(new_id.to_string());
+        }
+
+        tracing::info!("dao rename_instance: {} -> {}", old_id, new_id);
+        Ok(())
+    }
 }
