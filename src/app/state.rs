@@ -140,15 +140,21 @@ impl<D: Dao> App<D> {
     }
 
     /// 获取所有已创建的实例，按模板顺序分组排列
+    ///
+    /// 排序规则：按 templates 顺序 → 按 template.models 顺序 →
+    /// 同 (template_id, model_id) 内按 created_at 升序
     pub fn get_sorted_instances(&self) -> Vec<&ProviderInstance> {
         let templates = self.dao.get_templates();
+        let instances = self.dao.list_instances();
         let mut result = Vec::new();
         for template in templates {
             for model in &template.models {
-                let id = format!("{}-{}", template.id, model.id);
-                if let Some(instance) = self.dao.get_instance(&id) {
-                    result.push(instance);
-                }
+                let mut group: Vec<&ProviderInstance> = instances.iter()
+                    .filter(|i| i.template_id == template.id && i.model_id == model.id)
+                    .copied()
+                    .collect();
+                group.sort_by_key(|i| i.created_at);
+                result.extend(group);
             }
         }
         result
@@ -555,5 +561,126 @@ impl<D: Dao> App<D> {
             }
             _ => self.state = AppState::List,
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::domain::{ModelTemplate, ProviderTemplate};
+    use std::collections::HashMap;
+
+    fn test_templates() -> Vec<ProviderTemplate> {
+        vec![
+            ProviderTemplate {
+                id: "minimax".to_string(),
+                name: "MiniMax".to_string(),
+                default_env: HashMap::new(),
+                models: vec![ModelTemplate {
+                    id: "m1".to_string(),
+                    name: "Model 1".to_string(),
+                    env_overrides: HashMap::new(),
+                }],
+            },
+            ProviderTemplate {
+                id: "kimi".to_string(),
+                name: "Kimi".to_string(),
+                default_env: HashMap::new(),
+                models: vec![ModelTemplate {
+                    id: "kimi-for-coding".to_string(),
+                    name: "Kimi for Coding".to_string(),
+                    env_overrides: HashMap::new(),
+                }],
+            },
+        ]
+    }
+
+    #[test]
+    fn test_get_sorted_instances_groups_by_template_then_created_at() {
+        let dao = MemoryDaoImpl::new(test_templates());
+        let mut app = App::new_with_dao(dao);
+
+        let i1 = ProviderInstance {
+            id: "kimi-kimi-for-coding-cl-km2".to_string(),
+            template_id: "kimi".to_string(),
+            model_id: "kimi-for-coding".to_string(),
+            api_key: "key1".to_string(),
+            created_at: chrono::Utc::now() - chrono::Duration::seconds(10),
+            alias: "cl-km2".to_string(),
+        };
+        let i2 = ProviderInstance {
+            id: "kimi-kimi-for-coding-cl-km3".to_string(),
+            template_id: "kimi".to_string(),
+            model_id: "kimi-for-coding".to_string(),
+            api_key: "key2".to_string(),
+            created_at: chrono::Utc::now(),
+            alias: "cl-km3".to_string(),
+        };
+        let i3 = ProviderInstance {
+            id: "minimax-m1-cl-mx".to_string(),
+            template_id: "minimax".to_string(),
+            model_id: "m1".to_string(),
+            api_key: "key3".to_string(),
+            created_at: chrono::Utc::now(),
+            alias: "cl-mx".to_string(),
+        };
+
+        app.dao.create_instance(i1.clone()).unwrap();
+        app.dao.create_instance(i2.clone()).unwrap();
+        app.dao.create_instance(i3.clone()).unwrap();
+
+        let sorted = app.get_sorted_instances();
+        assert_eq!(sorted.len(), 3, "应返回全部 3 个实例");
+        assert_eq!(sorted[0].template_id, "minimax", "template 顺序优先");
+        assert_eq!(sorted[1].template_id, "kimi");
+        assert_eq!(sorted[2].template_id, "kimi");
+        assert_eq!(
+            sorted[1].created_at, i1.created_at,
+            "同组内按 created_at 升序，i1 更早应在前面"
+        );
+        assert_eq!(sorted[2].created_at, i2.created_at);
+    }
+
+    #[test]
+    fn test_get_sorted_instances_empty_when_no_instances() {
+        let dao = MemoryDaoImpl::new(test_templates());
+        let app = App::new_with_dao(dao);
+        let sorted = app.get_sorted_instances();
+        assert!(sorted.is_empty());
+    }
+
+    #[test]
+    fn test_get_sorted_instances_handles_multiple_aliases_same_model() {
+        let dao = MemoryDaoImpl::new(test_templates());
+        let mut app = App::new_with_dao(dao);
+
+        let i1 = ProviderInstance {
+            id: "kimi-kimi-for-coding-cl-km2".to_string(),
+            template_id: "kimi".to_string(),
+            model_id: "kimi-for-coding".to_string(),
+            api_key: "key1".to_string(),
+            created_at: chrono::Utc::now(),
+            alias: "cl-km2".to_string(),
+        };
+        let i2 = ProviderInstance {
+            id: "kimi-kimi-for-coding-cl-km3".to_string(),
+            template_id: "kimi".to_string(),
+            model_id: "kimi-for-coding".to_string(),
+            api_key: "key2".to_string(),
+            created_at: chrono::Utc::now() - chrono::Duration::seconds(5),
+            alias: "cl-km3".to_string(),
+        };
+
+        app.dao.create_instance(i1.clone()).unwrap();
+        app.dao.create_instance(i2.clone()).unwrap();
+
+        let sorted = app.get_sorted_instances();
+        assert_eq!(
+            sorted.len(),
+            2,
+            "同一 model 下多个 alias 实例应全部被返回"
+        );
+        assert_eq!(sorted[0].id, i2.id, "i2 创建更早应在前面");
+        assert_eq!(sorted[1].id, i1.id);
     }
 }
