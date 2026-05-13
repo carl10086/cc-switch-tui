@@ -38,7 +38,12 @@
       "Bash(gh run *)",
       "Bash(cargo install *)",
       "Bash(make build *)",
-      "Bash(make publish *)"
+      "Bash(make publish *)",
+      "Bash(xxd ~/.cc-switch-tui/aliases.zsh)",
+      "Bash(zsh *)",
+      "Bash(./target/debug/cc-switch-tui)",
+      "Bash(cargo tree *)",
+      "Bash(cargo audit *)"
     ]
   },
   "hooks": {
