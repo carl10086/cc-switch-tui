@@ -47,46 +47,40 @@ pub fn draw_list<D: Dao>(frame: &mut Frame, app: &App<D>) {
 fn draw_instance_list<D: Dao>(frame: &mut Frame, area: ratatui::layout::Rect, app: &App<D>) {
     let t = theme::theme();
     let templates = app.dao.get_templates();
-    let instances = app.dao.list_instances();
+    let sorted = app.get_sorted_instances();
     let mut items: Vec<ListItem> = Vec::new();
-    let mut flat_index = 0;
+    let mut last_template_id: Option<String> = None;
 
-    for template in templates {
-        // Get all instances that belong to this template
-        let group_instances: Vec<_> = instances.iter()
-            .filter(|i| i.template_id == template.id)
-            .collect();
-
-        if group_instances.is_empty() {
-            continue;
+    for (flat_index, instance) in sorted.iter().enumerate() {
+        if last_template_id.as_deref() != Some(instance.template_id.as_str()) {
+            if let Some(template) = templates.iter().find(|t| t.id == instance.template_id) {
+                items.push(ListItem::new(Line::from(vec![
+                    Span::styled(
+                        format!("[{}]", template.name),
+                        Style::default().fg(t.heading()).add_modifier(ratatui::style::Modifier::BOLD),
+                    ),
+                ])));
+            }
+            last_template_id = Some(instance.template_id.clone());
         }
+
+        let model = templates.iter()
+            .find(|t| t.id == instance.template_id)
+            .and_then(|t| t.models.iter().find(|m| m.id == instance.model_id))
+            .map(|m| m.name.as_str())
+            .unwrap_or("Unknown");
+
+        let is_selected = flat_index == app.list_index;
+        let style = if is_selected {
+            Style::default().bg(t.selection_bg()).fg(t.selection_fg())
+        } else {
+            Style::default()
+        };
 
         items.push(ListItem::new(Line::from(vec![
-            Span::styled(
-                format!("[{}]", template.name),
-                Style::default().fg(t.heading()).add_modifier(ratatui::style::Modifier::BOLD),
-            ),
-        ])));
-
-        for instance in group_instances {
-            let model = template.models.iter()
-                .find(|m| m.id == instance.model_id)
-                .map(|m| m.name.as_str())
-                .unwrap_or("Unknown");
-
-            let is_selected = flat_index == app.list_index;
-            let style = if is_selected {
-                Style::default().bg(t.selection_bg()).fg(t.selection_fg())
-            } else {
-                Style::default()
-            };
-
-            items.push(ListItem::new(Line::from(vec![
-                Span::raw("  "),
-                Span::raw(model),
-            ])).style(style));
-            flat_index += 1;
-        }
+            Span::raw("  "),
+            Span::raw(model),
+        ])).style(style));
     }
 
     let list = List::new(items)
