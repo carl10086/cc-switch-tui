@@ -42,6 +42,7 @@ fn build_env(instance: &ProviderInstance, templates: &[ProviderTemplate]) -> Has
     }
     env.insert("ANTHROPIC_AUTH_TOKEN".to_string(), instance.api_key.clone());
     env.insert("CMUX_PRESERVE_CLAUDE_AUTH_SELECTION_ENV".to_string(), "1".to_string());
+    env.insert("CC_SWITCH_ALIAS".to_string(), instance.alias.clone());
     env
 }
 
@@ -50,6 +51,7 @@ fn get_all_env_vars(templates: &[ProviderTemplate]) -> Vec<String> {
     let mut vars: Vec<String> = vec![
         "ANTHROPIC_AUTH_TOKEN".to_string(),
         "CMUX_PRESERVE_CLAUDE_AUTH_SELECTION_ENV".to_string(),
+        "CC_SWITCH_ALIAS".to_string(),
     ];
     for template in templates {
         for (key, _) in &template.default_env {
@@ -202,6 +204,9 @@ mod tests {
         // 验证函数格式：包含 unset 和 export
         assert!(content.contains("unset ANTHROPIC_AUTH_TOKEN"));
         assert!(content.contains("export ANTHROPIC_AUTH_TOKEN=sk-test"));
+        // 验证 CC_SWITCH_ALIAS 同时出现在 unset 和 export 中
+        assert!(content.contains("CC_SWITCH_ALIAS"));
+        assert!(content.contains("export CC_SWITCH_ALIAS=cl-mini"));
     }
 
     #[test]
