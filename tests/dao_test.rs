@@ -13,7 +13,12 @@ fn create_test_template() -> ProviderTemplate {
             id: "m1".to_string(),
             name: "Model 1".to_string(),
             env_overrides: HashMap::new(),
+            opencode_model_id: String::new(),
         }],
+        opencode_provider_id: String::new(),
+        opencode_npm: String::new(),
+        opencode_base_url: String::new(),
+        opencode_env_var: String::new(),
     }
 }
 
@@ -25,6 +30,7 @@ fn create_test_instance() -> ProviderInstance {
         api_key: "test-key".to_string(),
         created_at: Utc::now(),
         alias: String::new(),
+        opencode_model_id: String::new(),
     }
 }
 

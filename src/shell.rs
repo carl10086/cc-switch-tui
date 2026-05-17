@@ -1,9 +1,10 @@
 use crate::domain::{ProviderInstance, ProviderTemplate};
-use std::collections::HashMap;
+use crate::opencode_config;
+use std::collections::{HashMap, HashSet};
 use std::fs;
 use std::io::Write;
 
-/// 生成 aliases.zsh 文件
+/// 生成 aliases.zsh 文件（同时生成 cl-* 和 oc-* alias）
 pub fn generate_aliases(
     dir: &std::path::Path,
     instances: &[ProviderInstance],
@@ -25,6 +26,11 @@ pub fn generate_aliases(
         let function_def = format_function(&instance.alias, &env, &all_env_vars);
         lines.push(function_def);
     }
+
+    // 生成 opencode 配置文件和 alias
+    let config_paths = opencode_config::generate_opencode_configs(dir, instances, templates)?;
+    let opencode_lines = opencode_config::build_opencode_aliases(instances, templates, &config_paths);
+    lines.extend(opencode_lines);
 
     fs::create_dir_all(dir)?;
     let path = dir.join("aliases.zsh");
@@ -48,25 +54,18 @@ fn build_env(instance: &ProviderInstance, templates: &[ProviderTemplate]) -> Has
 
 /// 收集所有需要 unset 的环境变量（来自所有模板）
 fn get_all_env_vars(templates: &[ProviderTemplate]) -> Vec<String> {
-    let mut vars: Vec<String> = vec![
+    let mut set: HashSet<String> = HashSet::from([
         "ANTHROPIC_AUTH_TOKEN".to_string(),
         "CMUX_PRESERVE_CLAUDE_AUTH_SELECTION_ENV".to_string(),
         "CC_SWITCH_ALIAS".to_string(),
-    ];
+    ]);
     for template in templates {
-        for (key, _) in &template.default_env {
-            if !vars.contains(key) {
-                vars.push(key.clone());
-            }
-        }
+        set.extend(template.default_env.keys().cloned());
         for model in &template.models {
-            for (key, _) in &model.env_overrides {
-                if !vars.contains(key) {
-                    vars.push(key.clone());
-                }
-            }
+            set.extend(model.env_overrides.keys().cloned());
         }
     }
+    let mut vars: Vec<String> = set.into_iter().collect();
     vars.sort();
     vars
 }
@@ -91,7 +90,7 @@ fn format_function(name: &str, env: &HashMap<String, String>, unset_vars: &[Stri
     )
 }
 
-fn shell_escape(s: &str) -> String {
+pub(crate) fn shell_escape(s: &str) -> String {
     if s.contains('\'') {
         format!("'{}'", s.replace('\'', "'\"'\"'"))
     } else if s.chars().all(|c| c.is_ascii_alphanumeric() || "_.:-/".contains(c)) {
@@ -147,7 +146,12 @@ mod tests {
                 id: "MiniMax-M2.7-highspeed".to_string(),
                 name: "MiniMax M2.7 Highspeed".to_string(),
                 env_overrides: HashMap::new(),
+                opencode_model_id: "MiniMax-M2.7-highspeed".to_string(),
             }],
+            opencode_provider_id: "minimax-cn".to_string(),
+            opencode_npm: "@ai-sdk/anthropic".to_string(),
+            opencode_base_url: "https://api.minimaxi.com/anthropic/v1".to_string(),
+            opencode_env_var: "MINIMAX_API_KEY".to_string(),
         };
         let instance = ProviderInstance {
             id: "minimax-MiniMax-M2.7-highspeed-cl-mini".to_string(),
@@ -156,6 +160,7 @@ mod tests {
             api_key: "sk-test".to_string(),
             created_at: chrono::Utc::now(),
             alias: "cl-mini".to_string(),
+            opencode_model_id: "MiniMax-M2.7-highspeed".to_string(),
         };
         generate_aliases(
             temp.path(),
@@ -184,7 +189,12 @@ mod tests {
                 id: "MiniMax-M2.7-highspeed".to_string(),
                 name: "MiniMax M2.7 Highspeed".to_string(),
                 env_overrides: HashMap::new(),
+                opencode_model_id: "MiniMax-M2.7-highspeed".to_string(),
             }],
+            opencode_provider_id: "minimax-cn".to_string(),
+            opencode_npm: "@ai-sdk/anthropic".to_string(),
+            opencode_base_url: "https://api.minimaxi.com/anthropic/v1".to_string(),
+            opencode_env_var: "MINIMAX_API_KEY".to_string(),
         };
         let instance = ProviderInstance {
             id: "minimax-MiniMax-M2.7-highspeed-cl-mini".to_string(),
@@ -193,6 +203,7 @@ mod tests {
             api_key: "sk-test".to_string(),
             created_at: chrono::Utc::now(),
             alias: "cl-mini".to_string(),
+            opencode_model_id: "MiniMax-M2.7-highspeed".to_string(),
         };
         generate_aliases(
             temp.path(),

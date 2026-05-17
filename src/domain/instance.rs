@@ -15,4 +15,6 @@ pub struct ProviderInstance {
     pub created_at: DateTime<Utc>,
     /// 实例别名
     pub alias: String,
+    /// OpenCode model ID
+    pub opencode_model_id: String,
 }
