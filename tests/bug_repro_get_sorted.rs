@@ -14,7 +14,12 @@ fn test_templates() -> Vec<ProviderTemplate> {
                 id: "m1".to_string(),
                 name: "Model 1".to_string(),
                 env_overrides: HashMap::new(),
+                opencode_model_id: String::new(),
             }],
+            opencode_provider_id: String::new(),
+            opencode_npm: String::new(),
+            opencode_base_url: String::new(),
+            opencode_env_var: String::new(),
         },
         ProviderTemplate {
             id: "kimi".to_string(),
@@ -24,7 +29,12 @@ fn test_templates() -> Vec<ProviderTemplate> {
                 id: "kimi-for-coding".to_string(),
                 name: "Kimi for Coding".to_string(),
                 env_overrides: HashMap::new(),
+                opencode_model_id: String::new(),
             }],
+            opencode_provider_id: String::new(),
+            opencode_npm: String::new(),
+            opencode_base_url: String::new(),
+            opencode_env_var: String::new(),
         },
     ]
 }
@@ -43,6 +53,7 @@ fn test_get_sorted_instances_returns_all_instances_with_alias_ids() {
         api_key: "key1".to_string(),
         created_at: chrono::Utc::now() - chrono::Duration::seconds(10),
         alias: "cl-km2".to_string(),
+        opencode_model_id: String::new(),
     };
     let i2 = ProviderInstance {
         id: "kimi-kimi-for-coding-cl-km3".to_string(),
@@ -51,6 +62,7 @@ fn test_get_sorted_instances_returns_all_instances_with_alias_ids() {
         api_key: "key2".to_string(),
         created_at: chrono::Utc::now(),
         alias: "cl-km3".to_string(),
+        opencode_model_id: String::new(),
     };
 
     app.dao.create_instance(i1).unwrap();

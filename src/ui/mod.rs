@@ -16,7 +16,9 @@ pub fn draw<D: Dao>(frame: &mut Frame, app: &App<D>) {
         AppState::CreateProvider
         | AppState::CreateModel { .. }
         | AppState::CreateApiKey { .. }
-        | AppState::CreateAlias { .. } => {
+        | AppState::CreateOpencodeModel { .. }
+        | AppState::CreateAlias { .. }
+        | AppState::EditOpencodeModel { .. } => {
             list::draw_list(frame, app);
             create::draw_create(frame, app);
         }

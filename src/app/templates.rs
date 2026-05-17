@@ -45,7 +45,12 @@ fn minimax_template() -> ProviderTemplate {
             id: "MiniMax-M2.7-highspeed".to_string(),
             name: "MiniMax M2.7 Highspeed".to_string(),
             env_overrides,
+            opencode_model_id: "MiniMax-M2.7-highspeed".to_string(),
         }],
+        opencode_provider_id: "minimax-cn".to_string(),
+        opencode_npm: "@ai-sdk/anthropic".to_string(),
+        opencode_base_url: "https://api.minimaxi.com/anthropic/v1".to_string(),
+        opencode_env_var: "MINIMAX_API_KEY".to_string(),
     }
 }
 
@@ -65,6 +70,11 @@ fn kimi_template() -> ProviderTemplate {
             id: "kimi-for-coding".to_string(),
             name: "Kimi for Coding".to_string(),
             env_overrides: HashMap::new(),
+            opencode_model_id: "k2p5".to_string(),
         }],
+        opencode_provider_id: "kimi-for-coding".to_string(),
+        opencode_npm: "@ai-sdk/anthropic".to_string(),
+        opencode_base_url: "https://api.kimi.com/coding/v1".to_string(),
+        opencode_env_var: "KIMI_API_KEY".to_string(),
     }
 }

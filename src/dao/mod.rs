@@ -34,4 +34,7 @@ pub trait Dao {
 
     /// 重命名实例（同时更新 id 和 alias）
     fn rename_instance(&mut self, old_id: &str, new_id: &str, alias: String) -> Result<(), AppError>;
+
+    /// 更新实例的 OpenCode Model ID
+    fn set_opencode_model_id(&mut self, id: &str, opencode_model_id: String) -> Result<(), AppError>;
 }

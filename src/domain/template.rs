@@ -11,6 +11,14 @@ pub struct ProviderTemplate {
     pub default_env: HashMap<String, String>,
     /// 该 Provider 下支持的模型列表
     pub models: Vec<ModelTemplate>,
+    /// OpenCode provider ID，如 "minimax-cn"
+    pub opencode_provider_id: String,
+    /// OpenCode npm 包名，如 "@ai-sdk/anthropic"
+    pub opencode_npm: String,
+    /// OpenCode base URL
+    pub opencode_base_url: String,
+    /// OpenCode 环境变量名，如 "MINIMAX_API_KEY"
+    pub opencode_env_var: String,
 }
 
 /// 模型模板，定义特定模型对默认环境变量的覆盖项
@@ -22,4 +30,6 @@ pub struct ModelTemplate {
     pub name: String,
     /// 需要覆盖或追加的环境变量键值对
     pub env_overrides: HashMap<String, String>,
+    /// OpenCode model ID，如 "MiniMax-M2.7-highspeed"
+    pub opencode_model_id: String,
 }

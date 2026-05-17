@@ -2,6 +2,8 @@ use crate::app::templates::register_templates;
 use crate::dao::memory_impl::MemoryDaoImpl;
 use crate::dao::Dao;
 use crate::domain::{AppError, ProviderInstance, ProviderTemplate};
+use crate::opencode_fetch::OpencodeModelCache;
+use std::collections::HashSet;
 
 /// 应用当前所处的页面状态
 #[derive(Debug, Clone, PartialEq)]
@@ -14,14 +16,18 @@ pub enum AppState {
     CreateModel { template_id: String },
     /// 新建向导：输入 API Key
     CreateApiKey { template_id: String, model_id: String },
+    /// 新建向导：选择 OpenCode Model
+    CreateOpencodeModel { template_id: String, model_id: String, api_key: String },
     /// 新建向导最后一页：输入别名
-    CreateAlias { template_id: String, model_id: String, api_key: String },
+    CreateAlias { template_id: String, model_id: String, api_key: String, opencode_model_id: String },
     /// 原有 Edit 保留给 API Key 弹窗（兼容现有 draw_edit）
     Edit { instance_id: String },
     /// 编辑右侧信息面板
     EditInfoPanel { instance_id: String, focus_index: usize },
     /// 编辑具体字段弹窗
     EditField { instance_id: String, field: EditField },
+    /// 编辑 OpenCode Model（列表选择）
+    EditOpencodeModel { instance_id: String },
     /// 删除确认对话框
     DeleteConfirm { instance_id: String },
 }
@@ -103,6 +109,8 @@ pub struct App<D: Dao> {
     pub provider_index: usize,
     /// 创建向导中 Model 列表的索引
     pub model_index: usize,
+    /// 创建向导中 OpenCode Model 列表的索引
+    pub opencode_model_index: usize,
     /// API Key 输入状态
     pub api_key_input: InputState,
     /// 编辑时的输入状态
@@ -113,6 +121,8 @@ pub struct App<D: Dao> {
     pub should_quit: bool,
     /// ~/.zshrc 是否在本次启动时被自动修改
     pub zshrc_modified: bool,
+    /// 从 models.dev/api.json 拉取并缓存的 OpenCode 模型列表
+    pub opencode_model_cache: OpencodeModelCache,
 }
 
 impl App<MemoryDaoImpl> {
@@ -131,11 +141,13 @@ impl<D: Dao> App<D> {
             list_index: 0,
             provider_index: 0,
             model_index: 0,
+            opencode_model_index: 0,
             api_key_input: InputState::new(String::new()),
             edit_input: InputState::new(String::new()),
             error_message: None,
             should_quit: false,
             zshrc_modified: false,
+            opencode_model_cache: OpencodeModelCache::new(),
         }
     }
 
@@ -178,6 +190,40 @@ impl<D: Dao> App<D> {
         provider.models.get(self.model_index)
     }
 
+    /// 获取当前 Provider 下可用的 OpenCode Model ID 列表
+    pub fn get_opencode_models_for_current_provider(&self) -> Vec<String> {
+        let provider = match self.current_provider() {
+            Some(p) => p,
+            None => return vec![],
+        };
+        self.get_opencode_models_for_provider_id(&provider.id)
+    }
+
+    /// 获取指定 Provider ID 下可用的 OpenCode Model ID 列表
+    /// 优先从内存缓存（models.dev/api.json）获取，合并模板硬编码的映射
+    pub fn get_opencode_models_for_provider_id(&self, template_id: &str) -> Vec<String> {
+        let provider = match self.dao.get_template(template_id) {
+            Some(p) => p,
+            None => return vec![],
+        };
+
+        let mut set: HashSet<String> = provider
+            .models
+            .iter()
+            .map(|m| m.opencode_model_id.clone())
+            .filter(|id| !id.is_empty())
+            .collect();
+
+        // 合并从 API 拉取并缓存的模型列表
+        if !provider.opencode_provider_id.is_empty() {
+            if let Some(cached) = self.opencode_model_cache.get(&provider.opencode_provider_id) {
+                set.extend(cached.iter().cloned());
+            }
+        }
+
+        set.into_iter().collect()
+    }
+
     /// 重新生成 aliases.zsh（静默忽略错误）
     fn regenerate_aliases(&self) {
         let home = dirs::home_dir().unwrap_or_else(|| std::path::PathBuf::from("."));
@@ -192,6 +238,15 @@ impl<D: Dao> App<D> {
 use crossterm::event::{KeyCode, KeyEvent};
 
 impl<D: Dao> App<D> {
+    /// 将索引向指定方向移动一位，限制在 [0, max) 范围内
+    fn move_index(current: usize, delta: i32, max: usize) -> usize {
+        if max == 0 {
+            return 0;
+        }
+        let next = current as i32 + delta;
+        next.clamp(0, max as i32 - 1) as usize
+    }
+
     /// 处理键盘事件
     pub fn on_key(&mut self, key: KeyEvent) {
         self.error_message = None;
@@ -201,10 +256,12 @@ impl<D: Dao> App<D> {
             AppState::CreateProvider => self.handle_create_provider(key),
             AppState::CreateModel { .. } => self.handle_create_model(key),
             AppState::CreateApiKey { .. } => self.handle_create_api_key(key),
+            AppState::CreateOpencodeModel { .. } => self.handle_create_opencode_model(key),
             AppState::CreateAlias { .. } => self.handle_create_alias(key),
             AppState::Edit { .. } => self.handle_edit(key),
             AppState::EditInfoPanel { .. } => self.handle_edit_info_panel(key),
             AppState::EditField { .. } => self.handle_edit_field(key),
+            AppState::EditOpencodeModel { .. } => self.handle_edit_opencode_model(key),
             AppState::DeleteConfirm { .. } => self.handle_delete_confirm(key),
         }
     }
@@ -247,16 +304,8 @@ impl<D: Dao> App<D> {
                     }
                 }
             }
-            KeyCode::Up => {
-                if self.list_index > 0 {
-                    self.list_index -= 1;
-                }
-            }
-            KeyCode::Down => {
-                if self.list_index + 1 < instances.len() {
-                    self.list_index += 1;
-                }
-            }
+            KeyCode::Up => self.list_index = Self::move_index(self.list_index, -1, instances.len()),
+            KeyCode::Down => self.list_index = Self::move_index(self.list_index, 1, instances.len()),
             _ => {}
         }
     }
@@ -273,16 +322,8 @@ impl<D: Dao> App<D> {
                     self.model_index = 0;
                 }
             }
-            KeyCode::Up => {
-                if self.provider_index > 0 {
-                    self.provider_index -= 1;
-                }
-            }
-            KeyCode::Down => {
-                if self.provider_index + 1 < templates.len() {
-                    self.provider_index += 1;
-                }
-            }
+            KeyCode::Up => self.provider_index = Self::move_index(self.provider_index, -1, templates.len()),
+            KeyCode::Down => self.provider_index = Self::move_index(self.provider_index, 1, templates.len()),
             _ => {}
         }
     }
@@ -302,15 +343,13 @@ impl<D: Dao> App<D> {
                 }
             }
             KeyCode::Up => {
-                if self.current_provider().is_some() && self.model_index > 0 {
-                    self.model_index -= 1;
+                if let Some(template) = self.current_provider() {
+                    self.model_index = Self::move_index(self.model_index, -1, template.models.len());
                 }
             }
             KeyCode::Down => {
                 if let Some(template) = self.current_provider() {
-                    if self.model_index + 1 < template.models.len() {
-                        self.model_index += 1;
-                    }
+                    self.model_index = Self::move_index(self.model_index, 1, template.models.len());
                 }
             }
             _ => {}
@@ -328,12 +367,12 @@ impl<D: Dao> App<D> {
             KeyCode::Enter => {
                 if let AppState::CreateApiKey { template_id, model_id } = self.state.clone() {
                     let api_key = self.api_key_input.value.clone();
-                    self.state = AppState::CreateAlias {
+                    self.state = AppState::CreateOpencodeModel {
                         template_id,
                         model_id,
                         api_key,
                     };
-                    self.edit_input = InputState::new(String::new());
+                    self.opencode_model_index = 0;
                 }
             }
             KeyCode::Backspace => self.api_key_input.backspace(),
@@ -344,15 +383,47 @@ impl<D: Dao> App<D> {
         }
     }
 
-    fn handle_create_alias(&mut self, key: KeyEvent) {
+    fn handle_create_opencode_model(&mut self, key: KeyEvent) {
+        let models = self.get_opencode_models_for_current_provider();
         match key.code {
             KeyCode::Esc => {
-                if let AppState::CreateAlias { template_id, model_id, api_key } = self.state.clone() {
+                if let AppState::CreateOpencodeModel { template_id, model_id, api_key } = self.state.clone() {
                     self.state = AppState::CreateApiKey {
                         template_id,
                         model_id,
                     };
                     self.api_key_input = InputState::new(api_key);
+                }
+            }
+            KeyCode::Enter => {
+                if let AppState::CreateOpencodeModel { template_id, model_id, api_key } = self.state.clone() {
+                    let opencode_model_id = models.get(self.opencode_model_index)
+                        .map(|m| m.clone())
+                        .unwrap_or_default();
+                    self.state = AppState::CreateAlias {
+                        template_id,
+                        model_id,
+                        api_key,
+                        opencode_model_id,
+                    };
+                    self.edit_input = InputState::new(String::new());
+                }
+            }
+            KeyCode::Up => self.opencode_model_index = Self::move_index(self.opencode_model_index, -1, models.len()),
+            KeyCode::Down => self.opencode_model_index = Self::move_index(self.opencode_model_index, 1, models.len()),
+            _ => {}
+        }
+    }
+
+    fn handle_create_alias(&mut self, key: KeyEvent) {
+        match key.code {
+            KeyCode::Esc => {
+                if let AppState::CreateAlias { template_id, model_id, api_key, .. } = self.state.clone() {
+                    self.state = AppState::CreateOpencodeModel {
+                        template_id,
+                        model_id,
+                        api_key,
+                    };
                 }
             }
             KeyCode::Enter => {
@@ -367,7 +438,7 @@ impl<D: Dao> App<D> {
     }
 
     fn submit_create(&mut self) {
-        if let AppState::CreateAlias { template_id, model_id, api_key } = self.state.clone() {
+        if let AppState::CreateAlias { template_id, model_id, api_key, opencode_model_id } = self.state.clone() {
             let alias = self.edit_input.value.clone();
             if let Err(e) = self.validate_alias(&alias) {
                 self.error_message = Some(e.to_string());
@@ -381,6 +452,7 @@ impl<D: Dao> App<D> {
                 api_key,
                 created_at: chrono::Utc::now(),
                 alias,
+                opencode_model_id,
             };
             match self.dao.create_instance(instance) {
                 Ok(()) => {
@@ -440,7 +512,7 @@ impl<D: Dao> App<D> {
     }
 
     fn handle_edit_info_panel(&mut self, key: KeyEvent) {
-        let max_index = 1; // alias=0, api_key=1
+        let max_index = 2; // alias=0, api_key=1, opencode_model=2
         match key.code {
             KeyCode::Esc => self.state = AppState::List,
             KeyCode::Up => {
@@ -465,19 +537,36 @@ impl<D: Dao> App<D> {
             }
             KeyCode::Enter => {
                 if let AppState::EditInfoPanel { instance_id, focus_index } = self.state.clone() {
-                    let field = match focus_index {
-                        0 => EditField::Alias,
-                        1 => EditField::ApiKey,
-                        _ => return,
-                    };
-                    if let Some(instance) = self.dao.get_instance(&instance_id) {
-                        let value = match field {
-                            EditField::Alias => instance.alias.clone(),
-                            EditField::ApiKey => instance.api_key.clone(),
-                        };
-                        self.edit_input = InputState::new(value);
+                    match focus_index {
+                        0 | 1 => {
+                            let field = match focus_index {
+                                0 => EditField::Alias,
+                                1 => EditField::ApiKey,
+                                _ => return,
+                            };
+                            if let Some(instance) = self.dao.get_instance(&instance_id) {
+                                let value = match field {
+                                    EditField::Alias => instance.alias.clone(),
+                                    EditField::ApiKey => instance.api_key.clone(),
+                                };
+                                self.edit_input = InputState::new(value);
+                            }
+                            self.state = AppState::EditField { instance_id, field };
+                        }
+                        2 => {
+                            // OpenCode Model 使用列表选择而非文本输入
+                            if let Some(instance) = self.dao.get_instance(&instance_id) {
+                                let models = self.get_opencode_models_for_provider_id(&instance.template_id);
+                                let current_index = models
+                                    .iter()
+                                    .position(|m| m == &instance.opencode_model_id)
+                                    .unwrap_or(0);
+                                self.opencode_model_index = current_index;
+                            }
+                            self.state = AppState::EditOpencodeModel { instance_id };
+                        }
+                        _ => {}
                     }
-                    self.state = AppState::EditField { instance_id, field };
                 }
             }
             _ => {}
@@ -542,6 +631,47 @@ impl<D: Dao> App<D> {
         }
     }
 
+    fn handle_edit_opencode_model(&mut self, key: KeyEvent) {
+        let models = if let AppState::EditOpencodeModel { instance_id } = &self.state {
+            self.dao
+                .get_instance(instance_id)
+                .map(|i| self.get_opencode_models_for_provider_id(&i.template_id))
+                .unwrap_or_default()
+        } else {
+            vec![]
+        };
+        match key.code {
+            KeyCode::Esc => {
+                if let AppState::EditOpencodeModel { instance_id } = self.state.clone() {
+                    self.state = AppState::EditInfoPanel {
+                        instance_id,
+                        focus_index: 2,
+                    };
+                }
+            }
+            KeyCode::Enter => {
+                if let AppState::EditOpencodeModel { instance_id } = self.state.clone() {
+                    let opencode_model_id = models
+                        .get(self.opencode_model_index)
+                        .cloned()
+                        .unwrap_or_default();
+                    if let Err(e) = self.dao.set_opencode_model_id(&instance_id, opencode_model_id) {
+                        self.error_message = Some(e.to_string());
+                    } else {
+                        self.regenerate_aliases();
+                    }
+                    self.state = AppState::EditInfoPanel {
+                        instance_id,
+                        focus_index: 2,
+                    };
+                }
+            }
+            KeyCode::Up => self.opencode_model_index = Self::move_index(self.opencode_model_index, -1, models.len()),
+            KeyCode::Down => self.opencode_model_index = Self::move_index(self.opencode_model_index, 1, models.len()),
+            _ => {}
+        }
+    }
+
     fn handle_delete_confirm(&mut self, key: KeyEvent) {
         match key.code {
             KeyCode::Char('y') | KeyCode::Char('Y') => {
@@ -580,7 +710,12 @@ mod tests {
                     id: "m1".to_string(),
                     name: "Model 1".to_string(),
                     env_overrides: HashMap::new(),
+                    opencode_model_id: "m1".to_string(),
                 }],
+                opencode_provider_id: "minimax-cn".to_string(),
+                opencode_npm: "@ai-sdk/anthropic".to_string(),
+                opencode_base_url: "https://api.minimaxi.com/anthropic/v1".to_string(),
+                opencode_env_var: "MINIMAX_API_KEY".to_string(),
             },
             ProviderTemplate {
                 id: "kimi".to_string(),
@@ -590,7 +725,12 @@ mod tests {
                     id: "kimi-for-coding".to_string(),
                     name: "Kimi for Coding".to_string(),
                     env_overrides: HashMap::new(),
+                    opencode_model_id: "k2p5".to_string(),
                 }],
+                opencode_provider_id: "kimi-for-coding".to_string(),
+                opencode_npm: "@ai-sdk/anthropic".to_string(),
+                opencode_base_url: "https://api.kimi.com/coding/v1".to_string(),
+                opencode_env_var: "KIMI_API_KEY".to_string(),
             },
         ]
     }
@@ -607,6 +747,7 @@ mod tests {
             api_key: "key1".to_string(),
             created_at: chrono::Utc::now() - chrono::Duration::seconds(10),
             alias: "cl-km2".to_string(),
+            opencode_model_id: "k2p5".to_string(),
         };
         let i2 = ProviderInstance {
             id: "kimi-kimi-for-coding-cl-km3".to_string(),
@@ -615,6 +756,7 @@ mod tests {
             api_key: "key2".to_string(),
             created_at: chrono::Utc::now(),
             alias: "cl-km3".to_string(),
+            opencode_model_id: "k2p5".to_string(),
         };
         let i3 = ProviderInstance {
             id: "minimax-m1-cl-mx".to_string(),
@@ -623,6 +765,7 @@ mod tests {
             api_key: "key3".to_string(),
             created_at: chrono::Utc::now(),
             alias: "cl-mx".to_string(),
+            opencode_model_id: "m1".to_string(),
         };
 
         app.dao.create_instance(i1.clone()).unwrap();
@@ -661,6 +804,7 @@ mod tests {
             api_key: "key1".to_string(),
             created_at: chrono::Utc::now(),
             alias: "cl-km2".to_string(),
+            opencode_model_id: "k2p5".to_string(),
         };
         let i2 = ProviderInstance {
             id: "kimi-kimi-for-coding-cl-km3".to_string(),
@@ -669,6 +813,7 @@ mod tests {
             api_key: "key2".to_string(),
             created_at: chrono::Utc::now() - chrono::Duration::seconds(5),
             alias: "cl-km3".to_string(),
+            opencode_model_id: "k2p5".to_string(),
         };
 
         app.dao.create_instance(i1.clone()).unwrap();

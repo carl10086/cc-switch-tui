@@ -10,41 +10,60 @@ pub struct SqliteDaoImpl {
 }
 
 impl SqliteDaoImpl {
-    pub fn new(path: &str, templates: Vec<ProviderTemplate>) -> Result<Self, rusqlite::Error> {
+    fn db<T>(result: Result<T, rusqlite::Error>) -> Result<T, AppError> {
+        result.map_err(|e| AppError::Database(e.to_string()))
+    }
+
+    pub fn new(path: &str, templates: Vec<ProviderTemplate>) -> Result<Self, AppError> {
         if path != ":memory:" {
             if let Some(parent) = Path::new(path).parent() {
                 std::fs::create_dir_all(parent).map_err(|e| {
-                    rusqlite::Error::InvalidPath(std::path::PathBuf::from(parent).join(e.to_string()))
+                    AppError::Database(format!("创建目录失败: {}", e))
                 })?;
             }
         }
-        let conn = Connection::open(path)?;
-        conn.execute(
+        let conn = Self::db(Connection::open(path))?;
+        Self::db(conn.execute(
             "CREATE TABLE IF NOT EXISTS instances (
                 id TEXT PRIMARY KEY,
                 template_id TEXT NOT NULL,
                 model_id TEXT NOT NULL,
                 api_key TEXT NOT NULL,
                 created_at TEXT NOT NULL,
-                alias TEXT NOT NULL DEFAULT ''
+                alias TEXT NOT NULL DEFAULT '',
+                opencode_model_id TEXT NOT NULL DEFAULT ''
             )",
             [],
-        )?;
-        // 兼容旧表：如果 alias 列不存在则添加
-        let _ = conn.execute(
-            "ALTER TABLE instances ADD COLUMN alias TEXT NOT NULL DEFAULT ''",
-            [],
-        );
+        ))?;
+        // 兼容旧表：添加缺失的列（PRAGMA table_info 查询列是否存在）
+        let columns: Vec<String> = Self::db(conn
+            .prepare("SELECT name FROM pragma_table_info('instances')"))?
+            .query_map([], |row| row.get(0))
+            .map_err(|e| AppError::Database(e.to_string()))?
+            .collect::<Result<_, _>>()
+            .map_err(|e| AppError::Database(e.to_string()))?;
+        if !columns.contains(&"alias".to_string()) {
+            let _ = conn.execute(
+                "ALTER TABLE instances ADD COLUMN alias TEXT NOT NULL DEFAULT ''",
+                [],
+            );
+        }
+        if !columns.contains(&"opencode_model_id".to_string()) {
+            let _ = conn.execute(
+                "ALTER TABLE instances ADD COLUMN opencode_model_id TEXT NOT NULL DEFAULT ''",
+                [],
+            );
+        }
         let mut dao = Self { conn, templates, instances: Vec::new() };
         dao.refresh_instances()?;
         Ok(dao)
     }
 
-    fn refresh_instances(&mut self) -> Result<(), rusqlite::Error> {
-        let mut stmt = self.conn.prepare(
-            "SELECT id, template_id, model_id, api_key, created_at, alias FROM instances"
-        )?;
-        let rows = stmt.query_map([], |row| {
+    fn refresh_instances(&mut self) -> Result<(), AppError> {
+        let mut stmt = Self::db(self.conn.prepare(
+            "SELECT id, template_id, model_id, api_key, created_at, alias, opencode_model_id FROM instances"
+        ))?;
+        let rows = Self::db(stmt.query_map([], |row| {
             Ok(ProviderInstance {
                 id: row.get(0)?,
                 template_id: row.get(1)?,
@@ -58,11 +77,12 @@ impl SqliteDaoImpl {
                     ))?
                     .with_timezone(&chrono::Utc),
                 alias: row.get(5)?,
+                opencode_model_id: row.get(6)?,
             })
-        })?;
+        }))?;
         self.instances.clear();
         for row in rows {
-            self.instances.push(row?);
+            self.instances.push(Self::db(row)?);
         }
         Ok(())
     }
@@ -88,8 +108,8 @@ impl Dao for SqliteDaoImpl {
     fn create_instance(&mut self, instance: ProviderInstance) -> Result<(), AppError> {
         let created_at_str = instance.created_at.to_rfc3339();
         match self.conn.execute(
-            "INSERT INTO instances (id, template_id, model_id, api_key, created_at, alias)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
+            "INSERT INTO instances (id, template_id, model_id, api_key, created_at, alias, opencode_model_id)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
             rusqlite::params![
                 &instance.id,
                 &instance.template_id,
@@ -97,11 +117,11 @@ impl Dao for SqliteDaoImpl {
                 &instance.api_key,
                 created_at_str,
                 &instance.alias,
+                &instance.opencode_model_id,
             ],
         ) {
             Ok(_) => {
-                self.refresh_instances()
-                    .map_err(|e| AppError::Database(e.to_string()))?;
+                self.refresh_instances()?;
                 Ok(())
             }
             Err(rusqlite::Error::SqliteFailure(ref err, _))
@@ -114,41 +134,50 @@ impl Dao for SqliteDaoImpl {
     }
 
     fn delete_instance(&mut self, id: &str) -> Result<(), AppError> {
-        let changes = self.conn.execute(
+        let changes = Self::db(self.conn.execute(
             "DELETE FROM instances WHERE id = ?1",
             [id],
-        ).map_err(|e| AppError::Database(e.to_string()))?;
+        ))?;
         if changes == 0 {
             return Err(AppError::InstanceNotFound(id.to_string()));
         }
-        self.refresh_instances()
-            .map_err(|e| AppError::Database(e.to_string()))?;
+        self.refresh_instances()?;
         Ok(())
     }
 
     fn update_instance(&mut self, id: &str, api_key: String) -> Result<(), AppError> {
-        let changes = self.conn.execute(
+        let changes = Self::db(self.conn.execute(
             "UPDATE instances SET api_key = ?1 WHERE id = ?2",
             [api_key, id.to_string()],
-        ).map_err(|e| AppError::Database(e.to_string()))?;
+        ))?;
         if changes == 0 {
             return Err(AppError::InstanceNotFound(id.to_string()));
         }
-        self.refresh_instances()
-            .map_err(|e| AppError::Database(e.to_string()))?;
+        self.refresh_instances()?;
         Ok(())
     }
 
     fn set_alias(&mut self, id: &str, alias: String) -> Result<(), AppError> {
-        let changes = self.conn.execute(
+        let changes = Self::db(self.conn.execute(
             "UPDATE instances SET alias = ?1 WHERE id = ?2",
             [alias, id.to_string()],
-        ).map_err(|e| AppError::Database(e.to_string()))?;
+        ))?;
         if changes == 0 {
             return Err(AppError::InstanceNotFound(id.to_string()));
         }
-        self.refresh_instances()
-            .map_err(|e| AppError::Database(e.to_string()))?;
+        self.refresh_instances()?;
+        Ok(())
+    }
+
+    fn set_opencode_model_id(&mut self, id: &str, opencode_model_id: String) -> Result<(), AppError> {
+        let changes = Self::db(self.conn.execute(
+            "UPDATE instances SET opencode_model_id = ?1 WHERE id = ?2",
+            [opencode_model_id, id.to_string()],
+        ))?;
+        if changes == 0 {
+            return Err(AppError::InstanceNotFound(id.to_string()));
+        }
+        self.refresh_instances()?;
         Ok(())
     }
 
@@ -164,19 +193,19 @@ impl Dao for SqliteDaoImpl {
         }
 
         // Delete old instance
-        let changes = self.conn.execute(
+        let changes = Self::db(self.conn.execute(
             "DELETE FROM instances WHERE id = ?1",
             [old_id],
-        ).map_err(|e| AppError::Database(e.to_string()))?;
+        ))?;
         if changes == 0 {
             return Err(AppError::InstanceNotFound(old_id.to_string()));
         }
 
         // Insert new instance
         let created_at_str = old_instance.created_at.to_rfc3339();
-        self.conn.execute(
-            "INSERT INTO instances (id, template_id, model_id, api_key, created_at, alias)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
+        Self::db(self.conn.execute(
+            "INSERT INTO instances (id, template_id, model_id, api_key, created_at, alias, opencode_model_id)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
             rusqlite::params![
                 new_id,
                 old_instance.template_id,
@@ -184,11 +213,11 @@ impl Dao for SqliteDaoImpl {
                 old_instance.api_key,
                 created_at_str,
                 alias,
+                old_instance.opencode_model_id,
             ],
-        ).map_err(|e| AppError::Database(e.to_string()))?;
+        ))?;
 
-        self.refresh_instances()
-            .map_err(|e| AppError::Database(e.to_string()))?;
+        self.refresh_instances()?;
         tracing::info!("dao rename_instance: {} -> {}", old_id, new_id);
         Ok(())
     }
@@ -221,6 +250,7 @@ mod tests {
             api_key: "test-key".to_string(),
             created_at: chrono::Utc::now(),
             alias: String::new(),
+            opencode_model_id: String::new(),
         };
         dao.create_instance(instance.clone()).unwrap();
         let found = dao.get_instance(&instance.id).unwrap();
@@ -238,6 +268,7 @@ mod tests {
             api_key: "key".to_string(),
             created_at: chrono::Utc::now(),
             alias: String::new(),
+            opencode_model_id: String::new(),
         };
         dao.create_instance(instance).unwrap();
         dao.set_alias("minimax-MiniMax-M2.7-highspeed", "cl-mini".to_string()).unwrap();
@@ -255,6 +286,7 @@ mod tests {
             api_key: "old-key".to_string(),
             created_at: chrono::Utc::now(),
             alias: String::new(),
+            opencode_model_id: String::new(),
         };
         dao.create_instance(instance).unwrap();
         dao.update_instance("minimax-MiniMax-M2.7-highspeed", "new-key".to_string()).unwrap();
@@ -279,6 +311,7 @@ mod tests {
             api_key: "key".to_string(),
             created_at: chrono::Utc::now(),
             alias: String::new(),
+            opencode_model_id: String::new(),
         };
         dao.create_instance(instance).unwrap();
         dao.delete_instance("minimax-MiniMax-M2.7-highspeed").unwrap();
@@ -302,6 +335,7 @@ mod tests {
             api_key: "key".to_string(),
             created_at: chrono::Utc::now(),
             alias: String::new(),
+            opencode_model_id: String::new(),
         };
         dao.create_instance(instance.clone()).unwrap();
         let result = dao.create_instance(instance);
@@ -318,6 +352,7 @@ mod tests {
             api_key: "key".to_string(),
             created_at: chrono::Utc::now(),
             alias: String::new(),
+            opencode_model_id: String::new(),
         };
         dao.create_instance(instance).unwrap();
 
@@ -345,6 +380,7 @@ mod tests {
             api_key: "key1".to_string(),
             created_at: chrono::Utc::now(),
             alias: String::new(),
+            opencode_model_id: String::new(),
         };
         let instance2 = ProviderInstance {
             id: "minimax-MiniMax-M2.7-highspeed-cl-mini".to_string(),
@@ -353,6 +389,7 @@ mod tests {
             api_key: "key2".to_string(),
             created_at: chrono::Utc::now(),
             alias: "cl-mini".to_string(),
+            opencode_model_id: String::new(),
         };
         dao.create_instance(instance1).unwrap();
         dao.create_instance(instance2).unwrap();

@@ -2,6 +2,7 @@ use cc_switch_tui::app::state::App;
 use cc_switch_tui::app::templates::register_templates;
 use cc_switch_tui::dao::sqlite_impl::SqliteDaoImpl;
 use cc_switch_tui::dao::Dao;
+use cc_switch_tui::opencode_fetch;
 use cc_switch_tui::shell;
 use cc_switch_tui::ui;
 use crossterm::{
@@ -48,6 +49,12 @@ fn main() -> io::Result<()> {
     let dao = SqliteDaoImpl::new(db_path, templates).expect("无法初始化数据库");
     let mut app = App::new_with_dao(dao);
     app.zshrc_modified = zshrc_modified;
+
+    // 启动时从 models.dev/api.json 拉取 OpenCode 模型列表并缓存到内存
+    match opencode_fetch::fetch_opencode_models() {
+        Ok(cache) => app.opencode_model_cache = cache,
+        Err(e) => app.error_message = Some(format!("无法加载 OpenCode 模型列表: {}", e)),
+    }
 
     // 启动时预生成 aliases.zsh，避免 zsh source 时报文件不存在
     let alias_dir = dirs::home_dir()

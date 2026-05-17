@@ -88,6 +88,30 @@ fn draw_instance_list<D: Dao>(frame: &mut Frame, area: ratatui::layout::Rect, ap
     frame.render_widget(list, area);
 }
 
+fn push_editable_field(
+    text: &mut Vec<Line>,
+    label: &str,
+    value: &str,
+    focus_index: Option<usize>,
+    field_index: usize,
+    t: &theme::Theme,
+) {
+    let display = if value.is_empty() {
+        "(未设置)".to_string()
+    } else {
+        value.to_string()
+    };
+    let style = if focus_index == Some(field_index) {
+        Style::default().bg(t.selection_bg()).fg(t.selection_fg())
+    } else {
+        Style::default()
+    };
+    text.push(Line::from(vec![
+        Span::raw(format!("{}: ", label)),
+        Span::styled(display, style),
+    ]));
+}
+
 fn draw_info_panel<D: Dao>(frame: &mut Frame, area: ratatui::layout::Rect, app: &App<D>) {
     let t = theme::theme();
     let mut text = vec![];
@@ -114,34 +138,10 @@ fn draw_info_panel<D: Dao>(frame: &mut Frame, area: ratatui::layout::Rect, app: 
             text.push(Line::from(format!("Model: {}", model)));
             text.push(Line::from(""));
 
-            // Alias 字段（可编辑）
-            let alias_display = if instance.alias.is_empty() {
-                "(未设置)".to_string()
-            } else {
-                instance.alias.clone()
-            };
-            let alias_style = if focus_index == Some(0) {
-                Style::default().bg(t.selection_bg()).fg(t.selection_fg())
-            } else {
-                Style::default()
-            };
-            text.push(Line::from(vec![
-                Span::raw("Alias: "),
-                Span::styled(alias_display, alias_style),
-            ]));
-
-            // API Key 字段（可编辑）
-            let api_key_masked = format!("{}*******",
-                &instance.api_key.chars().take(3).collect::<String>());
-            let api_style = if focus_index == Some(1) {
-                Style::default().bg(t.selection_bg()).fg(t.selection_fg())
-            } else {
-                Style::default()
-            };
-            text.push(Line::from(vec![
-                Span::raw("API Key: "),
-                Span::styled(api_key_masked, api_style),
-            ]));
+            push_editable_field(&mut text, "Alias", &instance.alias, focus_index, 0, &t);
+            let api_key_masked = format!("{}*******", instance.api_key.chars().take(3).collect::<String>());
+            push_editable_field(&mut text, "API Key", &api_key_masked, focus_index, 1, &t);
+            push_editable_field(&mut text, "OpenCode Model", &instance.opencode_model_id, focus_index, 2, &t);
 
             text.push(Line::from(""));
             text.push(Line::from(vec![Span::styled(
