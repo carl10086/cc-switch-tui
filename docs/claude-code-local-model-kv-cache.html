@@ -1,0 +1,964 @@
+<!doctype html>
+<html lang="zh-CN" data-ha-style="teaching">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Claude Code + Local Model + KV Cache 配置指南</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Plus+Jakarta+Sans:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<style>
+:root {
+  --primary: #0f766e;
+  --primary-container: #115e59;
+  --primary-fixed: #ccfbf1;
+  --primary-fixed-dim: #99f0e4;
+  --on-primary: #ffffff;
+  --accent-glow: #14b8a6;
+  --secondary: #d5baff;
+  --secondary-container: #7b40e0;
+  --tertiary: #4d44e3;
+  --accent-cyan: #00D4FF;
+  --bg: #f6fbfb;
+  --surface: #f6fbfb;
+  --surface-container-lowest: #ffffff;
+  --surface-container-low: #edf7f5;
+  --surface-container: #e5f1ee;
+  --surface-container-high: #d8e8e4;
+  --fg-1: #102021;
+  --fg-2: #2a4543;
+  --fg-muted: #5a7875;
+  --border: rgba(15, 118, 110, 0.12);
+  --border-strong: rgba(15, 118, 110, 0.22);
+  --outline-variant: #a8d5d0;
+  --green: #10b981;
+  --blue: #3b82f6;
+  --yellow: #f59e0b;
+  --red: #ef4444;
+  --font-headline: 'Space Grotesk', ui-sans-serif, system-ui, sans-serif;
+  --font-body: 'Plus Jakarta Sans', ui-sans-serif, system-ui, sans-serif;
+  --font-mono: 'SF Mono', 'Menlo', ui-monospace, monospace;
+  --space-xs: 4px; --space-sm: 8px; --space-md: 12px;
+  --space-lg: 16px; --space-xl: 20px; --space-2xl: 24px;
+  --space-3xl: 32px; --space-4xl: 48px; --space-5xl: 64px;
+  --radius-sm: 8px; --radius-md: 12px; --radius-lg: 16px;
+  --radius-xl: 20px; --radius-2xl: 28px; --radius-pill: 9999px;
+  --shadow-sm: 0 1px 2px rgba(15, 118, 110, 0.05);
+  --shadow-md: 0 4px 12px rgba(15, 118, 110, 0.08);
+  --shadow-lg: 0 8px 24px rgba(15, 118, 110, 0.12);
+  --shadow-accent: 0 8px 24px rgba(15, 118, 110, 0.18);
+  --gradient-primary: linear-gradient(135deg, #0f766e 0%, #14b8a6 100%);
+  --gradient-hero: linear-gradient(135deg, #0f766e 0%, #f59e0b 100%);
+  --gradient-text: linear-gradient(135deg, #0f766e 0%, #14b8a6 100%);
+}
+
+*, *::before, *::after { box-sizing: border-box; }
+
+html, body { min-height: 100%; margin: 0; }
+
+body {
+  color: var(--fg-1);
+  background:
+    radial-gradient(circle at 5% 8%, rgba(15, 118, 110, 0.08), transparent 28%),
+    radial-gradient(circle at 92% 14%, rgba(245, 158, 11, 0.07), transparent 30%),
+    linear-gradient(160deg, #f6fbfb 0%, #edf7f5 55%, #e8f4f2 100%);
+  font-family: var(--font-body);
+  -webkit-font-smoothing: antialiased;
+  overflow-x: hidden;
+}
+
+button, select { font: inherit; }
+button { cursor: pointer; }
+
+/* Lesson Shell - 3 column layout */
+.lesson-shell {
+  min-height: 100vh;
+  display: grid;
+  grid-template-columns: minmax(280px, 340px) minmax(0, 1fr) minmax(320px, 400px);
+  gap: var(--space-lg);
+  padding: var(--space-lg);
+}
+
+.panel {
+  max-width: 100%;
+  background: rgba(255, 255, 255, 0.82);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-2xl);
+  box-shadow: var(--shadow-md);
+  backdrop-filter: blur(16px) saturate(1.15);
+}
+
+/* Left Panel - Step Rail */
+.left-panel {
+  min-height: calc(100vh - 32px);
+  padding: var(--space-xl);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xl);
+  overflow-y: auto;
+}
+
+.eyebrow {
+  margin: 0 0 var(--space-sm);
+  color: var(--primary);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+h1, h2, h3, p { margin-top: 0; }
+
+h1 {
+  margin-bottom: var(--space-md);
+  font-family: var(--font-headline);
+  font-size: clamp(26px, 4vw, 38px);
+  line-height: 1.05;
+  letter-spacing: -0.03em;
+}
+
+.gradient-text {
+  color: transparent;
+  background: var(--gradient-text);
+  background-clip: text;
+  -webkit-background-clip: text;
+}
+
+.intro {
+  margin: 0;
+  color: var(--fg-2);
+  font-size: 14px;
+  line-height: 1.6;
+}
+
+/* Concept Cards */
+.concept-card {
+  padding: var(--space-lg);
+  background: var(--surface-container-lowest);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-xl);
+}
+
+.concept-card strong {
+  display: block;
+  margin-bottom: var(--space-xs);
+  font-family: var(--font-headline);
+  font-size: 15px;
+  letter-spacing: -0.01em;
+  color: var(--fg-1);
+}
+
+.concept-card p {
+  margin: 0;
+  color: var(--fg-muted);
+  font-size: 12.5px;
+  line-height: 1.55;
+}
+
+/* Step Rail */
+.step-rail {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+}
+
+.step-item {
+  display: grid;
+  grid-template-columns: 28px 1fr;
+  gap: var(--space-md);
+  align-items: flex-start;
+  padding: var(--space-md);
+  background: var(--surface-container-lowest);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  transition: transform 0.18s, border-color 0.18s, box-shadow 0.18s;
+}
+
+.step-item:hover {
+  transform: translateX(4px);
+  border-color: rgba(15, 118, 110, 0.25);
+  box-shadow: var(--shadow-sm);
+}
+
+.step-item.active {
+  border-color: rgba(15, 118, 110, 0.35);
+  box-shadow: var(--shadow-accent);
+  background: var(--primary-fixed);
+}
+
+.step-number {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  color: var(--primary);
+  background: var(--surface-container);
+  border-radius: 50%;
+  font-family: var(--font-headline);
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.step-item.active .step-number {
+  background: var(--primary);
+  color: var(--on-primary);
+}
+
+.step-content {
+  min-width: 0;
+}
+
+.step-content strong {
+  display: block;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--fg-1);
+  margin-bottom: 2px;
+}
+
+.step-content span {
+  font-size: 12px;
+  color: var(--fg-muted);
+  line-height: 1.4;
+}
+
+/* Center Stage */
+.center-stage {
+  min-height: calc(100vh - 32px);
+  padding: var(--space-xl);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xl);
+  overflow-y: auto;
+}
+
+.stage-header {
+  text-align: center;
+}
+
+.stage-header h2 {
+  margin: 0 0 var(--space-sm);
+  font-family: var(--font-headline);
+  font-size: clamp(22px, 3vw, 32px);
+  letter-spacing: -0.03em;
+}
+
+.stage-header p {
+  max-width: 560px;
+  margin: 0 auto;
+  color: var(--fg-muted);
+  font-size: 13.5px;
+  line-height: 1.6;
+}
+
+/* Visual Diagram */
+.cache-diagram {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: var(--space-3xl);
+  background: var(--surface-container-lowest);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-2xl);
+  position: relative;
+  overflow: hidden;
+}
+
+.cache-diagram::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background-image:
+    linear-gradient(rgba(15, 118, 110, 0.05) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(15, 118, 110, 0.05) 1px, transparent 1px);
+  background-size: 24px 24px;
+  pointer-events: none;
+}
+
+.diagram-flow {
+  display: flex;
+  align-items: center;
+  gap: var(--space-lg);
+  flex-wrap: wrap;
+  justify-content: center;
+  position: relative;
+  z-index: 1;
+}
+
+.diagram-box {
+  padding: var(--space-lg) var(--space-xl);
+  background: var(--surface-container-lowest);
+  border: 2px solid var(--border-strong);
+  border-radius: var(--radius-xl);
+  text-align: center;
+  min-width: 140px;
+}
+
+.diagram-box.highlight {
+  border-color: var(--primary);
+  background: var(--primary-fixed);
+  box-shadow: var(--shadow-accent);
+}
+
+.diagram-box.miss {
+  border-color: var(--yellow);
+  background: #fffbeb;
+}
+
+.diagram-box.hit {
+  border-color: var(--green);
+  background: #ecfdf5;
+}
+
+.diagram-box strong {
+  display: block;
+  font-family: var(--font-headline);
+  font-size: 14px;
+  margin-bottom: var(--space-xs);
+}
+
+.diagram-box span {
+  font-size: 12px;
+  color: var(--fg-muted);
+}
+
+.diagram-arrow {
+  font-size: 24px;
+  color: var(--fg-muted);
+  flex-shrink: 0;
+}
+
+.metric-highlight {
+  margin-top: var(--space-xl);
+  padding: var(--space-xl);
+  background: var(--surface-container-lowest);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-xl);
+  text-align: center;
+  width: 100%;
+  max-width: 480px;
+}
+
+.metric-highlight .big-number {
+  font-family: var(--font-headline);
+  font-size: 48px;
+  font-weight: 700;
+  color: var(--primary);
+  letter-spacing: -0.04em;
+  line-height: 1;
+}
+
+.metric-highlight .label {
+  font-size: 13px;
+  color: var(--fg-muted);
+  margin-top: var(--space-sm);
+}
+
+/* Code Block */
+.code-block {
+  background: #1a1f2e;
+  border-radius: var(--radius-xl);
+  overflow: hidden;
+}
+
+.code-header {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  padding: var(--space-md) var(--space-lg);
+  background: rgba(0,0,0,0.2);
+  border-bottom: 1px solid rgba(255,255,255,0.06);
+}
+
+.code-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+}
+
+.code-dot.red { background: #ff5f57; }
+.code-dot.yellow { background: #febc2e; }
+.code-dot.green { background: #28c840; }
+
+.code-title {
+  margin-left: var(--space-sm);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: rgba(255,255,255,0.5);
+}
+
+.code-content {
+  padding: var(--space-lg);
+  overflow-x: auto;
+}
+
+.code-content pre {
+  margin: 0;
+  font-family: var(--font-mono);
+  font-size: 12.5px;
+  line-height: 1.7;
+  color: #e2e8f0;
+  white-space: pre;
+}
+
+.code-content .comment { color: #64748b; }
+.code-content .flag { color: #7dd3fc; }
+.code-content .value { color: #86efac; }
+.code-content .string { color: #fcd34d; }
+
+/* Right Panel - Inspector */
+.right-panel {
+  min-height: calc(100vh - 32px);
+  padding: var(--space-xl);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-lg);
+  overflow-y: auto;
+}
+
+.inspector-top {
+  display: grid;
+  grid-template-columns: 64px 1fr;
+  gap: var(--space-lg);
+  align-items: center;
+}
+
+.inspector-icon {
+  width: 64px;
+  height: 64px;
+  border-radius: var(--radius-xl);
+  background: var(--gradient-hero);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 28px;
+  box-shadow: var(--shadow-md);
+}
+
+.inspector-top h2 {
+  margin: 0;
+  font-family: var(--font-headline);
+  font-size: 24px;
+  letter-spacing: -0.03em;
+}
+
+.kind-pill {
+  display: inline-flex;
+  margin-top: var(--space-xs);
+  padding: 4px 10px;
+  color: var(--primary);
+  background: var(--primary-fixed);
+  border-radius: var(--radius-pill);
+  font-size: 11px;
+  font-weight: 700;
+}
+
+/* Table */
+.param-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12.5px;
+}
+
+.param-table th {
+  text-align: left;
+  padding: var(--space-sm) var(--space-md);
+  color: var(--fg-muted);
+  font-weight: 700;
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  border-bottom: 1px solid var(--border);
+}
+
+.param-table td {
+  padding: var(--space-sm) var(--space-md);
+  border-bottom: 1px solid var(--border);
+  vertical-align: top;
+}
+
+.param-table tr:last-child td { border-bottom: none; }
+
+.param-table td:first-child {
+  font-family: var(--font-mono);
+  color: var(--primary);
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.param-table td:last-child {
+  color: var(--fg-2);
+  line-height: 1.5;
+}
+
+/* Key Points */
+.key-point {
+  display: flex;
+  gap: var(--space-md);
+  align-items: flex-start;
+  padding: var(--space-md);
+  background: var(--surface-container-lowest);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+}
+
+.key-point-icon {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: var(--primary-fixed);
+  color: var(--primary);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+  flex-shrink: 0;
+}
+
+.key-point-content strong {
+  display: block;
+  font-size: 13px;
+  font-weight: 700;
+  margin-bottom: 2px;
+}
+
+.key-point-content span {
+  font-size: 12px;
+  color: var(--fg-muted);
+  line-height: 1.4;
+}
+
+/* Test Results */
+.test-result {
+  display: flex;
+  gap: var(--space-md);
+  align-items: center;
+  padding: var(--space-md);
+  background: var(--surface-container-lowest);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+}
+
+.test-result .status {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 16px;
+  flex-shrink: 0;
+}
+
+.test-result .status.pass {
+  background: #d1fae5;
+  color: var(--green);
+}
+
+.test-result .content strong {
+  display: block;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.test-result .content span {
+  font-size: 12px;
+  color: var(--fg-muted);
+}
+
+/* Recap Strip */
+.recap-strip {
+  margin-top: auto;
+  padding: var(--space-lg);
+  background: var(--primary-fixed);
+  border-radius: var(--radius-xl);
+  border: 1px solid rgba(15, 118, 110, 0.2);
+}
+
+.recap-strip h3 {
+  margin: 0 0 var(--space-sm);
+  font-family: var(--font-headline);
+  font-size: 15px;
+  color: var(--primary);
+}
+
+.recap-strip ul {
+  margin: 0;
+  padding-left: var(--space-lg);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+}
+
+.recap-strip li {
+  font-size: 12.5px;
+  color: var(--fg-2);
+  line-height: 1.5;
+}
+
+/* Footer */
+.source-note {
+  margin: 0;
+  padding-top: var(--space-lg);
+  border-top: 1px solid var(--border);
+  color: var(--fg-muted);
+  font-size: 11px;
+  line-height: 1.5;
+}
+
+.source-note a {
+  color: var(--primary);
+  text-decoration: none;
+}
+
+.source-note a:hover { text-decoration: underline; }
+
+/* Responsive */
+@media (max-width: 1160px) {
+  .lesson-shell {
+    grid-template-columns: 280px minmax(0, 1fr);
+  }
+  .right-panel {
+    grid-column: 1 / -1;
+    min-height: auto;
+  }
+}
+
+@media (max-width: 820px) {
+  .lesson-shell {
+    display: block;
+    padding: var(--space-md);
+  }
+  .left-panel, .center-stage, .right-panel {
+    min-height: auto;
+    margin-bottom: var(--space-md);
+  }
+  .diagram-flow { flex-direction: column; }
+  .diagram-arrow { transform: rotate(90deg); }
+}
+
+@media (max-width: 560px) {
+  .lesson-shell { padding: var(--space-sm); }
+  h1 { font-size: 24px; }
+  .metric-highlight .big-number { font-size: 36px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+</style>
+</head>
+<body>
+<main class="lesson-shell">
+  <!-- Left Panel: Concept & Steps -->
+  <aside class="panel left-panel concept-drawer">
+    <section>
+      <p class="eyebrow">Interactive Guide</p>
+      <h1>Claude Code <span class="gradient-text">+ Local Model</span> + KV Cache</h1>
+      <p class="intro">让本地后端（llama.cpp）的提示词前缀更稳定，提升 KV cache 命中率，减少重复 prefill。</p>
+    </section>
+
+    <div class="concept-card">
+      <strong>核心问题</strong>
+      <p>Claude Code 每次请求会注入动态变化的 metadata 或 git context，导致 KV cache miss，迫使后端重新 prefill 大段 system prompt。</p>
+    </div>
+
+    <div class="concept-card">
+      <strong>解决思路</strong>
+      <p>通过 <code>--exclude-dynamic-system-prompt-sections</code> 和 <code>--settings</code> 将动态信息移出 system prompt，使其在多轮请求间保持稳定。</p>
+    </div>
+
+    <nav class="step-rail" aria-label="Configuration steps">
+      <div class="step-item active" data-step="1">
+        <span class="step-number">1</span>
+        <div class="step-content">
+          <strong>启动 llama-server</strong>
+          <span>配置 KV cache 参数</span>
+        </div>
+      </div>
+      <div class="step-item" data-step="2">
+        <span class="step-number">2</span>
+        <div class="step-content">
+          <strong>启动 Claude Code</strong>
+          <span>禁用动态 system prompt</span>
+        </div>
+      </div>
+      <div class="step-item" data-step="3">
+        <span class="step-number">3</span>
+        <div class="step-content">
+          <strong>验证效果</strong>
+          <span>对比首次与后续请求</span>
+        </div>
+      </div>
+    </nav>
+  </aside>
+
+  <!-- Center Stage -->
+  <section class="panel center-stage lesson-stage">
+    <header class="stage-header">
+      <p class="eyebrow">How it works</p>
+      <h2>KV Cache 命中原理</h2>
+      <p>动态信息移出 system prompt 后，llama-server 可复用已缓存的 KV 数据，大幅减少重复计算。</p>
+    </header>
+
+    <div class="cache-diagram">
+      <div class="diagram-flow">
+        <div class="diagram-box">
+          <strong>User Message</strong>
+          <span>动态内容</span>
+        </div>
+        <span class="diagram-arrow">+</span>
+        <div class="diagram-box highlight">
+          <strong>Static Prefix</strong>
+          <span>稳定不变</span>
+        </div>
+        <span class="diagram-arrow">&rarr;</span>
+        <div class="diagram-box hit">
+          <strong>KV Cache Hit</strong>
+          <span>直接复用</span>
+        </div>
+      </div>
+
+      <div class="metric-highlight">
+        <div class="big-number">98.7%</div>
+        <div class="label">后续请求 token 降低（从 34,947 降至 441）</div>
+      </div>
+    </div>
+
+    <div class="code-block">
+      <div class="code-header">
+        <span class="code-dot red"></span>
+        <span class="code-dot yellow"></span>
+        <span class="code-dot green"></span>
+        <span class="code-title">llama-server startup</span>
+      </div>
+      <div class="code-content">
+        <pre><span class="comment"># 启动 llama-server 并配置 KV cache</span>
+<span class="flag">/path/to/llama-server</span> \
+  <span class="flag">--model</span> <span class="string">/path/to/your-model.gguf</span> \
+  <span class="flag">--jinja</span> \
+  <span class="flag">--reasoning</span> <span class="value">auto</span> \
+  <span class="flag">--threads</span> <span class="value">12</span> \
+  <span class="flag">--n-gpu-layers</span> <span class="value">99</span> \
+  <span class="flag">--flash-attn</span> <span class="value">on</span> \
+  <span class="flag">--mlock</span> \
+  <span class="flag">--cache-type-k</span> <span class="value">q8_0</span> \
+  <span class="flag">--cache-type-v</span> <span class="value">q8_0</span> \
+  <span class="flag">--cache-ram</span> <span class="value">24576</span> \
+  <span class="flag">--ctx-checkpoints</span> <span class="value">128</span> \
+  <span class="flag">--checkpoint-every-n-tokens</span> <span class="value">1024</span> \
+  <span class="flag">--slot-prompt-similarity</span> <span class="value">0.01</span> \
+  <span class="flag">--host</span> <span class="value">127.0.0.1</span> \
+  <span class="flag">--port</span> <span class="value">8080</span> \
+  <span class="flag">--parallel</span> <span class="value">1</span> \
+  <span class="flag">--cont-batching</span> \
+  <span class="flag">--metrics</span> \
+  <span class="flag">--slots</span></pre>
+      </div>
+    </div>
+
+    <div class="code-block">
+      <div class="code-header">
+        <span class="code-dot red"></span>
+        <span class="code-dot yellow"></span>
+        <span class="code-dot green"></span>
+        <span class="code-title">claude-code startup</span>
+      </div>
+      <div class="code-content">
+        <pre><span class="comment"># 启动 Claude Code 连接到本地后端</span>
+<span class="flag">ANTHROPIC_BASE_URL</span>=<span class="string">http://127.0.0.1:8080</span> \
+<span class="flag">ANTHROPIC_API_KEY</span>=<span class="string">no-key</span> \
+<span class="flag">ANTHROPIC_MODEL</span>=<span class="string">your-model.gguf</span> \
+<span class="flag">CLAUDE_CODE_ATTRIBUTION_HEADER</span>=<span class="value">0</span> \
+<span class="flag">CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC</span>=<span class="value">1</span> \
+<span class="flag">DISABLE_TELEMETRY</span>=<span class="value">1</span> \
+<span class="flag">DISABLE_ERROR_REPORTING</span>=<span class="value">1</span> \
+<span class="flag">claude</span> <span class="value">--bare</span> \
+  <span class="flag">--model</span> <span class="string">your-model.gguf</span> \
+  <span class="flag">--dangerously-skip-permissions</span> \
+  <span class="flag">--exclude-dynamic-system-prompt-sections</span> \
+  <span class="flag">--settings</span> <span class="string">'{"includeGitInstructions":false}'</span> \
+  <span class="flag">--allowedTools</span> <span class="string">"WebFetch,Read,Edit,Write,Bash(curl:*)"</span></pre>
+      </div>
+    </div>
+  </section>
+
+  <!-- Right Panel: Details & Reference -->
+  <aside class="panel right-panel check-yourself">
+    <section class="inspector-top">
+      <div class="inspector-icon">&#9881;</div>
+      <div>
+        <p class="eyebrow">Configuration</p>
+        <h2>核心参数说明</h2>
+      </div>
+    </section>
+
+    <section>
+      <h3 style="margin: 0 0 var(--space-sm); font-family: var(--font-headline); font-size: 14px;">llama-server 关键参数</h3>
+      <table class="param-table">
+        <thead>
+          <tr>
+            <th>参数</th>
+            <th>说明</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>--flash-attn on</td>
+            <td>启用 Flash Attention，提升推理速度</td>
+          </tr>
+          <tr>
+            <td>--cache-type-k q8_0</td>
+            <td>K cache 量化格式</td>
+          </tr>
+          <tr>
+            <td>--cache-type-v q8_0</td>
+            <td>V cache 量化格式</td>
+          </tr>
+          <tr>
+            <td>--cache-ram 24576</td>
+            <td>RAM 中缓存大小（MB）</td>
+          </tr>
+          <tr>
+            <td>--slot-prompt-similarity 0.01</td>
+            <td>插槽相似度阈值，低值利于 cache 复用</td>
+          </tr>
+          <tr>
+            <td>--slots</td>
+            <td>启用插槽机制</td>
+          </tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section>
+      <h3 style="margin: 0 0 var(--space-sm); font-family: var(--font-headline); font-size: 14px;">Claude Code 关键参数</h3>
+      <table class="param-table">
+        <thead>
+          <tr>
+            <th>参数</th>
+            <th>作用</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>--exclude-dynamic-system-prompt-sections</td>
+            <td>将 cwd、env、memory、git status 从 system prompt 移到用户消息</td>
+          </tr>
+          <tr>
+            <td>--settings '{"includeGitInstructions":false}'</td>
+            <td>禁用内置 git 指令和 git status 快照</td>
+          </tr>
+          <tr>
+            <td>--dangerously-skip-permissions</td>
+            <td>绕过权限检查（本地沙箱环境使用）</td>
+          </tr>
+          <tr>
+            <td>--bare</td>
+            <td>最小化启动模式</td>
+          </tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section>
+      <h3 style="margin: 0 0 var(--space-sm); font-family: var(--font-headline); font-size: 14px;">原理</h3>
+      <div class="key-point">
+        <div class="key-point-icon">1</div>
+        <div class="key-point-content">
+          <strong>动态信息移出</strong>
+          <span>--exclude-dynamic-system-prompt-sections 将每机器相关的动态信息移出 system prompt</span>
+        </div>
+      </div>
+      <div class="key-point" style="margin-top: var(--space-sm);">
+        <div class="key-point-icon">2</div>
+        <div class="key-point-content">
+          <strong>Git 指令禁用</strong>
+          <span>--settings 移除内置 git 指令，进一步减少动态内容</span>
+        </div>
+      </div>
+      <div class="key-point" style="margin-top: var(--space-sm);">
+        <div class="key-point-icon">3</div>
+        <div class="key-point-content">
+          <strong>Cache 复用</strong>
+          <span>两者结合确保 system prompt 在多次请求间保持稳定，llama-server 可命中 KV cache</span>
+        </div>
+      </div>
+    </section>
+
+    <section>
+      <h3 style="margin: 0 0 var(--space-sm); font-family: var(--font-headline); font-size: 14px;">测试结果</h3>
+      <div class="test-result">
+        <div class="status pass">&#10003;</div>
+        <div class="content">
+          <strong>首次请求</strong>
+          <span>prompt eval time = 271,184.95 ms / 34,947 tokens</span>
+        </div>
+      </div>
+      <div class="test-result" style="margin-top: var(--space-sm);">
+        <div class="status pass">&#10003;</div>
+        <div class="content">
+          <strong>后续请求</strong>
+          <span>prompt eval time = 5,136.44 ms / 441 tokens（降低 98.7%）</span>
+        </div>
+      </div>
+    </section>
+
+    <section>
+      <h3 style="margin: 0 0 var(--space-sm); font-family: var(--font-headline); font-size: 14px;">测试场景</h3>
+      <div class="test-result">
+        <div class="status pass">&#10003;</div>
+        <div class="content">
+          <strong>多轮对话</strong>
+          <span>KV cache 正常复用</span>
+        </div>
+      </div>
+      <div class="test-result" style="margin-top: var(--space-sm);">
+        <div class="status pass">&#10003;</div>
+        <div class="content">
+          <strong>Tool calling（截图等）</strong>
+          <span>正常工作</span>
+        </div>
+      </div>
+      <div class="test-result" style="margin-top: var(--space-sm);">
+        <div class="status pass">&#10003;</div>
+        <div class="content">
+          <strong>生成单文件 HTML 游戏</strong>
+          <span>正常</span>
+        </div>
+      </div>
+    </section>
+
+    <div class="recap-strip">
+      <h3>配置要点总结</h3>
+      <ul>
+        <li>使用 <code>--exclude-dynamic-system-prompt-sections</code></li>
+        <li>使用 <code>--settings '{"includeGitInstructions":false}'</code></li>
+        <li>配置 llama-server 的 cache 参数和 slot 机制</li>
+        <li>验证日志中出现 <code>restored context checkpoint</code></li>
+      </ul>
+    </div>
+
+    <p class="source-note">
+      原文：<a href="https://datamoat.org/articles/claude-code-local-model-kv-cache/" target="_blank" rel="noopener">datamoat.org</a><br>
+      问题来源：Reddit LocalLLaMA PSA
+    </p>
+  </aside>
+</main>
+
+<script>
+document.querySelectorAll('.step-item').forEach(item => {
+  item.addEventListener('click', () => {
+    document.querySelectorAll('.step-item').forEach(i => i.classList.remove('active'));
+    item.classList.add('active');
+  });
+});
+</script>
+</body>
+</html>
