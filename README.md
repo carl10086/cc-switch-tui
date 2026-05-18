@@ -2,6 +2,20 @@
 
 管理 Claude Code 模型提供商的 Rust TUI 工具。
 
+## 功能列表
+
+- **TUI 管理** — 交互式界面管理 Provider Instance
+- **多 Provider** — 支持 MiniMax、Kimi 等多 Provider
+- **多 Alias** — 同一模型支持多个配置实例
+- **Shell Function 隔离** — 使用函数代替 alias，环境变量隔离更好
+- **claude 参数透传** — alias 支持传递任意参数给 claude
+- **KV Cache 优化** — 优化本地模型的 prompt cache 命中率
+- **OpenCode 支持** — 生成 OpenCode 配置文件，支持 OpenCode 模型选择
+- **兼容 CMUX** — 防止切换时丢失认证信息
+- **CC_SWITCH_ALIAS** — 注入环境变量用于 statusline 显示
+- **SQLite 持久化** — 本地持久化存储配置
+- **自动配置 zshrc** — 自动注入 source 命令
+
 ## 快速开始
 
 ### 前置要求
@@ -13,9 +27,8 @@
 
 从 [Releases](https://github.com/carl10086/cc-switch-tui/releases) 下载二进制文件。
 
-**macOS 安全提示**：首次运行可能会提示"无法验证开发者"。在终端执行以下命令即可运行：
-
 ```bash
+# macOS 安全提示：首次运行可能会提示"无法验证开发者"
 xattr -d com.apple.quarantine cc-switch-tui-macos-arm64
 ./cc-switch-tui-macos-arm64
 ```
@@ -24,7 +37,7 @@ xattr -d com.apple.quarantine cc-switch-tui-macos-arm64
 
 首次运行时会自动在 `~/.zshrc` 末尾添加一行：
 
-```zsh
+```bash
 source ~/.cc-switch-tui/aliases.zsh
 ```
 
@@ -36,17 +49,9 @@ source ~/.cc-switch-tui/aliases.zsh
 
 **Provider** — 模型提供商，目前支持 MiniMax、Kimi。
 
-**Instance** — 用户创建的 Provider 配置实例，包含 API Key 和自定义别名。
+**Instance** — 用户创建的 Provider 配置实例，包含 API Key、自定义别名和可选的 KV Cache 优化开关。
 
-**Alias** — 根据 Instance 生成的 shell alias，激活后切换环境变量。
-
-## 功能列表
-
-- TUI 界面管理 Provider Instance
-- 支持 MiniMax、Kimi 等多 Provider
-- 一键生成并激活 shell alias
-- SQLite 本地持久化存储
-- 自动配置 zshrc
+**Alias** — 根据 Instance 生成的 shell function，激活后切换环境变量。
 
 ## 键盘快捷键
 
@@ -54,8 +59,31 @@ source ~/.cc-switch-tui/aliases.zsh
 |--------|--------------------|
 | j/↑   | 上一项             |
 | k/↓   | 下一项             |
-| Enter | 选择/确认          |
-| n     | 创建新 Instance    |
-| e     | 编辑选中 Instance  |
-| d     | 删除选中 Instance  |
-| q     | 退出               |
+| Enter  | 选择/确认          |
+| n      | 创建新 Instance     |
+| e      | 编辑选中 Instance   |
+| d      | 删除选中 Instance   |
+| q      | 退出               |
+
+## 进阶功能
+
+### KV Cache 优化
+
+针对本地 llama.cpp 模型优化 cache 命中率。开启后 `cl-xxx` alias 会追加以下参数：
+
+```bash
+--exclude-dynamic-system-prompt-sections --settings '{"includeGitInstructions":false}'
+```
+
+详见 [KV Cache 配置指南](docs/claude-code-local-model-kv-cache.md)。
+
+### OpenCode 支持
+
+自动生成 OpenCode 配置文件，支持 OpenCode 模型选择。
+
+详见 [OpenCode 配置参考](docs/opencode/config-reference.md)。
+
+## 相关文档
+
+- [KV Cache 配置指南](docs/claude-code-local-model-kv-cache.md)
+- [OpenCode 配置参考](docs/opencode/config-reference.md)
