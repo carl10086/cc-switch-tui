@@ -143,6 +143,20 @@ fn draw_info_panel<D: Dao>(frame: &mut Frame, area: ratatui::layout::Rect, app: 
             push_editable_field(&mut text, "API Key", &api_key_masked, focus_index, 1, &t);
             push_editable_field(&mut text, "OpenCode Model", &instance.opencode_model_id, focus_index, 2, &t);
 
+            // KV Cache 开关
+            let kv_cache_display = if instance.kv_cache_enabled { "[x]" } else { "[ ]" };
+            let kv_cache_label = "KV Cache";
+            let display = format!("{} {}", kv_cache_display, kv_cache_label);
+            let kv_cache_style = if focus_index == Some(3) {
+                Style::default().bg(t.selection_bg()).fg(t.selection_fg())
+            } else {
+                Style::default()
+            };
+            text.push(Line::from(vec![
+                Span::raw("KV Cache: "),
+                Span::styled(display, kv_cache_style),
+            ]));
+
             text.push(Line::from(""));
             text.push(Line::from(vec![Span::styled(
                 "环境变量",

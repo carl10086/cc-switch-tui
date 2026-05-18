@@ -54,6 +54,12 @@ impl SqliteDaoImpl {
                 [],
             );
         }
+        if !columns.contains(&"kv_cache_enabled".to_string()) {
+            let _ = conn.execute(
+                "ALTER TABLE instances ADD COLUMN kv_cache_enabled INTEGER NOT NULL DEFAULT 0",
+                [],
+            );
+        }
         let mut dao = Self { conn, templates, instances: Vec::new() };
         dao.refresh_instances()?;
         Ok(dao)
@@ -61,7 +67,7 @@ impl SqliteDaoImpl {
 
     fn refresh_instances(&mut self) -> Result<(), AppError> {
         let mut stmt = Self::db(self.conn.prepare(
-            "SELECT id, template_id, model_id, api_key, created_at, alias, opencode_model_id FROM instances"
+            "SELECT id, template_id, model_id, api_key, created_at, alias, opencode_model_id, kv_cache_enabled FROM instances"
         ))?;
         let rows = Self::db(stmt.query_map([], |row| {
             Ok(ProviderInstance {
@@ -78,6 +84,7 @@ impl SqliteDaoImpl {
                     .with_timezone(&chrono::Utc),
                 alias: row.get(5)?,
                 opencode_model_id: row.get(6)?,
+                kv_cache_enabled: row.get::<_, i32>("kv_cache_enabled")? != 0,
             })
         }))?;
         self.instances.clear();
@@ -108,8 +115,8 @@ impl Dao for SqliteDaoImpl {
     fn create_instance(&mut self, instance: ProviderInstance) -> Result<(), AppError> {
         let created_at_str = instance.created_at.to_rfc3339();
         match self.conn.execute(
-            "INSERT INTO instances (id, template_id, model_id, api_key, created_at, alias, opencode_model_id)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
+            "INSERT INTO instances (id, template_id, model_id, api_key, created_at, alias, opencode_model_id, kv_cache_enabled)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
             rusqlite::params![
                 &instance.id,
                 &instance.template_id,
@@ -118,6 +125,7 @@ impl Dao for SqliteDaoImpl {
                 created_at_str,
                 &instance.alias,
                 &instance.opencode_model_id,
+                instance.kv_cache_enabled as i32,
             ],
         ) {
             Ok(_) => {
@@ -181,6 +189,18 @@ impl Dao for SqliteDaoImpl {
         Ok(())
     }
 
+    fn set_kv_cache_enabled(&mut self, id: &str, enabled: bool) -> Result<(), AppError> {
+        let changes = Self::db(self.conn.execute(
+            "UPDATE instances SET kv_cache_enabled = ?1 WHERE id = ?2",
+            rusqlite::params![enabled as i32, id],
+        ))?;
+        if changes == 0 {
+            return Err(AppError::InstanceNotFound(id.to_string()));
+        }
+        self.refresh_instances()?;
+        Ok(())
+    }
+
     fn rename_instance(&mut self, old_id: &str, new_id: &str, alias: String) -> Result<(), AppError> {
         // Check if old_id exists
         let old_instance = self.instances.iter()
@@ -204,8 +224,8 @@ impl Dao for SqliteDaoImpl {
         // Insert new instance
         let created_at_str = old_instance.created_at.to_rfc3339();
         Self::db(self.conn.execute(
-            "INSERT INTO instances (id, template_id, model_id, api_key, created_at, alias, opencode_model_id)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
+            "INSERT INTO instances (id, template_id, model_id, api_key, created_at, alias, opencode_model_id, kv_cache_enabled)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
             rusqlite::params![
                 new_id,
                 old_instance.template_id,
@@ -214,6 +234,7 @@ impl Dao for SqliteDaoImpl {
                 created_at_str,
                 alias,
                 old_instance.opencode_model_id,
+                old_instance.kv_cache_enabled as i32,
             ],
         ))?;
 
@@ -251,6 +272,7 @@ mod tests {
             created_at: chrono::Utc::now(),
             alias: String::new(),
             opencode_model_id: String::new(),
+            kv_cache_enabled: false,
         };
         dao.create_instance(instance.clone()).unwrap();
         let found = dao.get_instance(&instance.id).unwrap();
@@ -269,6 +291,7 @@ mod tests {
             created_at: chrono::Utc::now(),
             alias: String::new(),
             opencode_model_id: String::new(),
+            kv_cache_enabled: false,
         };
         dao.create_instance(instance).unwrap();
         dao.set_alias("minimax-MiniMax-M2.7-highspeed", "cl-mini".to_string()).unwrap();
@@ -287,6 +310,7 @@ mod tests {
             created_at: chrono::Utc::now(),
             alias: String::new(),
             opencode_model_id: String::new(),
+            kv_cache_enabled: false,
         };
         dao.create_instance(instance).unwrap();
         dao.update_instance("minimax-MiniMax-M2.7-highspeed", "new-key".to_string()).unwrap();
@@ -312,6 +336,7 @@ mod tests {
             created_at: chrono::Utc::now(),
             alias: String::new(),
             opencode_model_id: String::new(),
+            kv_cache_enabled: false,
         };
         dao.create_instance(instance).unwrap();
         dao.delete_instance("minimax-MiniMax-M2.7-highspeed").unwrap();
@@ -336,6 +361,7 @@ mod tests {
             created_at: chrono::Utc::now(),
             alias: String::new(),
             opencode_model_id: String::new(),
+            kv_cache_enabled: false,
         };
         dao.create_instance(instance.clone()).unwrap();
         let result = dao.create_instance(instance);
@@ -353,6 +379,7 @@ mod tests {
             created_at: chrono::Utc::now(),
             alias: String::new(),
             opencode_model_id: String::new(),
+            kv_cache_enabled: false,
         };
         dao.create_instance(instance).unwrap();
 
@@ -381,6 +408,7 @@ mod tests {
             created_at: chrono::Utc::now(),
             alias: String::new(),
             opencode_model_id: String::new(),
+            kv_cache_enabled: false,
         };
         let instance2 = ProviderInstance {
             id: "minimax-MiniMax-M2.7-highspeed-cl-mini".to_string(),
@@ -390,6 +418,7 @@ mod tests {
             created_at: chrono::Utc::now(),
             alias: "cl-mini".to_string(),
             opencode_model_id: String::new(),
+            kv_cache_enabled: false,
         };
         dao.create_instance(instance1).unwrap();
         dao.create_instance(instance2).unwrap();

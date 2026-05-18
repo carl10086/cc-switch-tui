@@ -31,6 +31,7 @@ fn create_test_instance() -> ProviderInstance {
         created_at: Utc::now(),
         alias: String::new(),
         opencode_model_id: String::new(),
+        kv_cache_enabled: false,
     }
 }
 
