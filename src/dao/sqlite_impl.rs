@@ -84,7 +84,7 @@ impl SqliteDaoImpl {
                     .with_timezone(&chrono::Utc),
                 alias: row.get(5)?,
                 opencode_model_id: row.get(6)?,
-                kv_cache_enabled: row.get::<_, i32>(7)? != 0,
+                kv_cache_enabled: row.get::<_, i32>("kv_cache_enabled")? != 0,
             })
         }))?;
         self.instances.clear();

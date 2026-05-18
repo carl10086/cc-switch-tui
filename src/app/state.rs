@@ -569,7 +569,7 @@ impl<D: Dao> App<D> {
                             self.state = AppState::EditOpencodeModel { instance_id };
                         }
                         3 => {
-                            // KV Cache 开关：直接切换布尔值
+                            // KV Cache: 切换布尔值（Enter 直接切换，无需进入编辑模式）
                             if let Some(instance) = self.dao.get_instance(&instance_id) {
                                 let new_enabled = !instance.kv_cache_enabled;
                                 if let Err(e) = self.dao.set_kv_cache_enabled(&instance_id, new_enabled) {
