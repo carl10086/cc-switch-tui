@@ -54,6 +54,7 @@ fn test_get_sorted_instances_returns_all_instances_with_alias_ids() {
         created_at: chrono::Utc::now() - chrono::Duration::seconds(10),
         alias: "cl-km2".to_string(),
         opencode_model_id: String::new(),
+        kv_cache_enabled: false,
     };
     let i2 = ProviderInstance {
         id: "kimi-kimi-for-coding-cl-km3".to_string(),
@@ -63,6 +64,7 @@ fn test_get_sorted_instances_returns_all_instances_with_alias_ids() {
         created_at: chrono::Utc::now(),
         alias: "cl-km3".to_string(),
         opencode_model_id: String::new(),
+        kv_cache_enabled: false,
     };
 
     app.dao.create_instance(i1).unwrap();

@@ -453,6 +453,7 @@ impl<D: Dao> App<D> {
                 created_at: chrono::Utc::now(),
                 alias,
                 opencode_model_id,
+                kv_cache_enabled: false,
             };
             match self.dao.create_instance(instance) {
                 Ok(()) => {
@@ -748,6 +749,7 @@ mod tests {
             created_at: chrono::Utc::now() - chrono::Duration::seconds(10),
             alias: "cl-km2".to_string(),
             opencode_model_id: "k2p5".to_string(),
+            kv_cache_enabled: false,
         };
         let i2 = ProviderInstance {
             id: "kimi-kimi-for-coding-cl-km3".to_string(),
@@ -757,6 +759,7 @@ mod tests {
             created_at: chrono::Utc::now(),
             alias: "cl-km3".to_string(),
             opencode_model_id: "k2p5".to_string(),
+            kv_cache_enabled: false,
         };
         let i3 = ProviderInstance {
             id: "minimax-m1-cl-mx".to_string(),
@@ -766,6 +769,7 @@ mod tests {
             created_at: chrono::Utc::now(),
             alias: "cl-mx".to_string(),
             opencode_model_id: "m1".to_string(),
+            kv_cache_enabled: false,
         };
 
         app.dao.create_instance(i1.clone()).unwrap();
@@ -805,6 +809,7 @@ mod tests {
             created_at: chrono::Utc::now(),
             alias: "cl-km2".to_string(),
             opencode_model_id: "k2p5".to_string(),
+            kv_cache_enabled: false,
         };
         let i2 = ProviderInstance {
             id: "kimi-kimi-for-coding-cl-km3".to_string(),
@@ -814,6 +819,7 @@ mod tests {
             created_at: chrono::Utc::now() - chrono::Duration::seconds(5),
             alias: "cl-km3".to_string(),
             opencode_model_id: "k2p5".to_string(),
+            kv_cache_enabled: false,
         };
 
         app.dao.create_instance(i1.clone()).unwrap();

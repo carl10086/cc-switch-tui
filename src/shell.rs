@@ -161,6 +161,7 @@ mod tests {
             created_at: chrono::Utc::now(),
             alias: "cl-mini".to_string(),
             opencode_model_id: "MiniMax-M2.7-highspeed".to_string(),
+            kv_cache_enabled: false,
         };
         generate_aliases(
             temp.path(),
@@ -204,6 +205,7 @@ mod tests {
             created_at: chrono::Utc::now(),
             alias: "cl-mini".to_string(),
             opencode_model_id: "MiniMax-M2.7-highspeed".to_string(),
+            kv_cache_enabled: false,
         };
         generate_aliases(
             temp.path(),

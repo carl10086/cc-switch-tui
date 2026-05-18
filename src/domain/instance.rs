@@ -17,4 +17,6 @@ pub struct ProviderInstance {
     pub alias: String,
     /// OpenCode model ID
     pub opencode_model_id: String,
+    /// 是否启用 KV Cache 优化（默认 false）
+    pub kv_cache_enabled: bool,
 }
