@@ -37,6 +37,7 @@ pub enum AppState {
 pub enum EditField {
     Alias,
     ApiKey,
+    KvCacheEnabled,
 }
 
 /// 输入框状态，用于 API Key 输入和编辑
@@ -513,7 +514,7 @@ impl<D: Dao> App<D> {
     }
 
     fn handle_edit_info_panel(&mut self, key: KeyEvent) {
-        let max_index = 2; // alias=0, api_key=1, opencode_model=2
+        let max_index = 3; // alias=0, api_key=1, opencode_model=2, kv_cache=3
         match key.code {
             KeyCode::Esc => self.state = AppState::List,
             KeyCode::Up => {
@@ -549,6 +550,7 @@ impl<D: Dao> App<D> {
                                 let value = match field {
                                     EditField::Alias => instance.alias.clone(),
                                     EditField::ApiKey => instance.api_key.clone(),
+                                    EditField::KvCacheEnabled => instance.kv_cache_enabled.to_string(),
                                 };
                                 self.edit_input = InputState::new(value);
                             }
@@ -566,6 +568,18 @@ impl<D: Dao> App<D> {
                             }
                             self.state = AppState::EditOpencodeModel { instance_id };
                         }
+                        3 => {
+                            // KV Cache 开关：直接切换布尔值
+                            if let Some(instance) = self.dao.get_instance(&instance_id) {
+                                let new_enabled = !instance.kv_cache_enabled;
+                                if let Err(e) = self.dao.set_kv_cache_enabled(&instance_id, new_enabled) {
+                                    self.error_message = Some(e.to_string());
+                                } else {
+                                    tracing::info!("toggle kv_cache_enabled: id={}, enabled={}", instance_id, new_enabled);
+                                    self.regenerate_aliases();
+                                }
+                            }
+                        }
                         _ => {}
                     }
                 }
@@ -581,6 +595,7 @@ impl<D: Dao> App<D> {
                     let focus_index = match field {
                         EditField::Alias => 0,
                         EditField::ApiKey => 1,
+                        EditField::KvCacheEnabled => 3,
                     };
                     self.state = AppState::EditInfoPanel {
                         instance_id,
@@ -608,6 +623,10 @@ impl<D: Dao> App<D> {
                         }
                         EditField::ApiKey => {
                             (self.dao.update_instance(&instance_id, value), instance_id.clone())
+                        }
+                        EditField::KvCacheEnabled => {
+                            // This case is handled in handle_edit_info_panel, not here
+                            (Ok(()), instance_id.clone())
                         }
                     };
                     match result {
