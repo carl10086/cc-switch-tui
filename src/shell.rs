@@ -23,7 +23,7 @@ pub fn generate_aliases(
             continue;
         }
         let env = build_env(instance, templates);
-        let function_def = format_function(&instance.alias, &env, &all_env_vars);
+        let function_def = format_function(&instance.alias, &env, &all_env_vars, instance.kv_cache_enabled);
         lines.push(function_def);
     }
 
@@ -70,7 +70,7 @@ fn get_all_env_vars(templates: &[ProviderTemplate]) -> Vec<String> {
     vars
 }
 
-fn format_function(name: &str, env: &HashMap<String, String>, unset_vars: &[String]) -> String {
+fn format_function(name: &str, env: &HashMap<String, String>, unset_vars: &[String], kv_cache_enabled: bool) -> String {
     let mut pairs: Vec<_> = env.iter().collect();
     pairs.sort_by(|a, b| a.0.cmp(b.0));
 
@@ -82,11 +82,18 @@ fn format_function(name: &str, env: &HashMap<String, String>, unset_vars: &[Stri
         .collect::<Vec<_>>()
         .join("\n");
 
+    let claude_cmd = if kv_cache_enabled {
+        "command claude --exclude-dynamic-system-prompt-sections --settings '{\"includeGitInstructions\":false}' \"$@\""
+    } else {
+        "command claude \"$@\""
+    };
+
     format!(
-        "function {} {{\n{}\n{}\n  command claude \"$@\"\n}}",
+        "function {} {{\n{}\n{}\n  {}\n}}",
         name,
         unset_line,
-        export_lines
+        export_lines,
+        claude_cmd
     )
 }
 
@@ -220,6 +227,47 @@ mod tests {
         // 验证 CC_SWITCH_ALIAS 同时出现在 unset 和 export 中
         assert!(content.contains("CC_SWITCH_ALIAS"));
         assert!(content.contains("export CC_SWITCH_ALIAS=cl-mini"));
+    }
+
+    #[test]
+    fn test_generate_aliases_kv_cache_enabled() {
+        let temp = TempDir::new().unwrap();
+        let template = ProviderTemplate {
+            id: "llama".to_string(),
+            name: "Llama.cpp".to_string(),
+            default_env: HashMap::new(),
+            models: vec![ModelTemplate {
+                id: "qwen3-27b".to_string(),
+                name: "Qwen3 27B".to_string(),
+                env_overrides: HashMap::new(),
+                opencode_model_id: "qwen3-27b".to_string(),
+            }],
+            opencode_provider_id: String::new(),
+            opencode_npm: String::new(),
+            opencode_base_url: String::new(),
+            opencode_env_var: String::new(),
+        };
+        let instance = ProviderInstance {
+            id: "llama-qwen3-27b-cl-local".to_string(),
+            template_id: "llama".to_string(),
+            model_id: "qwen3-27b".to_string(),
+            api_key: "no-key".to_string(),
+            created_at: chrono::Utc::now(),
+            alias: "cl-local".to_string(),
+            opencode_model_id: "qwen3-27b".to_string(),
+            kv_cache_enabled: true,
+        };
+        generate_aliases(
+            temp.path(),
+            &[instance],
+            &[template],
+        ).unwrap();
+
+        let content = std::fs::read_to_string(temp.path().join("aliases.zsh")).unwrap();
+        // Verify KV cache parameters are present
+        assert!(content.contains("--exclude-dynamic-system-prompt-sections"));
+        assert!(content.contains("includeGitInstructions"));
+        assert!(content.contains("command claude --exclude-dynamic-system-prompt-sections"));
     }
 
     #[test]
