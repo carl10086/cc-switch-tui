@@ -3,7 +3,7 @@ use crate::dao::Dao;
 use crate::dao::memory_impl::MemoryDaoImpl;
 use crate::domain::{AppError, ProviderInstance, ProviderTemplate};
 use crate::opencode_fetch::OpencodeModelCache;
-use std::collections::HashSet;
+use std::collections::BTreeSet;
 
 /// 应用当前所处的页面状态
 #[derive(Debug, Clone, PartialEq)]
@@ -228,12 +228,11 @@ impl<D: Dao> App<D> {
     /// 获取指定 Provider ID 下可用的 OpenCode Model ID 列表
     /// 优先从内存缓存（models.dev/api.json）获取，合并模板硬编码的映射
     pub fn get_opencode_models_for_provider_id(&self, template_id: &str) -> Vec<String> {
-        let provider = match self.dao.get_template(template_id) {
-            Some(p) => p,
-            None => return vec![],
+        let Some(provider) = self.dao.get_template(template_id) else {
+            return vec![];
         };
 
-        let mut set: HashSet<String> = provider
+        let mut set: BTreeSet<String> = provider
             .models
             .iter()
             .map(|m| m.opencode_model_id.clone())
@@ -250,9 +249,7 @@ impl<D: Dao> App<D> {
             }
         }
 
-        let mut models: Vec<String> = set.into_iter().collect();
-        models.sort();
-        models
+        set.into_iter().collect()
     }
 
     /// 重新生成 aliases.zsh（静默忽略错误）
