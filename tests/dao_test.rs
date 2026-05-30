@@ -1,5 +1,5 @@
-use cc_switch_tui::dao::memory_impl::MemoryDaoImpl;
 use cc_switch_tui::dao::Dao;
+use cc_switch_tui::dao::memory_impl::MemoryDaoImpl;
 use cc_switch_tui::domain::{AppError, ModelTemplate, ProviderInstance, ProviderTemplate};
 use chrono::Utc;
 use std::collections::HashMap;
@@ -55,7 +55,10 @@ fn test_create_duplicate_instance_fails() {
 
     dao.create_instance(instance.clone()).unwrap();
     let result = dao.create_instance(instance);
-    assert_eq!(result, Err(AppError::InstanceAlreadyExists("minimax-m1".to_string())));
+    assert_eq!(
+        result,
+        Err(AppError::InstanceAlreadyExists("minimax-m1".to_string()))
+    );
 }
 
 #[test]
@@ -75,7 +78,10 @@ fn test_delete_nonexistent_instance_fails() {
     let mut dao = MemoryDaoImpl::new(vec![template]);
 
     let result = dao.delete_instance("not-exist");
-    assert_eq!(result, Err(AppError::InstanceNotFound("not-exist".to_string())));
+    assert_eq!(
+        result,
+        Err(AppError::InstanceNotFound("not-exist".to_string()))
+    );
 }
 
 #[test]
@@ -95,7 +101,8 @@ fn test_update_instance() {
     let instance = create_test_instance();
 
     dao.create_instance(instance).unwrap();
-    dao.update_instance("minimax-m1", "new-key".to_string()).unwrap();
+    dao.update_instance("minimax-m1", "new-key".to_string())
+        .unwrap();
     let updated = dao.get_instance("minimax-m1").unwrap();
     assert_eq!(updated.api_key, "new-key");
 }
@@ -106,5 +113,8 @@ fn test_update_nonexistent_instance_fails() {
     let mut dao = MemoryDaoImpl::new(vec![template]);
 
     let result = dao.update_instance("not-exist", "key".to_string());
-    assert_eq!(result, Err(AppError::InstanceNotFound("not-exist".to_string())));
+    assert_eq!(
+        result,
+        Err(AppError::InstanceNotFound("not-exist".to_string()))
+    );
 }

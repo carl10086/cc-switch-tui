@@ -1,16 +1,16 @@
 use cc_switch_tui::app::state::App;
 use cc_switch_tui::app::templates::register_templates;
-use cc_switch_tui::dao::sqlite_impl::SqliteDaoImpl;
 use cc_switch_tui::dao::Dao;
+use cc_switch_tui::dao::sqlite_impl::SqliteDaoImpl;
 use cc_switch_tui::opencode_fetch;
 use cc_switch_tui::shell;
 use cc_switch_tui::ui;
 use crossterm::{
     event::{self, DisableMouseCapture, EnableMouseCapture, Event},
-    terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
+    terminal::{EnterAlternateScreen, LeaveAlternateScreen, disable_raw_mode, enable_raw_mode},
 };
-use ratatui::backend::CrosstermBackend;
 use ratatui::Terminal;
+use ratatui::backend::CrosstermBackend;
 use std::io;
 use std::time::Duration;
 
@@ -25,7 +25,7 @@ fn main() -> io::Result<()> {
         .with_writer(move || log_file.try_clone().unwrap())
         .with_env_filter(
             tracing_subscriber::EnvFilter::try_from_default_env()
-                .unwrap_or_else(|_| tracing_subscriber::EnvFilter::new("INFO"))
+                .unwrap_or_else(|_| tracing_subscriber::EnvFilter::new("INFO")),
         )
         .with_ansi(false)
         .with_target(true)
@@ -34,7 +34,9 @@ fn main() -> io::Result<()> {
     tracing::info!("cc-switch-tui starting");
 
     let zshrc_modified = shell::ensure_zshrc_source(
-        &dirs::home_dir().unwrap_or_else(|| std::path::PathBuf::from(".")).join(".zshrc"),
+        &dirs::home_dir()
+            .unwrap_or_else(|| std::path::PathBuf::from("."))
+            .join(".zshrc"),
     )
     .unwrap_or(false);
 

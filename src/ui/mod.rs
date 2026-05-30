@@ -22,8 +22,7 @@ pub fn draw<D: Dao>(frame: &mut Frame, app: &App<D>) {
             list::draw_list(frame, app);
             create::draw_create(frame, app);
         }
-        AppState::Edit { .. }
-        | AppState::EditField { .. } => {
+        AppState::Edit { .. } | AppState::EditField { .. } => {
             list::draw_list(frame, app);
             edit::draw_edit(frame, app);
         }

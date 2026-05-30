@@ -1,6 +1,6 @@
 use cc_switch_tui::app::state::App;
-use cc_switch_tui::dao::memory_impl::MemoryDaoImpl;
 use cc_switch_tui::dao::Dao;
+use cc_switch_tui::dao::memory_impl::MemoryDaoImpl;
 use cc_switch_tui::domain::{ModelTemplate, ProviderInstance, ProviderTemplate};
 use std::collections::HashMap;
 

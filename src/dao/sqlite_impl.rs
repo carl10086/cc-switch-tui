@@ -17,9 +17,8 @@ impl SqliteDaoImpl {
     pub fn new(path: &str, templates: Vec<ProviderTemplate>) -> Result<Self, AppError> {
         if path != ":memory:" {
             if let Some(parent) = Path::new(path).parent() {
-                std::fs::create_dir_all(parent).map_err(|e| {
-                    AppError::Database(format!("创建目录失败: {}", e))
-                })?;
+                std::fs::create_dir_all(parent)
+                    .map_err(|e| AppError::Database(format!("创建目录失败: {}", e)))?;
             }
         }
         let conn = Self::db(Connection::open(path))?;
@@ -36,12 +35,12 @@ impl SqliteDaoImpl {
             [],
         ))?;
         // 兼容旧表：添加缺失的列（PRAGMA table_info 查询列是否存在）
-        let columns: Vec<String> = Self::db(conn
-            .prepare("SELECT name FROM pragma_table_info('instances')"))?
-            .query_map([], |row| row.get(0))
-            .map_err(|e| AppError::Database(e.to_string()))?
-            .collect::<Result<_, _>>()
-            .map_err(|e| AppError::Database(e.to_string()))?;
+        let columns: Vec<String> =
+            Self::db(conn.prepare("SELECT name FROM pragma_table_info('instances')"))?
+                .query_map([], |row| row.get(0))
+                .map_err(|e| AppError::Database(e.to_string()))?
+                .collect::<Result<_, _>>()
+                .map_err(|e| AppError::Database(e.to_string()))?;
         if !columns.contains(&"alias".to_string()) {
             let _ = conn.execute(
                 "ALTER TABLE instances ADD COLUMN alias TEXT NOT NULL DEFAULT ''",
@@ -60,7 +59,11 @@ impl SqliteDaoImpl {
                 [],
             );
         }
-        let mut dao = Self { conn, templates, instances: Vec::new() };
+        let mut dao = Self {
+            conn,
+            templates,
+            instances: Vec::new(),
+        };
         dao.refresh_instances()?;
         Ok(dao)
     }
@@ -76,11 +79,13 @@ impl SqliteDaoImpl {
                 model_id: row.get(2)?,
                 api_key: row.get(3)?,
                 created_at: chrono::DateTime::parse_from_rfc3339(&row.get::<_, String>(4)?)
-                    .map_err(|e| rusqlite::Error::FromSqlConversionFailure(
-                        4,
-                        rusqlite::types::Type::Text,
-                        Box::new(e),
-                    ))?
+                    .map_err(|e| {
+                        rusqlite::Error::FromSqlConversionFailure(
+                            4,
+                            rusqlite::types::Type::Text,
+                            Box::new(e),
+                        )
+                    })?
                     .with_timezone(&chrono::Utc),
                 alias: row.get(5)?,
                 opencode_model_id: row.get(6)?,
@@ -142,10 +147,10 @@ impl Dao for SqliteDaoImpl {
     }
 
     fn delete_instance(&mut self, id: &str) -> Result<(), AppError> {
-        let changes = Self::db(self.conn.execute(
-            "DELETE FROM instances WHERE id = ?1",
-            [id],
-        ))?;
+        let changes = Self::db(
+            self.conn
+                .execute("DELETE FROM instances WHERE id = ?1", [id]),
+        )?;
         if changes == 0 {
             return Err(AppError::InstanceNotFound(id.to_string()));
         }
@@ -177,7 +182,11 @@ impl Dao for SqliteDaoImpl {
         Ok(())
     }
 
-    fn set_opencode_model_id(&mut self, id: &str, opencode_model_id: String) -> Result<(), AppError> {
+    fn set_opencode_model_id(
+        &mut self,
+        id: &str,
+        opencode_model_id: String,
+    ) -> Result<(), AppError> {
         let changes = Self::db(self.conn.execute(
             "UPDATE instances SET opencode_model_id = ?1 WHERE id = ?2",
             [opencode_model_id, id.to_string()],
@@ -201,9 +210,16 @@ impl Dao for SqliteDaoImpl {
         Ok(())
     }
 
-    fn rename_instance(&mut self, old_id: &str, new_id: &str, alias: String) -> Result<(), AppError> {
+    fn rename_instance(
+        &mut self,
+        old_id: &str,
+        new_id: &str,
+        alias: String,
+    ) -> Result<(), AppError> {
         // Check if old_id exists
-        let old_instance = self.instances.iter()
+        let old_instance = self
+            .instances
+            .iter()
             .find(|i| i.id == old_id)
             .ok_or_else(|| AppError::InstanceNotFound(old_id.to_string()))?;
 
@@ -213,10 +229,10 @@ impl Dao for SqliteDaoImpl {
         }
 
         // Delete old instance
-        let changes = Self::db(self.conn.execute(
-            "DELETE FROM instances WHERE id = ?1",
-            [old_id],
-        ))?;
+        let changes = Self::db(
+            self.conn
+                .execute("DELETE FROM instances WHERE id = ?1", [old_id]),
+        )?;
         if changes == 0 {
             return Err(AppError::InstanceNotFound(old_id.to_string()));
         }
@@ -294,7 +310,8 @@ mod tests {
             kv_cache_enabled: false,
         };
         dao.create_instance(instance).unwrap();
-        dao.set_alias("minimax-MiniMax-M2.7-highspeed", "cl-mini".to_string()).unwrap();
+        dao.set_alias("minimax-MiniMax-M2.7-highspeed", "cl-mini".to_string())
+            .unwrap();
         let found = dao.get_instance("minimax-MiniMax-M2.7-highspeed").unwrap();
         assert_eq!(found.alias, "cl-mini");
     }
@@ -313,7 +330,8 @@ mod tests {
             kv_cache_enabled: false,
         };
         dao.create_instance(instance).unwrap();
-        dao.update_instance("minimax-MiniMax-M2.7-highspeed", "new-key".to_string()).unwrap();
+        dao.update_instance("minimax-MiniMax-M2.7-highspeed", "new-key".to_string())
+            .unwrap();
         let found = dao.get_instance("minimax-MiniMax-M2.7-highspeed").unwrap();
         assert_eq!(found.api_key, "new-key");
     }
@@ -339,7 +357,8 @@ mod tests {
             kv_cache_enabled: false,
         };
         dao.create_instance(instance).unwrap();
-        dao.delete_instance("minimax-MiniMax-M2.7-highspeed").unwrap();
+        dao.delete_instance("minimax-MiniMax-M2.7-highspeed")
+            .unwrap();
         assert!(dao.get_instance("minimax-MiniMax-M2.7-highspeed").is_none());
     }
 
@@ -388,12 +407,15 @@ mod tests {
             "minimax-MiniMax-M2.7-highspeed",
             "minimax-MiniMax-M2.7-highspeed-cl-mini",
             "cl-mini".to_string(),
-        ).unwrap();
+        )
+        .unwrap();
 
         // Old id should not exist
         assert!(dao.get_instance("minimax-MiniMax-M2.7-highspeed").is_none());
         // New id should exist with new alias
-        let found = dao.get_instance("minimax-MiniMax-M2.7-highspeed-cl-mini").unwrap();
+        let found = dao
+            .get_instance("minimax-MiniMax-M2.7-highspeed-cl-mini")
+            .unwrap();
         assert_eq!(found.alias, "cl-mini");
     }
 
@@ -435,11 +457,7 @@ mod tests {
     #[test]
     fn test_rename_instance_not_found() {
         let mut dao = create_test_dao();
-        let result = dao.rename_instance(
-            "nonexistent",
-            "some-new-id",
-            "cl-new".to_string(),
-        );
+        let result = dao.rename_instance("nonexistent", "some-new-id", "cl-new".to_string());
         assert!(matches!(result, Err(AppError::InstanceNotFound(_))));
     }
 }
