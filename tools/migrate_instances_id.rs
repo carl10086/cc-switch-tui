@@ -10,10 +10,10 @@
 //!     --no-backup        Skip backup before migration (enabled by default)
 //!     --db-path <PATH>   Database path (default: ~/.cc-switch-tui/db.sqlite)
 
+use chrono::Utc;
 use rusqlite::Connection;
 use std::env;
 use std::path::PathBuf;
-use chrono::Utc;
 
 struct Config {
     db_path: PathBuf,
@@ -55,8 +55,12 @@ impl Config {
                     println!();
                     println!("Options:");
                     println!("    --dry-run          Print migration SQL without executing");
-                    println!("    --no-backup        Skip backup before migration (enabled by default)");
-                    println!("    --db-path <PATH>   Database path (default: ~/.cc-switch-tui/db.sqlite)");
+                    println!(
+                        "    --no-backup        Skip backup before migration (enabled by default)"
+                    );
+                    println!(
+                        "    --db-path <PATH>   Database path (default: ~/.cc-switch-tui/db.sqlite)"
+                    );
                     println!("    --help, -h         Show this help message");
                     std::process::exit(0);
                 }
@@ -98,9 +102,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let conn = Connection::open(&config.db_path)?;
 
     // Find all instances with non-empty alias and old-style id (no alias in id)
-    let mut stmt = conn.prepare(
-        "SELECT id, template_id, model_id, alias FROM instances WHERE alias != ''"
-    )?;
+    let mut stmt =
+        conn.prepare("SELECT id, template_id, model_id, alias FROM instances WHERE alias != ''")?;
 
     let instances: Vec<(String, String, String, String)> = stmt
         .query_map([], |row| {
@@ -116,7 +119,12 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     for (id, template_id, model_id, alias) in &instances {
         let expected_new_id = format!("{}-{}-{}", template_id, model_id, alias);
         if id != &expected_new_id {
-            to_migrate.push((id.clone(), expected_new_id.clone(), template_id.clone(), alias.clone()));
+            to_migrate.push((
+                id.clone(),
+                expected_new_id.clone(),
+                template_id.clone(),
+                alias.clone(),
+            ));
         }
     }
 
@@ -138,17 +146,18 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // Check for conflicts before migrating
     for (old_id, new_id, _, _) in &to_migrate {
-        let exists: bool = conn.query_row(
-            "SELECT 1 FROM instances WHERE id = ?1",
-            [new_id],
-            |_| Ok(true),
-        ).unwrap_or(false);
+        let exists: bool = conn
+            .query_row("SELECT 1 FROM instances WHERE id = ?1", [new_id], |_| {
+                Ok(true)
+            })
+            .unwrap_or(false);
 
         if exists {
             return Err(format!(
                 "Conflict: new id '{}' already exists (migration would overwrite data from '{}')",
                 new_id, old_id
-            ).into());
+            )
+            .into());
         }
     }
 
@@ -160,7 +169,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             "UPDATE instances SET id = ?1 WHERE id = ?2",
             [new_id, old_id],
         )?;
-        println!("  Migrated: {} -> {} (rows affected: {})", old_id, new_id, changes);
+        println!(
+            "  Migrated: {} -> {} (rows affected: {})",
+            old_id, new_id, changes
+        );
     }
 
     println!();

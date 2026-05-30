@@ -48,7 +48,9 @@ pub fn fetch_opencode_models() -> Result<OpencodeModelCache, String> {
 fn is_valid_id(id: &str) -> bool {
     !id.is_empty()
         && id.len() <= 128
-        && id.chars().all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_')
+        && id
+            .chars()
+            .all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_')
 }
 
 #[derive(Debug, Deserialize)]

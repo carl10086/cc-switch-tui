@@ -130,7 +130,10 @@ pub fn build_opencode_aliases(
             continue;
         };
 
-        let suffix = instance.alias.strip_prefix("cl-").unwrap_or(&instance.alias);
+        let suffix = instance
+            .alias
+            .strip_prefix("cl-")
+            .unwrap_or(&instance.alias);
         let opencode_alias = format!("oc-{}", suffix);
         let env_var = &template.opencode_env_var;
 

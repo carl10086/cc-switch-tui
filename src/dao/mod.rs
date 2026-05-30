@@ -33,10 +33,19 @@ pub trait Dao {
     fn set_alias(&mut self, id: &str, alias: String) -> Result<(), AppError>;
 
     /// 重命名实例（同时更新 id 和 alias）
-    fn rename_instance(&mut self, old_id: &str, new_id: &str, alias: String) -> Result<(), AppError>;
+    fn rename_instance(
+        &mut self,
+        old_id: &str,
+        new_id: &str,
+        alias: String,
+    ) -> Result<(), AppError>;
 
     /// 更新实例的 OpenCode Model ID
-    fn set_opencode_model_id(&mut self, id: &str, opencode_model_id: String) -> Result<(), AppError>;
+    fn set_opencode_model_id(
+        &mut self,
+        id: &str,
+        opencode_model_id: String,
+    ) -> Result<(), AppError>;
 
     /// 更新实例的 KV Cache 优化开关
     fn set_kv_cache_enabled(&mut self, id: &str, enabled: bool) -> Result<(), AppError>;

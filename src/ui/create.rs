@@ -2,11 +2,11 @@ use crate::app::state::{App, AppState};
 use crate::dao::Dao;
 use crate::ui::theme;
 use ratatui::{
+    Frame,
     layout::Rect,
     style::Style,
     text::{Line, Span},
     widgets::{Block, Borders, Clear, List, ListItem, Paragraph},
-    Frame,
 };
 
 /// 根据当前 AppState 渲染新建向导的对应页面
@@ -39,17 +39,24 @@ fn draw_provider_select<D: Dao>(frame: &mut Frame, app: &App<D>) {
 
     let t = theme::theme();
     let templates = app.dao.get_templates();
-    let items: Vec<ListItem> = templates.iter().enumerate().map(|(i, template)| {
-        let style = if i == app.provider_index {
-            Style::default().bg(t.selection_bg()).fg(t.selection_fg())
-        } else {
-            Style::default()
-        };
-        ListItem::new(template.name.clone()).style(style)
-    }).collect();
+    let items: Vec<ListItem> = templates
+        .iter()
+        .enumerate()
+        .map(|(i, template)| {
+            let style = if i == app.provider_index {
+                Style::default().bg(t.selection_bg()).fg(t.selection_fg())
+            } else {
+                Style::default()
+            };
+            ListItem::new(template.name.clone()).style(style)
+        })
+        .collect();
 
-    let list = List::new(items)
-        .block(Block::default().title("选择 Provider").borders(Borders::ALL));
+    let list = List::new(items).block(
+        Block::default()
+            .title("选择 Provider")
+            .borders(Borders::ALL),
+    );
     frame.render_widget(list, area);
 }
 
@@ -59,17 +66,25 @@ fn draw_model_select<D: Dao>(frame: &mut Frame, app: &App<D>) {
 
     if let Some(template) = app.current_provider() {
         let t = theme::theme();
-        let items: Vec<ListItem> = template.models.iter().enumerate().map(|(i, m)| {
-            let style = if i == app.model_index {
-                Style::default().bg(t.selection_bg()).fg(t.selection_fg())
-            } else {
-                Style::default()
-            };
-            ListItem::new(m.name.clone()).style(style)
-        }).collect();
+        let items: Vec<ListItem> = template
+            .models
+            .iter()
+            .enumerate()
+            .map(|(i, m)| {
+                let style = if i == app.model_index {
+                    Style::default().bg(t.selection_bg()).fg(t.selection_fg())
+                } else {
+                    Style::default()
+                };
+                ListItem::new(m.name.clone()).style(style)
+            })
+            .collect();
 
-        let list = List::new(items)
-            .block(Block::default().title(format!("选择 Model - {}", template.name)).borders(Borders::ALL));
+        let list = List::new(items).block(
+            Block::default()
+                .title(format!("选择 Model - {}", template.name))
+                .borders(Borders::ALL),
+        );
         frame.render_widget(list, area);
     }
 }
@@ -80,25 +95,31 @@ fn draw_opencode_model_select<D: Dao>(frame: &mut Frame, app: &App<D>) {
 
     let t = theme::theme();
     let models = match &app.state {
-        AppState::EditOpencodeModel { instance_id } => {
-            app.dao
-                .get_instance(instance_id)
-                .map(|i| app.get_opencode_models_for_provider_id(&i.template_id))
-                .unwrap_or_default()
-        }
+        AppState::EditOpencodeModel { instance_id } => app
+            .dao
+            .get_instance(instance_id)
+            .map(|i| app.get_opencode_models_for_provider_id(&i.template_id))
+            .unwrap_or_default(),
         _ => app.get_opencode_models_for_current_provider(),
     };
-    let items: Vec<ListItem> = models.iter().enumerate().map(|(i, m)| {
-        let style = if i == app.opencode_model_index {
-            Style::default().bg(t.selection_bg()).fg(t.selection_fg())
-        } else {
-            Style::default()
-        };
-        ListItem::new(m.clone()).style(style)
-    }).collect();
+    let items: Vec<ListItem> = models
+        .iter()
+        .enumerate()
+        .map(|(i, m)| {
+            let style = if i == app.opencode_model_index {
+                Style::default().bg(t.selection_bg()).fg(t.selection_fg())
+            } else {
+                Style::default()
+            };
+            ListItem::new(m.clone()).style(style)
+        })
+        .collect();
 
-    let list = List::new(items)
-        .block(Block::default().title("选择 OpenCode Model").borders(Borders::ALL));
+    let list = List::new(items).block(
+        Block::default()
+            .title("选择 OpenCode Model")
+            .borders(Borders::ALL),
+    );
     frame.render_widget(list, area);
 }
 
@@ -117,8 +138,8 @@ fn draw_api_key_input<D: Dao>(frame: &mut Frame, app: &App<D>) {
         ]),
     ];
 
-    let paragraph = Paragraph::new(text)
-        .block(Block::default().title("输入 API Key").borders(Borders::ALL));
+    let paragraph =
+        Paragraph::new(text).block(Block::default().title("输入 API Key").borders(Borders::ALL));
     frame.render_widget(paragraph, area);
 }
 
@@ -137,7 +158,7 @@ fn draw_alias_input<D: Dao>(frame: &mut Frame, app: &App<D>) {
         ]),
     ];
 
-    let paragraph = Paragraph::new(text)
-        .block(Block::default().title("输入别名").borders(Borders::ALL));
+    let paragraph =
+        Paragraph::new(text).block(Block::default().title("输入别名").borders(Borders::ALL));
     frame.render_widget(paragraph, area);
 }

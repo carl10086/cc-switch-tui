@@ -2,17 +2,21 @@ use crate::app::state::App;
 use crate::dao::Dao;
 use crate::ui::theme;
 use ratatui::{
+    Frame,
     layout::{Constraint, Direction, Layout},
     style::Style,
     text::{Line, Span},
     widgets::{Block, Borders, Clear, List, ListItem, Paragraph, Wrap},
-    Frame,
 };
 
 /// 渲染主界面：左侧实例列表 + 右侧信息面板 + 底部帮助栏
 pub fn draw_list<D: Dao>(frame: &mut Frame, app: &App<D>) {
     let constraints = if app.zshrc_modified {
-        vec![Constraint::Min(0), Constraint::Length(1), Constraint::Length(1)]
+        vec![
+            Constraint::Min(0),
+            Constraint::Length(1),
+            Constraint::Length(1),
+        ]
     } else {
         vec![Constraint::Min(0), Constraint::Length(1)]
     };
@@ -54,17 +58,18 @@ fn draw_instance_list<D: Dao>(frame: &mut Frame, area: ratatui::layout::Rect, ap
     for (flat_index, instance) in sorted.iter().enumerate() {
         if last_template_id.as_deref() != Some(instance.template_id.as_str()) {
             if let Some(template) = templates.iter().find(|t| t.id == instance.template_id) {
-                items.push(ListItem::new(Line::from(vec![
-                    Span::styled(
-                        format!("[{}]", template.name),
-                        Style::default().fg(t.heading()).add_modifier(ratatui::style::Modifier::BOLD),
-                    ),
-                ])));
+                items.push(ListItem::new(Line::from(vec![Span::styled(
+                    format!("[{}]", template.name),
+                    Style::default()
+                        .fg(t.heading())
+                        .add_modifier(ratatui::style::Modifier::BOLD),
+                )])));
             }
             last_template_id = Some(instance.template_id.clone());
         }
 
-        let model = templates.iter()
+        let model = templates
+            .iter()
             .find(|t| t.id == instance.template_id)
             .and_then(|t| t.models.iter().find(|m| m.id == instance.model_id))
             .map(|m| m.name.as_str())
@@ -77,14 +82,10 @@ fn draw_instance_list<D: Dao>(frame: &mut Frame, area: ratatui::layout::Rect, ap
             Style::default()
         };
 
-        items.push(ListItem::new(Line::from(vec![
-            Span::raw("  "),
-            Span::raw(model),
-        ])).style(style));
+        items.push(ListItem::new(Line::from(vec![Span::raw("  "), Span::raw(model)])).style(style));
     }
 
-    let list = List::new(items)
-        .block(Block::default().title("实例列表").borders(Borders::ALL));
+    let list = List::new(items).block(Block::default().title("实例列表").borders(Borders::ALL));
     frame.render_widget(list, area);
 }
 
@@ -123,14 +124,18 @@ fn draw_info_panel<D: Dao>(frame: &mut Frame, area: ratatui::layout::Rect, app: 
 
     if let Some(instance) = app.current_instance() {
         if let Some(template) = app.dao.get_template(&instance.template_id) {
-            let model = template.models.iter()
+            let model = template
+                .models
+                .iter()
                 .find(|m| m.id == instance.model_id)
                 .map(|m| m.name.as_str())
                 .unwrap_or("Unknown");
 
             text.push(Line::from(vec![Span::styled(
                 "实例详情",
-                Style::default().fg(t.heading()).add_modifier(ratatui::style::Modifier::BOLD),
+                Style::default()
+                    .fg(t.heading())
+                    .add_modifier(ratatui::style::Modifier::BOLD),
             )]));
             text.push(Line::from(""));
             text.push(Line::from(format!("ID: {}", instance.id)));
@@ -139,12 +144,26 @@ fn draw_info_panel<D: Dao>(frame: &mut Frame, area: ratatui::layout::Rect, app: 
             text.push(Line::from(""));
 
             push_editable_field(&mut text, "Alias", &instance.alias, focus_index, 0, &t);
-            let api_key_masked = format!("{}*******", instance.api_key.chars().take(3).collect::<String>());
+            let api_key_masked = format!(
+                "{}*******",
+                instance.api_key.chars().take(3).collect::<String>()
+            );
             push_editable_field(&mut text, "API Key", &api_key_masked, focus_index, 1, &t);
-            push_editable_field(&mut text, "OpenCode Model", &instance.opencode_model_id, focus_index, 2, &t);
+            push_editable_field(
+                &mut text,
+                "OpenCode Model",
+                &instance.opencode_model_id,
+                focus_index,
+                2,
+                &t,
+            );
 
             // KV Cache 开关
-            let kv_cache_display = if instance.kv_cache_enabled { "[x]" } else { "[ ]" };
+            let kv_cache_display = if instance.kv_cache_enabled {
+                "[x]"
+            } else {
+                "[ ]"
+            };
             let kv_cache_label = "KV Cache";
             let display = format!("{} {}", kv_cache_display, kv_cache_label);
             let kv_cache_style = if focus_index == Some(3) {
@@ -160,7 +179,9 @@ fn draw_info_panel<D: Dao>(frame: &mut Frame, area: ratatui::layout::Rect, app: 
             text.push(Line::from(""));
             text.push(Line::from(vec![Span::styled(
                 "环境变量",
-                Style::default().fg(t.heading()).add_modifier(ratatui::style::Modifier::BOLD),
+                Style::default()
+                    .fg(t.heading())
+                    .add_modifier(ratatui::style::Modifier::BOLD),
             )]));
             text.push(Line::from(""));
 
@@ -174,7 +195,10 @@ fn draw_info_panel<D: Dao>(frame: &mut Frame, area: ratatui::layout::Rect, app: 
             keys.sort();
             for key in keys {
                 let value = if key == "ANTHROPIC_AUTH_TOKEN" {
-                    format!("{}*******", &env.get(key).unwrap().chars().take(3).collect::<String>())
+                    format!(
+                        "{}*******",
+                        &env.get(key).unwrap().chars().take(3).collect::<String>()
+                    )
                 } else {
                     env.get(key).unwrap().clone()
                 };
@@ -199,8 +223,7 @@ fn draw_help_bar<D: Dao>(frame: &mut Frame, area: ratatui::layout::Rect, app: &A
         }
         _ => "↑↓:移动  Enter:激活  n:新建  e:编辑详情  d:删除  q:退出",
     };
-    let paragraph = Paragraph::new(help)
-        .style(Style::default().bg(t.muted()).fg(t.selection_fg()));
+    let paragraph = Paragraph::new(help).style(Style::default().bg(t.muted()).fg(t.selection_fg()));
     frame.render_widget(paragraph, area);
 }
 

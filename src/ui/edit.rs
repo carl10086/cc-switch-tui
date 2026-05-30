@@ -2,11 +2,11 @@ use crate::app::state::{App, EditField};
 use crate::dao::Dao;
 use crate::ui::theme;
 use ratatui::{
+    Frame,
     layout::Rect,
     style::Style,
     text::{Line, Span},
     widgets::{Block, Borders, Clear, Paragraph},
-    Frame,
 };
 
 /// 渲染编辑弹窗（支持 API Key 和 Alias）
@@ -22,11 +22,17 @@ pub fn draw_edit<D: Dao>(frame: &mut Frame, app: &App<D>) {
 
     let t = theme::theme();
     let title = match &app.state {
-        crate::app::state::AppState::EditField { field: EditField::Alias, .. } => "编辑别名",
+        crate::app::state::AppState::EditField {
+            field: EditField::Alias,
+            ..
+        } => "编辑别名",
         _ => "编辑",
     };
     let prompt = match &app.state {
-        crate::app::state::AppState::EditField { field: EditField::Alias, .. } => "修改别名：",
+        crate::app::state::AppState::EditField {
+            field: EditField::Alias,
+            ..
+        } => "修改别名：",
         _ => "修改 API Key：",
     };
     let text = vec![
@@ -39,7 +45,6 @@ pub fn draw_edit<D: Dao>(frame: &mut Frame, app: &App<D>) {
         ]),
     ];
 
-    let paragraph = Paragraph::new(text)
-        .block(Block::default().title(title).borders(Borders::ALL));
+    let paragraph = Paragraph::new(text).block(Block::default().title(title).borders(Borders::ALL));
     frame.render_widget(paragraph, popup_area);
 }

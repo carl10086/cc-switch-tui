@@ -23,13 +23,19 @@ pub fn generate_aliases(
             continue;
         }
         let env = build_env(instance, templates);
-        let function_def = format_function(&instance.alias, &env, &all_env_vars, instance.kv_cache_enabled);
+        let function_def = format_function(
+            &instance.alias,
+            &env,
+            &all_env_vars,
+            instance.kv_cache_enabled,
+        );
         lines.push(function_def);
     }
 
     // 生成 opencode 配置文件和 alias
     let config_paths = opencode_config::generate_opencode_configs(dir, instances, templates)?;
-    let opencode_lines = opencode_config::build_opencode_aliases(instances, templates, &config_paths);
+    let opencode_lines =
+        opencode_config::build_opencode_aliases(instances, templates, &config_paths);
     lines.extend(opencode_lines);
 
     fs::create_dir_all(dir)?;
@@ -38,7 +44,10 @@ pub fn generate_aliases(
     Ok(())
 }
 
-fn build_env(instance: &ProviderInstance, templates: &[ProviderTemplate]) -> HashMap<String, String> {
+fn build_env(
+    instance: &ProviderInstance,
+    templates: &[ProviderTemplate],
+) -> HashMap<String, String> {
     let mut env = HashMap::new();
     if let Some(template) = templates.iter().find(|t| t.id == instance.template_id) {
         env.extend(template.default_env.clone());
@@ -47,7 +56,10 @@ fn build_env(instance: &ProviderInstance, templates: &[ProviderTemplate]) -> Has
         }
     }
     env.insert("ANTHROPIC_AUTH_TOKEN".to_string(), instance.api_key.clone());
-    env.insert("CMUX_PRESERVE_CLAUDE_AUTH_SELECTION_ENV".to_string(), "1".to_string());
+    env.insert(
+        "CMUX_PRESERVE_CLAUDE_AUTH_SELECTION_ENV".to_string(),
+        "1".to_string(),
+    );
     env.insert("CC_SWITCH_ALIAS".to_string(), instance.alias.clone());
     env
 }
@@ -70,7 +82,12 @@ fn get_all_env_vars(templates: &[ProviderTemplate]) -> Vec<String> {
     vars
 }
 
-fn format_function(name: &str, env: &HashMap<String, String>, unset_vars: &[String], kv_cache_enabled: bool) -> String {
+fn format_function(
+    name: &str,
+    env: &HashMap<String, String>,
+    unset_vars: &[String],
+    kv_cache_enabled: bool,
+) -> String {
     let mut pairs: Vec<_> = env.iter().collect();
     pairs.sort_by(|a, b| a.0.cmp(b.0));
 
@@ -90,17 +107,17 @@ fn format_function(name: &str, env: &HashMap<String, String>, unset_vars: &[Stri
 
     format!(
         "function {} {{\n{}\n{}\n  {}\n}}",
-        name,
-        unset_line,
-        export_lines,
-        claude_cmd
+        name, unset_line, export_lines, claude_cmd
     )
 }
 
 pub(crate) fn shell_escape(s: &str) -> String {
     if s.contains('\'') {
         format!("'{}'", s.replace('\'', "'\"'\"'"))
-    } else if s.chars().all(|c| c.is_ascii_alphanumeric() || "_.:-/".contains(c)) {
+    } else if s
+        .chars()
+        .all(|c| c.is_ascii_alphanumeric() || "_.:-/".contains(c))
+    {
         s.to_string()
     } else {
         format!("'{}'", s)
@@ -144,7 +161,10 @@ mod tests {
     fn test_generate_aliases_content() {
         let temp = TempDir::new().unwrap();
         let mut env = HashMap::new();
-        env.insert("ANTHROPIC_BASE_URL".to_string(), "https://api.minimaxi.com/anthropic".to_string());
+        env.insert(
+            "ANTHROPIC_BASE_URL".to_string(),
+            "https://api.minimaxi.com/anthropic".to_string(),
+        );
         let template = ProviderTemplate {
             id: "minimax".to_string(),
             name: "MiniMax".to_string(),
@@ -170,11 +190,7 @@ mod tests {
             opencode_model_id: "MiniMax-M2.7-highspeed".to_string(),
             kv_cache_enabled: false,
         };
-        generate_aliases(
-            temp.path(),
-            &[instance],
-            &[template],
-        ).unwrap();
+        generate_aliases(temp.path(), &[instance], &[template]).unwrap();
 
         let content = std::fs::read_to_string(temp.path().join("aliases.zsh")).unwrap();
         // 新格式：函数格式，包含 unset 和 export
@@ -188,7 +204,10 @@ mod tests {
     fn test_generate_aliases_contains_unset_vars() {
         let temp = TempDir::new().unwrap();
         let mut env = HashMap::new();
-        env.insert("ANTHROPIC_BASE_URL".to_string(), "https://api.minimaxi.com/anthropic".to_string());
+        env.insert(
+            "ANTHROPIC_BASE_URL".to_string(),
+            "https://api.minimaxi.com/anthropic".to_string(),
+        );
         let template = ProviderTemplate {
             id: "minimax".to_string(),
             name: "MiniMax".to_string(),
@@ -214,11 +233,7 @@ mod tests {
             opencode_model_id: "MiniMax-M2.7-highspeed".to_string(),
             kv_cache_enabled: false,
         };
-        generate_aliases(
-            temp.path(),
-            &[instance],
-            &[template],
-        ).unwrap();
+        generate_aliases(temp.path(), &[instance], &[template]).unwrap();
 
         let content = std::fs::read_to_string(temp.path().join("aliases.zsh")).unwrap();
         // 验证函数格式：包含 unset 和 export
@@ -257,11 +272,7 @@ mod tests {
             opencode_model_id: "qwen3-27b".to_string(),
             kv_cache_enabled: true,
         };
-        generate_aliases(
-            temp.path(),
-            &[instance],
-            &[template],
-        ).unwrap();
+        generate_aliases(temp.path(), &[instance], &[template]).unwrap();
 
         let content = std::fs::read_to_string(temp.path().join("aliases.zsh")).unwrap();
         // Verify KV cache parameters are present

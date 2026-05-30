@@ -56,7 +56,9 @@ impl Dao for MemoryDaoImpl {
     }
 
     fn update_instance(&mut self, id: &str, api_key: String) -> Result<(), AppError> {
-        let instance = self.instances.get_mut(id)
+        let instance = self
+            .instances
+            .get_mut(id)
             .ok_or_else(|| AppError::InstanceNotFound(id.to_string()))?;
         instance.api_key = api_key;
         tracing::info!("dao update_instance: id={}", id);
@@ -64,29 +66,46 @@ impl Dao for MemoryDaoImpl {
     }
 
     fn set_alias(&mut self, id: &str, alias: String) -> Result<(), AppError> {
-        let instance = self.instances.get_mut(id)
+        let instance = self
+            .instances
+            .get_mut(id)
             .ok_or_else(|| AppError::InstanceNotFound(id.to_string()))?;
         instance.alias = alias;
         Ok(())
     }
 
-    fn set_opencode_model_id(&mut self, id: &str, opencode_model_id: String) -> Result<(), AppError> {
-        let instance = self.instances.get_mut(id)
+    fn set_opencode_model_id(
+        &mut self,
+        id: &str,
+        opencode_model_id: String,
+    ) -> Result<(), AppError> {
+        let instance = self
+            .instances
+            .get_mut(id)
             .ok_or_else(|| AppError::InstanceNotFound(id.to_string()))?;
         instance.opencode_model_id = opencode_model_id;
         Ok(())
     }
 
     fn set_kv_cache_enabled(&mut self, id: &str, enabled: bool) -> Result<(), AppError> {
-        let instance = self.instances.get_mut(id)
+        let instance = self
+            .instances
+            .get_mut(id)
             .ok_or_else(|| AppError::InstanceNotFound(id.to_string()))?;
         instance.kv_cache_enabled = enabled;
         Ok(())
     }
 
-    fn rename_instance(&mut self, old_id: &str, new_id: &str, alias: String) -> Result<(), AppError> {
+    fn rename_instance(
+        &mut self,
+        old_id: &str,
+        new_id: &str,
+        alias: String,
+    ) -> Result<(), AppError> {
         // Get the old instance
-        let instance = self.instances.get(old_id)
+        let instance = self
+            .instances
+            .get(old_id)
             .ok_or_else(|| AppError::InstanceNotFound(old_id.to_string()))?
             .clone();
 

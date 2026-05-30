@@ -2,11 +2,11 @@ use crate::app::state::App;
 use crate::dao::Dao;
 use crate::ui::theme;
 use ratatui::{
+    Frame,
     layout::Rect,
     style::Style,
     text::Line,
     widgets::{Block, Borders, Clear, Paragraph},
-    Frame,
 };
 
 /// 渲染删除确认对话框
