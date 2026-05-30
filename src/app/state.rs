@@ -1025,4 +1025,48 @@ mod tests {
             "返回结果应按字母升序排列且去重"
         );
     }
+
+    #[test]
+    fn test_get_opencode_models_sorted_when_cache_empty() {
+        let provider = ProviderTemplate {
+            id: "test-provider-empty-cache".to_string(),
+            name: "Test Provider Empty Cache".to_string(),
+            default_env: HashMap::new(),
+            models: vec![
+                ModelTemplate {
+                    id: "m-c".to_string(),
+                    name: "Model C".to_string(),
+                    env_overrides: HashMap::new(),
+                    opencode_model_id: "charlie".to_string(),
+                },
+                ModelTemplate {
+                    id: "m-a".to_string(),
+                    name: "Model A".to_string(),
+                    env_overrides: HashMap::new(),
+                    opencode_model_id: "alpha".to_string(),
+                },
+                ModelTemplate {
+                    id: "m-b".to_string(),
+                    name: "Model B".to_string(),
+                    env_overrides: HashMap::new(),
+                    opencode_model_id: "bravo".to_string(),
+                },
+            ],
+            opencode_provider_id: "test-pid-empty".to_string(),
+            opencode_npm: "@ai-sdk/test".to_string(),
+            opencode_base_url: "https://test.example.com".to_string(),
+            opencode_env_var: "TEST_API_KEY".to_string(),
+        };
+
+        let dao = MemoryDaoImpl::new(vec![provider]);
+        let app = App::new_with_dao(dao);
+
+        // 缓存为空，仅返回硬编码 model 且已排序
+        let models = app.get_opencode_models_for_provider_id("test-provider-empty-cache");
+        assert_eq!(
+            models,
+            vec!["alpha", "bravo", "charlie"],
+            "缓存为空时硬编码 model 仍应按字母升序返回"
+        );
+    }
 }
