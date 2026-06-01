@@ -46,6 +46,8 @@ pub enum AppState {
     },
     /// 编辑 OpenCode Model（列表选择）
     EditOpencodeModel { instance_id: String },
+    /// 编辑 Model（列表选择，限定同 template 内的 model）
+    EditModel { instance_id: String },
     /// 删除确认对话框
     DeleteConfirm { instance_id: String },
 }
@@ -300,6 +302,7 @@ impl<D: Dao> App<D> {
             AppState::EditInfoPanel { .. } => self.handle_edit_info_panel(key),
             AppState::EditField { .. } => self.handle_edit_field(key),
             AppState::EditOpencodeModel { .. } => self.handle_edit_opencode_model(key),
+            AppState::EditModel { .. } => self.handle_edit_model(key),
             AppState::DeleteConfirm { .. } => self.handle_delete_confirm(key),
         }
     }
@@ -614,7 +617,7 @@ impl<D: Dao> App<D> {
     }
 
     fn handle_edit_info_panel(&mut self, key: KeyEvent) {
-        let max_index = 3; // alias=0, api_key=1, opencode_model=2, kv_cache=3
+        let max_index = 4; // model=0, alias=1, api_key=2, opencode_model=3, kv_cache=4
         match key.code {
             KeyCode::Esc => self.state = AppState::List,
             KeyCode::Up => {
@@ -652,10 +655,26 @@ impl<D: Dao> App<D> {
                 } = self.state.clone()
                 {
                     match focus_index {
-                        0 | 1 => {
+                        0 => {
+                            // Model：列表选择，限定同 template 内的 model
+                            if let Some(instance) = self.dao.get_instance(&instance_id) {
+                                if let Some(template) =
+                                    self.dao.get_template(&instance.template_id)
+                                {
+                                    let current_index = template
+                                        .models
+                                        .iter()
+                                        .position(|m| m.id == instance.model_id)
+                                        .unwrap_or(0);
+                                    self.model_index = current_index;
+                                }
+                            }
+                            self.state = AppState::EditModel { instance_id };
+                        }
+                        1 | 2 => {
                             let field = match focus_index {
-                                0 => EditField::Alias,
-                                1 => EditField::ApiKey,
+                                1 => EditField::Alias,
+                                2 => EditField::ApiKey,
                                 _ => return,
                             };
                             if let Some(instance) = self.dao.get_instance(&instance_id) {
@@ -670,7 +689,7 @@ impl<D: Dao> App<D> {
                             }
                             self.state = AppState::EditField { instance_id, field };
                         }
-                        2 => {
+                        3 => {
                             // OpenCode Model 使用列表选择而非文本输入
                             if let Some(instance) = self.dao.get_instance(&instance_id) {
                                 let models =
@@ -683,7 +702,7 @@ impl<D: Dao> App<D> {
                             }
                             self.state = AppState::EditOpencodeModel { instance_id };
                         }
-                        3 => {
+                        4 => {
                             // KV Cache: 切换布尔值（Enter 直接切换，无需进入编辑模式）
                             if let Some(instance) = self.dao.get_instance(&instance_id) {
                                 let new_enabled = !instance.kv_cache_enabled;
@@ -714,9 +733,9 @@ impl<D: Dao> App<D> {
             KeyCode::Esc => {
                 if let AppState::EditField { instance_id, field } = self.state.clone() {
                     let focus_index = match field {
-                        EditField::Alias => 0,
-                        EditField::ApiKey => 1,
-                        EditField::KvCacheEnabled => 3,
+                        EditField::Alias => 1,
+                        EditField::ApiKey => 2,
+                        EditField::KvCacheEnabled => 4,
                     };
                     self.state = AppState::EditInfoPanel {
                         instance_id,
@@ -804,7 +823,7 @@ impl<D: Dao> App<D> {
                 if let AppState::EditOpencodeModel { instance_id } = self.state.clone() {
                     self.state = AppState::EditInfoPanel {
                         instance_id,
-                        focus_index: 2,
+                        focus_index: 3,
                     };
                 }
             }
@@ -824,7 +843,7 @@ impl<D: Dao> App<D> {
                     }
                     self.state = AppState::EditInfoPanel {
                         instance_id,
-                        focus_index: 2,
+                        focus_index: 3,
                     };
                 }
             }
@@ -835,6 +854,102 @@ impl<D: Dao> App<D> {
             KeyCode::Down => {
                 self.opencode_model_index =
                     Self::move_index(self.opencode_model_index, 1, models.len())
+            }
+            _ => {}
+        }
+    }
+
+    /// 编辑 model（列表选择，限定同 template 内的 models）
+    fn handle_edit_model(&mut self, key: KeyEvent) {
+        // 计算可选项：同 template 内的所有 models
+        let models: Vec<String> = if let AppState::EditModel { instance_id } = &self.state {
+            self.dao
+                .get_instance(instance_id)
+                .and_then(|i| self.dao.get_template(&i.template_id))
+                .map(|t| t.models.iter().map(|m| m.id.clone()).collect())
+                .unwrap_or_default()
+        } else {
+            vec![]
+        };
+        match key.code {
+            KeyCode::Esc => {
+                if let AppState::EditModel { instance_id } = self.state.clone() {
+                    self.state = AppState::EditInfoPanel {
+                        instance_id,
+                        focus_index: 0,
+                    };
+                }
+            }
+            KeyCode::Enter => {
+                if let AppState::EditModel { instance_id } = self.state.clone() {
+                    if let Some(new_model_id) = models.get(self.model_index).cloned() {
+                        // 先 clone 出需要的字段，drop 借用后再调 mut 方法
+                        let snapshot = self
+                            .dao
+                            .get_instance(&instance_id)
+                            .map(|i| {
+                                (
+                                    i.alias.clone(),
+                                    i.api_key.clone(),
+                                    i.template_id.clone(),
+                                    i.opencode_model_id.clone(),
+                                )
+                            });
+                        if let Some((alias, api_key, template_id, old_opencode_id)) = snapshot {
+                            // 改 model 同时保留 alias 和 api_key
+                            let result = self.dao.update_instance(
+                                &instance_id,
+                                new_model_id.clone(),
+                                alias,
+                                api_key,
+                            );
+                            match result {
+                                Ok(()) => {
+                                    tracing::info!(
+                                        "update model: id={} -> model_id={}",
+                                        instance_id,
+                                        new_model_id
+                                    );
+                                    // opencode_model_id 联动：
+                                    // 原值空时按新 model 的 env_overrides 重算；已设值则保留
+                                    if old_opencode_id.is_empty() {
+                                        if let Some(template) = self.dao.get_template(&template_id)
+                                        {
+                                            if let Some(model_tmpl) = template
+                                                .models
+                                                .iter()
+                                                .find(|m| m.id == new_model_id)
+                                            {
+                                                let new_opencode_id =
+                                                    model_tmpl.opencode_model_id.clone();
+                                                if let Err(e) = self.dao.set_opencode_model_id(
+                                                    &instance_id,
+                                                    new_opencode_id,
+                                                ) {
+                                                    self.error_message = Some(e.to_string());
+                                                }
+                                            }
+                                        }
+                                    }
+                                    self.regenerate_aliases();
+                                }
+                                Err(e) => {
+                                    self.error_message = Some(e.to_string());
+                                }
+                            }
+                        }
+                    }
+                    self.state = AppState::EditInfoPanel {
+                        instance_id,
+                        focus_index: 0,
+                    };
+                }
+            }
+            KeyCode::Up => {
+                self.model_index = Self::move_index(self.model_index, -1, models.len())
+            }
+            KeyCode::Down => {
+                self.model_index = Self::move_index(self.model_index, 1, models.len())
             }
             _ => {}
         }
