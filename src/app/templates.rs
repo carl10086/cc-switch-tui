@@ -13,27 +13,45 @@ fn minimax_template() -> ProviderTemplate {
         "ANTHROPIC_BASE_URL".to_string(),
         "https://api.minimaxi.com/anthropic".to_string(),
     );
-    default_env.insert(
-        "ANTHROPIC_DEFAULT_HAIKU_MODEL".to_string(),
-        "MiniMax-M2.7-highspeed".to_string(),
-    );
-    default_env.insert(
-        "ANTHROPIC_DEFAULT_OPUS_MODEL".to_string(),
-        "MiniMax-M2.7-highspeed".to_string(),
-    );
-    default_env.insert(
-        "ANTHROPIC_DEFAULT_SONNET_MODEL".to_string(),
-        "MiniMax-M2.7-highspeed".to_string(),
-    );
     default_env.insert("API_TIMEOUT_MS".to_string(), "3000000".to_string());
     default_env.insert(
         "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC".to_string(),
         "1".to_string(),
     );
 
-    let mut env_overrides = HashMap::new();
-    env_overrides.insert(
+    let mut env_overrides_m3 = HashMap::new();
+    env_overrides_m3.insert(
         "ANTHROPIC_MODEL".to_string(),
+        "MiniMax-M3".to_string(),
+    );
+    env_overrides_m3.insert(
+        "ANTHROPIC_DEFAULT_HAIKU_MODEL".to_string(),
+        "MiniMax-M3".to_string(),
+    );
+    env_overrides_m3.insert(
+        "ANTHROPIC_DEFAULT_OPUS_MODEL".to_string(),
+        "MiniMax-M3".to_string(),
+    );
+    env_overrides_m3.insert(
+        "ANTHROPIC_DEFAULT_SONNET_MODEL".to_string(),
+        "MiniMax-M3".to_string(),
+    );
+
+    let mut env_overrides_m27 = HashMap::new();
+    env_overrides_m27.insert(
+        "ANTHROPIC_MODEL".to_string(),
+        "MiniMax-M2.7-highspeed".to_string(),
+    );
+    env_overrides_m27.insert(
+        "ANTHROPIC_DEFAULT_HAIKU_MODEL".to_string(),
+        "MiniMax-M2.7-highspeed".to_string(),
+    );
+    env_overrides_m27.insert(
+        "ANTHROPIC_DEFAULT_OPUS_MODEL".to_string(),
+        "MiniMax-M2.7-highspeed".to_string(),
+    );
+    env_overrides_m27.insert(
+        "ANTHROPIC_DEFAULT_SONNET_MODEL".to_string(),
         "MiniMax-M2.7-highspeed".to_string(),
     );
 
@@ -41,12 +59,20 @@ fn minimax_template() -> ProviderTemplate {
         id: "minimax".to_string(),
         name: "MiniMax".to_string(),
         default_env,
-        models: vec![ModelTemplate {
-            id: "MiniMax-M2.7-highspeed".to_string(),
-            name: "MiniMax M2.7 Highspeed".to_string(),
-            env_overrides,
-            opencode_model_id: "MiniMax-M2.7-highspeed".to_string(),
-        }],
+        models: vec![
+            ModelTemplate {
+                id: "MiniMax-M3".to_string(),
+                name: "MiniMax M3".to_string(),
+                env_overrides: env_overrides_m3,
+                opencode_model_id: "MiniMax-M3".to_string(),
+            },
+            ModelTemplate {
+                id: "MiniMax-M2.7-highspeed".to_string(),
+                name: "MiniMax M2.7 Highspeed".to_string(),
+                env_overrides: env_overrides_m27,
+                opencode_model_id: "MiniMax-M2.7-highspeed".to_string(),
+            },
+        ],
         opencode_provider_id: "minimax-cn".to_string(),
         opencode_npm: "@ai-sdk/anthropic".to_string(),
         opencode_base_url: "https://api.minimaxi.com/anthropic/v1".to_string(),

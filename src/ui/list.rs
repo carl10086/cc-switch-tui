@@ -140,21 +140,21 @@ fn draw_info_panel<D: Dao>(frame: &mut Frame, area: ratatui::layout::Rect, app: 
             text.push(Line::from(""));
             text.push(Line::from(format!("ID: {}", instance.id)));
             text.push(Line::from(format!("Provider: {}", template.name)));
-            text.push(Line::from(format!("Model: {}", model)));
             text.push(Line::from(""));
 
-            push_editable_field(&mut text, "Alias", &instance.alias, focus_index, 0, &t);
+            push_editable_field(&mut text, "Model", model, focus_index, 0, &t);
+            push_editable_field(&mut text, "Alias", &instance.alias, focus_index, 1, &t);
             let api_key_masked = format!(
                 "{}*******",
                 instance.api_key.chars().take(3).collect::<String>()
             );
-            push_editable_field(&mut text, "API Key", &api_key_masked, focus_index, 1, &t);
+            push_editable_field(&mut text, "API Key", &api_key_masked, focus_index, 2, &t);
             push_editable_field(
                 &mut text,
                 "OpenCode Model",
                 &instance.opencode_model_id,
                 focus_index,
-                2,
+                3,
                 &t,
             );
 
@@ -166,7 +166,7 @@ fn draw_info_panel<D: Dao>(frame: &mut Frame, area: ratatui::layout::Rect, app: 
             };
             let kv_cache_label = "KV Cache";
             let display = format!("{} {}", kv_cache_display, kv_cache_label);
-            let kv_cache_style = if focus_index == Some(3) {
+            let kv_cache_style = if focus_index == Some(4) {
                 Style::default().bg(t.selection_bg()).fg(t.selection_fg())
             } else {
                 Style::default()

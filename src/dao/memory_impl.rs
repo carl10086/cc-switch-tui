@@ -1,4 +1,5 @@
 use crate::dao::Dao;
+use crate::domain::instance::validate_alias;
 use crate::domain::{AppError, ProviderInstance, ProviderTemplate};
 use std::collections::HashMap;
 
@@ -38,6 +39,7 @@ impl Dao for MemoryDaoImpl {
     }
 
     fn create_instance(&mut self, instance: ProviderInstance) -> Result<(), AppError> {
+        validate_alias(&instance.alias)?;
         if self.instances.contains_key(&instance.id) {
             return Err(AppError::InstanceAlreadyExists(instance.id.clone()));
         }
@@ -55,17 +57,27 @@ impl Dao for MemoryDaoImpl {
         Ok(())
     }
 
-    fn update_instance(&mut self, id: &str, api_key: String) -> Result<(), AppError> {
+    fn update_instance(
+        &mut self,
+        id: &str,
+        model_id: String,
+        alias: String,
+        api_key: String,
+    ) -> Result<(), AppError> {
+        validate_alias(&alias)?;
         let instance = self
             .instances
             .get_mut(id)
             .ok_or_else(|| AppError::InstanceNotFound(id.to_string()))?;
+        instance.model_id = model_id;
+        instance.alias = alias;
         instance.api_key = api_key;
         tracing::info!("dao update_instance: id={}", id);
         Ok(())
     }
 
     fn set_alias(&mut self, id: &str, alias: String) -> Result<(), AppError> {
+        validate_alias(&alias)?;
         let instance = self
             .instances
             .get_mut(id)
@@ -102,6 +114,7 @@ impl Dao for MemoryDaoImpl {
         new_id: &str,
         alias: String,
     ) -> Result<(), AppError> {
+        validate_alias(&alias)?;
         // Get the old instance
         let instance = self
             .instances

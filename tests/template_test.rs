@@ -11,12 +11,30 @@ fn test_minimax_template_registered() {
         minimax.default_env.get("ANTHROPIC_BASE_URL").unwrap(),
         "https://api.minimaxi.com/anthropic"
     );
-    assert_eq!(minimax.models.len(), 1);
+    assert_eq!(minimax.models.len(), 2);
 
     let model = &minimax.models[0];
-    assert_eq!(model.id, "MiniMax-M2.7-highspeed");
+    assert_eq!(model.id, "MiniMax-M3");
     assert_eq!(
         model.env_overrides.get("ANTHROPIC_MODEL").unwrap(),
+        "MiniMax-M3"
+    );
+    assert_eq!(
+        model.env_overrides.get("ANTHROPIC_DEFAULT_OPUS_MODEL").unwrap(),
+        "MiniMax-M3"
+    );
+
+    let model2 = &minimax.models[1];
+    assert_eq!(model2.id, "MiniMax-M2.7-highspeed");
+    assert_eq!(
+        model2.env_overrides.get("ANTHROPIC_MODEL").unwrap(),
+        "MiniMax-M2.7-highspeed"
+    );
+    assert_eq!(
+        model2
+            .env_overrides
+            .get("ANTHROPIC_DEFAULT_OPUS_MODEL")
+            .unwrap(),
         "MiniMax-M2.7-highspeed"
     );
 }

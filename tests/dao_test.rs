@@ -29,7 +29,7 @@ fn create_test_instance() -> ProviderInstance {
         model_id: "m1".to_string(),
         api_key: "test-key".to_string(),
         created_at: Utc::now(),
-        alias: String::new(),
+        alias: "cl-mini".to_string(),
         opencode_model_id: String::new(),
         kv_cache_enabled: false,
     }
@@ -101,10 +101,17 @@ fn test_update_instance() {
     let instance = create_test_instance();
 
     dao.create_instance(instance).unwrap();
-    dao.update_instance("minimax-m1", "new-key".to_string())
-        .unwrap();
+    dao.update_instance(
+        "minimax-m1",
+        "m1".to_string(),
+        "cl-mini".to_string(),
+        "new-key".to_string(),
+    )
+    .unwrap();
     let updated = dao.get_instance("minimax-m1").unwrap();
     assert_eq!(updated.api_key, "new-key");
+    assert_eq!(updated.model_id, "m1");
+    assert_eq!(updated.alias, "cl-mini");
 }
 
 #[test]
@@ -112,7 +119,12 @@ fn test_update_nonexistent_instance_fails() {
     let template = create_test_template();
     let mut dao = MemoryDaoImpl::new(vec![template]);
 
-    let result = dao.update_instance("not-exist", "key".to_string());
+    let result = dao.update_instance(
+        "not-exist",
+        "m".to_string(),
+        "a".to_string(),
+        "key".to_string(),
+    );
     assert_eq!(
         result,
         Err(AppError::InstanceNotFound("not-exist".to_string()))

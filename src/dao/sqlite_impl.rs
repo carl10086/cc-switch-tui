@@ -1,4 +1,5 @@
 use crate::dao::Dao;
+use crate::domain::instance::validate_alias;
 use crate::domain::{AppError, ProviderInstance, ProviderTemplate};
 use rusqlite::Connection;
 use std::path::Path;
@@ -118,6 +119,7 @@ impl Dao for SqliteDaoImpl {
     }
 
     fn create_instance(&mut self, instance: ProviderInstance) -> Result<(), AppError> {
+        validate_alias(&instance.alias)?;
         let created_at_str = instance.created_at.to_rfc3339();
         match self.conn.execute(
             "INSERT INTO instances (id, template_id, model_id, api_key, created_at, alias, opencode_model_id, kv_cache_enabled)
@@ -158,10 +160,17 @@ impl Dao for SqliteDaoImpl {
         Ok(())
     }
 
-    fn update_instance(&mut self, id: &str, api_key: String) -> Result<(), AppError> {
+    fn update_instance(
+        &mut self,
+        id: &str,
+        model_id: String,
+        alias: String,
+        api_key: String,
+    ) -> Result<(), AppError> {
+        validate_alias(&alias)?;
         let changes = Self::db(self.conn.execute(
-            "UPDATE instances SET api_key = ?1 WHERE id = ?2",
-            [api_key, id.to_string()],
+            "UPDATE instances SET model_id = ?1, alias = ?2, api_key = ?3 WHERE id = ?4",
+            rusqlite::params![model_id, alias, api_key, id.to_string()],
         ))?;
         if changes == 0 {
             return Err(AppError::InstanceNotFound(id.to_string()));
@@ -171,6 +180,7 @@ impl Dao for SqliteDaoImpl {
     }
 
     fn set_alias(&mut self, id: &str, alias: String) -> Result<(), AppError> {
+        validate_alias(&alias)?;
         let changes = Self::db(self.conn.execute(
             "UPDATE instances SET alias = ?1 WHERE id = ?2",
             [alias, id.to_string()],
@@ -216,6 +226,7 @@ impl Dao for SqliteDaoImpl {
         new_id: &str,
         alias: String,
     ) -> Result<(), AppError> {
+        validate_alias(&alias)?;
         // Check if old_id exists
         let old_instance = self
             .instances
@@ -286,7 +297,7 @@ mod tests {
             model_id: "MiniMax-M2.7-highspeed".to_string(),
             api_key: "test-key".to_string(),
             created_at: chrono::Utc::now(),
-            alias: String::new(),
+            alias: "cl-mini".to_string(),
             opencode_model_id: String::new(),
             kv_cache_enabled: false,
         };
@@ -305,7 +316,7 @@ mod tests {
             model_id: "MiniMax-M2.7-highspeed".to_string(),
             api_key: "key".to_string(),
             created_at: chrono::Utc::now(),
-            alias: String::new(),
+            alias: "cl-mini".to_string(),
             opencode_model_id: String::new(),
             kv_cache_enabled: false,
         };
@@ -325,13 +336,18 @@ mod tests {
             model_id: "MiniMax-M2.7-highspeed".to_string(),
             api_key: "old-key".to_string(),
             created_at: chrono::Utc::now(),
-            alias: String::new(),
+            alias: "cl-mini".to_string(),
             opencode_model_id: String::new(),
             kv_cache_enabled: false,
         };
         dao.create_instance(instance).unwrap();
-        dao.update_instance("minimax-MiniMax-M2.7-highspeed", "new-key".to_string())
-            .unwrap();
+        dao.update_instance(
+            "minimax-MiniMax-M2.7-highspeed",
+            "MiniMax-M2.7-highspeed".to_string(),
+            "cl-mini".to_string(),
+            "new-key".to_string(),
+        )
+        .unwrap();
         let found = dao.get_instance("minimax-MiniMax-M2.7-highspeed").unwrap();
         assert_eq!(found.api_key, "new-key");
     }
@@ -339,8 +355,46 @@ mod tests {
     #[test]
     fn test_update_instance_not_found() {
         let mut dao = create_test_dao();
-        let result = dao.update_instance("nonexistent", "key".to_string());
+        let result = dao.update_instance(
+            "nonexistent",
+            "m".to_string(),
+            "a".to_string(),
+            "key".to_string(),
+        );
         assert!(matches!(result, Err(AppError::InstanceNotFound(_))));
+    }
+
+    /// 新行为：update_instance 同时改 model_id + alias + api_key，
+    /// 改 model 不影响 id 主键稳定性。
+    #[test]
+    fn test_update_instance_changes_model_id_preserves_id() {
+        let mut dao = create_test_dao();
+        let instance = ProviderInstance {
+            id: "minimax-cl-mini".to_string(),
+            template_id: "minimax".to_string(),
+            model_id: "MiniMax-M2.7-highspeed".to_string(),
+            api_key: "old-key".to_string(),
+            created_at: chrono::Utc::now(),
+            alias: "cl-mini".to_string(),
+            opencode_model_id: String::new(),
+            kv_cache_enabled: false,
+        };
+        dao.create_instance(instance).unwrap();
+
+        // 改 model（M2.7 → M3），alias 和 api_key 同时更新
+        dao.update_instance(
+            "minimax-cl-mini",
+            "MiniMax-M3".to_string(),
+            "cl-mini".to_string(),
+            "new-key".to_string(),
+        )
+        .unwrap();
+
+        // id 不变（id 格式只含 template+alias，model 改变不动 id）
+        let found = dao.get_instance("minimax-cl-mini").expect("id 保持稳定");
+        assert_eq!(found.id, "minimax-cl-mini");
+        assert_eq!(found.model_id, "MiniMax-M3");
+        assert_eq!(found.api_key, "new-key");
     }
 
     #[test]
@@ -352,7 +406,7 @@ mod tests {
             model_id: "MiniMax-M2.7-highspeed".to_string(),
             api_key: "key".to_string(),
             created_at: chrono::Utc::now(),
-            alias: String::new(),
+            alias: "cl-mini".to_string(),
             opencode_model_id: String::new(),
             kv_cache_enabled: false,
         };
@@ -378,7 +432,7 @@ mod tests {
             model_id: "MiniMax-M2.7-highspeed".to_string(),
             api_key: "key".to_string(),
             created_at: chrono::Utc::now(),
-            alias: String::new(),
+            alias: "cl-mini".to_string(),
             opencode_model_id: String::new(),
             kv_cache_enabled: false,
         };
@@ -396,7 +450,7 @@ mod tests {
             model_id: "MiniMax-M2.7-highspeed".to_string(),
             api_key: "key".to_string(),
             created_at: chrono::Utc::now(),
-            alias: String::new(),
+            alias: "cl-mini".to_string(),
             opencode_model_id: String::new(),
             kv_cache_enabled: false,
         };
@@ -428,7 +482,7 @@ mod tests {
             model_id: "MiniMax-M2.7-highspeed".to_string(),
             api_key: "key1".to_string(),
             created_at: chrono::Utc::now(),
-            alias: String::new(),
+            alias: "cl-mini".to_string(),
             opencode_model_id: String::new(),
             kv_cache_enabled: false,
         };
