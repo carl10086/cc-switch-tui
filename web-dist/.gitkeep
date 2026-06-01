@@ -1,2 +1,0 @@
-# 保持 web-dist/ 目录在 git 中存在
-# index.html 是占位文件，make web-build 会用 Vite 产物覆盖
