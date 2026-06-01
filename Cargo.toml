@@ -23,3 +23,7 @@ tempfile = "3"
 [[bin]]
 name = "migrate_instances_id"
 path = "tools/migrate_instances_id.rs"
+
+[[bin]]
+name = "migrate_3_to_2"
+path = "tools/migrate_3_to_2.rs"
