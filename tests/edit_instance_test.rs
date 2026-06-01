@@ -146,3 +146,71 @@ fn test_edit_model_preserves_user_opencode_id() {
     assert_eq!(updated.model_id, "MiniMax-M3");
     assert_eq!(updated.opencode_model_id, "user-custom-id");
 }
+
+/// 改 model 后直接调 shell::generate_aliases，断言 alias 文件 env 跟随新 model
+/// （绕开 regenerate_aliases 的 home dir 副作用，用临时目录）
+#[test]
+fn test_edit_model_changes_shell_alias_env() {
+    use cc_switch_tui::shell;
+
+    // 构造含 env_overrides 的 model，让 ANTHROPIC_DEFAULT_OPUS_MODEL 出现在 alias 文件
+    let mut m27 = ModelTemplate {
+        id: "MiniMax-M2.7-highspeed".to_string(),
+        name: "MiniMax M2.7 Highspeed".to_string(),
+        env_overrides: HashMap::new(),
+        opencode_model_id: "MiniMax-M2.7-highspeed".to_string(),
+    };
+    m27.env_overrides.insert(
+        "ANTHROPIC_DEFAULT_OPUS_MODEL".to_string(),
+        "MiniMax-M2.7-highspeed".to_string(),
+    );
+    let mut m3 = ModelTemplate {
+        id: "MiniMax-M3".to_string(),
+        name: "MiniMax M3".to_string(),
+        env_overrides: HashMap::new(),
+        opencode_model_id: "MiniMax-M3".to_string(),
+    };
+    m3.env_overrides.insert(
+        "ANTHROPIC_DEFAULT_OPUS_MODEL".to_string(),
+        "MiniMax-M3".to_string(),
+    );
+
+    let template = ProviderTemplate {
+        id: "minimax".to_string(),
+        name: "MiniMax".to_string(),
+        default_env: HashMap::new(),
+        models: vec![m27.clone(), m3.clone()],
+        opencode_provider_id: "minimax-cn".to_string(),
+        opencode_npm: "@ai-sdk/anthropic".to_string(),
+        opencode_base_url: "https://api.minimaxi.com/anthropic/v1".to_string(),
+        opencode_env_var: "MINIMAX_API_KEY".to_string(),
+    };
+
+    let mut inst = ProviderInstance {
+        id: "minimax-cl-mini".to_string(),
+        template_id: "minimax".to_string(),
+        model_id: "MiniMax-M2.7-highspeed".to_string(),
+        api_key: "sk-test".to_string(),
+        created_at: Utc::now(),
+        alias: "cl-mini".to_string(),
+        opencode_model_id: String::new(),
+        kv_cache_enabled: false,
+    };
+
+    let tmp = tempfile::tempdir().unwrap();
+    shell::generate_aliases(tmp.path(), &[inst.clone()], &[template.clone()]).unwrap();
+    let before = std::fs::read_to_string(tmp.path().join("aliases.zsh")).unwrap();
+    assert!(
+        before.contains("ANTHROPIC_DEFAULT_OPUS_MODEL=MiniMax-M2.7-highspeed"),
+        "改 model 前应包含旧 model env"
+    );
+
+    // 改 model 到 M3，重生成
+    inst.model_id = "MiniMax-M3".to_string();
+    shell::generate_aliases(tmp.path(), &[inst], &[template]).unwrap();
+    let after = std::fs::read_to_string(tmp.path().join("aliases.zsh")).unwrap();
+    assert!(
+        after.contains("ANTHROPIC_DEFAULT_OPUS_MODEL=MiniMax-M3"),
+        "改 model 后应包含新 model env"
+    );
+}
