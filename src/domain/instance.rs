@@ -3,7 +3,8 @@ use chrono::{DateTime, Utc};
 /// 用户创建的 Provider 实例，对应一个具体的模板和模型配置
 #[derive(Debug, Clone, PartialEq)]
 pub struct ProviderInstance {
-    /// 实例唯一标识，格式为 "template_id-model_id-alias"
+    /// 实例唯一标识，格式为 "template_id-alias"
+    /// （注：model_id 不在 id 中，改 model 不会破坏主键稳定性）
     pub id: String,
     /// 关联的 Provider 模板 ID
     pub template_id: String,

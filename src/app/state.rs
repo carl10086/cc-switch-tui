@@ -527,7 +527,7 @@ impl<D: Dao> App<D> {
                 self.error_message = Some(e.to_string());
                 return;
             }
-            let id = format!("{}-{}-{}", template_id, model_id, alias);
+            let id = format!("{}-{}", template_id, alias);
             let instance = ProviderInstance {
                 id: id.clone(),
                 template_id,
@@ -1065,5 +1065,32 @@ mod tests {
             vec!["alpha", "bravo", "charlie"],
             "缓存为空时硬编码 model 仍应按字母升序返回"
         );
+    }
+
+    /// 回归测试：submit_create 必须用新 id 格式 `{template_id}-{alias}`，
+    /// 不能再用旧的 `{template_id}-{model_id}-{alias}`（否则改 model 会破坏主键稳定性）。
+    #[test]
+    fn test_submit_create_uses_two_segment_id() {
+        let dao = MemoryDaoImpl::new(test_templates());
+        let mut app = App::new_with_dao(dao);
+
+        app.state = AppState::CreateAlias {
+            template_id: "kimi".to_string(),
+            model_id: "kimi-for-coding".to_string(),
+            api_key: "sk-test".to_string(),
+            opencode_model_id: "k2p5".to_string(),
+        };
+        app.edit_input.value = "cl-km2".to_string();
+
+        app.submit_create();
+
+        // 期望 id 是两段 `{template_id}-{alias}`，不是三段
+        let inst = app
+            .dao
+            .get_instance("kimi-cl-km2")
+            .expect("instance should be created with two-segment id");
+        assert_eq!(inst.id, "kimi-cl-km2");
+        assert_eq!(inst.alias, "cl-km2");
+        assert_eq!(inst.model_id, "kimi-for-coding");
     }
 }
