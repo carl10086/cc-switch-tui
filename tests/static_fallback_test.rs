@@ -42,9 +42,9 @@ async fn test_spa_fallback_for_unknown_path() {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
-async fn test_api_health_endpoint_responds() {
+async fn test_api_health_responds() {
     let addr = api::spawn_app().await;
     let raw = http_get(addr, "/api/health").await;
     assert!(raw.starts_with("HTTP/1.0 200"), "expected 200, got:\n{raw}");
-    assert!(raw.contains("placeholder"), "T0-T4 will replace with real health");
+    assert!(raw.contains("\"status\":\"ok\""), "expected status=ok, got:\n{raw}");
 }
