@@ -1,26 +1,17 @@
-use cc_switch_tui::app::state::App;
-use cc_switch_tui::app::templates::register_templates;
-use cc_switch_tui::dao::Dao;
-use cc_switch_tui::dao::sqlite_impl::SqliteDaoImpl;
-use cc_switch_tui::opencode_fetch;
-use cc_switch_tui::shell;
-use cc_switch_tui::ui;
-use crossterm::{
-    event::{self, DisableMouseCapture, EnableMouseCapture, Event},
-    terminal::{EnterAlternateScreen, LeaveAlternateScreen, disable_raw_mode, enable_raw_mode},
-};
-use ratatui::Terminal;
-use ratatui::backend::CrosstermBackend;
+use cc_switch_tui::api;
 use std::io;
-use std::time::Duration;
+use std::net::SocketAddr;
+use tokio::net::TcpListener;
+use tokio::signal;
 
-fn main() -> io::Result<()> {
+#[tokio::main]
+async fn main() -> io::Result<()> {
+    // 日志初始化（沿用 v0.3.0 模式）
     let log_file = std::fs::OpenOptions::new()
         .create(true)
         .append(true)
         .open("app.log")
         .expect("无法创建日志文件");
-
     tracing_subscriber::fmt()
         .with_writer(move || log_file.try_clone().unwrap())
         .with_env_filter(
@@ -30,79 +21,52 @@ fn main() -> io::Result<()> {
         .with_ansi(false)
         .with_target(true)
         .init();
+    tracing::info!("cc-switch-tui starting (web mode)");
 
-    tracing::info!("cc-switch-tui starting");
+    // 绑定 127.0.0.1:7480（端口策略留到 S10 实现，目前硬编码）
+    let addr: SocketAddr = "127.0.0.1:7480".parse().unwrap();
+    let listener = TcpListener::bind(addr).await?;
+    let actual_addr = listener.local_addr()?;
+    tracing::info!("listening on http://{}", actual_addr);
 
-    let zshrc_modified = shell::ensure_zshrc_source(
-        &dirs::home_dir()
-            .unwrap_or_else(|| std::path::PathBuf::from("."))
-            .join(".zshrc"),
-    )
-    .unwrap_or(false);
-
-    enable_raw_mode()?;
-    let mut stdout = io::stdout();
-    crossterm::execute!(stdout, EnterAlternateScreen, EnableMouseCapture)?;
-    let backend = CrosstermBackend::new(stdout);
-    let mut terminal = Terminal::new(backend)?;
-
-    let db_path = ".cc-switch-tui/db.sqlite";
-    let templates = register_templates();
-    let dao = SqliteDaoImpl::new(db_path, templates).expect("无法初始化数据库");
-    let mut app = App::new_with_dao(dao);
-    app.zshrc_modified = zshrc_modified;
-
-    // 启动时从 models.dev/api.json 拉取 OpenCode 模型列表并缓存到内存
-    match opencode_fetch::fetch_opencode_models() {
-        Ok(cache) => app.opencode_model_cache = cache,
-        Err(e) => app.error_message = Some(format!("无法加载 OpenCode 模型列表: {}", e)),
+    // 自动开浏览器（S0-T3 + S10-T2：等 SPA fallback + 端口策略就位后端到端生效）
+    let url = format!("http://{}", actual_addr);
+    if let Err(e) = webbrowser::open(&url) {
+        tracing::warn!("无法自动打开浏览器: {}。请手动访问 {}", e, url);
     }
 
-    // 启动时预生成 aliases.zsh，避免 zsh source 时报文件不存在
-    let alias_dir = dirs::home_dir()
-        .unwrap_or_else(|| std::path::PathBuf::from("."))
-        .join(".cc-switch-tui");
-    let instances: Vec<_> = app.dao.list_instances().into_iter().cloned().collect();
-    let templates: Vec<_> = app.dao.get_templates().into_iter().cloned().collect();
-    let _ = shell::generate_aliases(&alias_dir, &instances, &templates);
-
-    let res = run_app(&mut terminal, &mut app);
-
-    disable_raw_mode()?;
-    crossterm::execute!(
-        terminal.backend_mut(),
-        LeaveAlternateScreen,
-        DisableMouseCapture
-    )?;
-    terminal.show_cursor()?;
-
-    if let Err(e) = res {
-        eprintln!("Error: {}", e);
-    }
+    // 启动 axum server
+    let app = api::router();
+    tracing::info!("server ready, open {} in your browser", url);
+    axum::serve(listener, app)
+        .with_graceful_shutdown(shutdown_signal())
+        .await?;
 
     tracing::info!("cc-switch-tui exiting");
     Ok(())
 }
 
-fn run_app<B: ratatui::backend::Backend>(
-    terminal: &mut Terminal<B>,
-    app: &mut App<SqliteDaoImpl>,
-) -> io::Result<()> {
-    let tick_rate = Duration::from_millis(100);
+/// 监听 Ctrl-C / SIGTERM，触发 graceful shutdown
+async fn shutdown_signal() {
+    let ctrl_c = async {
+        signal::ctrl_c()
+            .await
+            .expect("failed to install Ctrl-C handler");
+    };
 
-    loop {
-        terminal.draw(|f| ui::draw(f, app))?;
+    #[cfg(unix)]
+    let terminate = async {
+        signal::unix::signal(signal::unix::SignalKind::terminate())
+            .expect("failed to install SIGTERM handler")
+            .recv()
+            .await;
+    };
 
-        if event::poll(tick_rate)? {
-            if let Event::Key(key) = event::read()? {
-                if key.kind == event::KeyEventKind::Press {
-                    app.on_key(key);
-                }
-            }
-        }
+    #[cfg(not(unix))]
+    let terminate = std::future::pending::<()>();
 
-        if app.should_quit {
-            return Ok(());
-        }
+    tokio::select! {
+        _ = ctrl_c => tracing::info!("received Ctrl-C"),
+        _ = terminate => tracing::info!("received SIGTERM"),
     }
 }
