@@ -2,6 +2,10 @@
 
 > 对应 spec: `docs/ys-powers/specs/2026-06-01-edit-instance-model-design.md`
 
+> **Task 3 状态：取消**（A1 决策：alias 唯一性由 `state.rs::validate_alias` 列表检查兜底，未加 DB UNIQUE 约束）
+> **Task 5 状态：未实施**（独立 migrate 工具，作为可选后续工作）
+> 详见 §8 用户拍板结果
+
 ## 1. 依赖关系分析
 
 ```

@@ -60,6 +60,15 @@ pub enum EditField {
     KvCacheEnabled,
 }
 
+/// instance 关键字段快照：在借用 `&ProviderInstance` 期间 copy 出 owned 数据，
+/// 之后才能调用 `&mut self.dao` 方法（避免 E0502 借用冲突）
+struct InstanceSnapshot {
+    alias: String,
+    api_key: String,
+    template_id: String,
+    opencode_model_id: String,
+}
+
 /// 输入框状态，用于 API Key 输入和编辑
 #[derive(Debug, Clone, PartialEq)]
 pub struct InputState {
@@ -561,22 +570,15 @@ impl<D: Dao> App<D> {
     }
 
     fn validate_alias(&self, alias: &str) -> Result<(), AppError> {
-        if alias.is_empty() {
-            return Err(AppError::InvalidAlias("alias cannot be empty".to_string()));
-        }
+        // UI 层额外要求：必须以 "cl-" 开头（DAO 层无此约束，给外部工具/迁移脚本留空间）
         if !alias.starts_with("cl-") {
             return Err(AppError::InvalidAlias(
                 "alias must start with 'cl-'".to_string(),
             ));
         }
-        if !alias
-            .chars()
-            .all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_')
-        {
-            return Err(AppError::InvalidAlias(
-                "alias contains invalid characters".to_string(),
-            ));
-        }
+        // 格式校验委托给 domain 层，与 DAO 兜底规则一致
+        crate::domain::instance::validate_alias(alias)?;
+        // 全表唯一性检查（A1 决策：不加 DB UNIQUE 约束）
         let instances = self.dao.list_instances();
         if instances.iter().any(|i| i.alias == alias) {
             return Err(AppError::AliasAlreadyExists(alias.to_string()));
@@ -883,25 +885,22 @@ impl<D: Dao> App<D> {
             KeyCode::Enter => {
                 if let AppState::EditModel { instance_id } = self.state.clone() {
                     if let Some(new_model_id) = models.get(self.model_index).cloned() {
-                        // 先 clone 出需要的字段，drop 借用后再调 mut 方法
-                        let snapshot = self
-                            .dao
-                            .get_instance(&instance_id)
-                            .map(|i| {
-                                (
-                                    i.alias.clone(),
-                                    i.api_key.clone(),
-                                    i.template_id.clone(),
-                                    i.opencode_model_id.clone(),
-                                )
-                            });
-                        if let Some((alias, api_key, template_id, old_opencode_id)) = snapshot {
+                        // 快照当前 instance 关键字段，drop 借用后再调 mut 方法
+                        let snapshot = self.dao.get_instance(&instance_id).map(|i| {
+                            InstanceSnapshot {
+                                alias: i.alias.clone(),
+                                api_key: i.api_key.clone(),
+                                template_id: i.template_id.clone(),
+                                opencode_model_id: i.opencode_model_id.clone(),
+                            }
+                        });
+                        if let Some(snap) = snapshot {
                             // 改 model 同时保留 alias 和 api_key
                             let result = self.dao.update_instance(
                                 &instance_id,
                                 new_model_id.clone(),
-                                alias,
-                                api_key,
+                                snap.alias,
+                                snap.api_key,
                             );
                             match result {
                                 Ok(()) => {
@@ -912,8 +911,9 @@ impl<D: Dao> App<D> {
                                     );
                                     // opencode_model_id 联动：
                                     // 原值空时按新 model 的 env_overrides 重算；已设值则保留
-                                    if old_opencode_id.is_empty() {
-                                        if let Some(template) = self.dao.get_template(&template_id)
+                                    if snap.opencode_model_id.is_empty() {
+                                        if let Some(template) =
+                                            self.dao.get_template(&snap.template_id)
                                         {
                                             if let Some(model_tmpl) = template
                                                 .models

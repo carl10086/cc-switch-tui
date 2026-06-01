@@ -25,6 +25,11 @@ pub struct ProviderInstance {
 }
 
 /// alias 校验：只能小写字母、数字、-、_，长度 1-32，不能为空，不能有空白或大写
+///
+/// 长度上限 32 字符的来源：与 macOS/Linux ext4 文件系统对单文件名的实际限制
+/// （255 字节）相比保守许多；32 字符是经验值，能容纳 "cl-" 前缀 + 28 字符有意义的
+/// 标识符，足以表达 `cl-mini-prod`、`cl-claude-2-opus` 等组合。
+/// 如果未来需要更长 alias，可调整此值并迁移历史数据。
 pub fn validate_alias(alias: &str) -> Result<(), AppError> {
     if alias.is_empty() {
         return Err(AppError::InvalidAlias("alias 不能为空".to_string()));
