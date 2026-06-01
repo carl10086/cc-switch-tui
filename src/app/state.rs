@@ -586,10 +586,18 @@ impl<D: Dao> App<D> {
             KeyCode::Esc => self.state = AppState::List,
             KeyCode::Enter => {
                 if let AppState::Edit { instance_id } = self.state.clone() {
-                    if let Err(e) = self
-                        .dao
-                        .update_instance(&instance_id, self.edit_input.value.clone())
-                    {
+                    // 旧 API Key 弹窗：只改 api_key，其他字段从 instance 读取
+                    let api_key = self.edit_input.value.clone();
+                    let result = match self.dao.get_instance(&instance_id) {
+                        Some(inst) => self.dao.update_instance(
+                            &instance_id,
+                            inst.model_id.clone(),
+                            inst.alias.clone(),
+                            api_key,
+                        ),
+                        None => Err(AppError::InstanceNotFound(instance_id.clone())),
+                    };
+                    if let Err(e) = result {
                         self.error_message = Some(e.to_string());
                     } else {
                         tracing::info!("update api_key: id={}", instance_id);
@@ -724,23 +732,37 @@ impl<D: Dao> App<D> {
                             if let Err(e) = self.validate_alias(&value) {
                                 (Err(e), instance_id.clone())
                             } else {
-                                // Get old instance to compute new id
+                                // 新 id 格式下 alias 不在 id 中，改 alias 不改 id
+                                // 用 update_instance 同时保留 model_id 和 api_key
                                 let old_instance = match self.dao.get_instance(&instance_id) {
                                     Some(i) => i,
                                     None => return,
                                 };
-                                let new_id = format!(
-                                    "{}-{}-{}",
-                                    old_instance.template_id, old_instance.model_id, value
+                                let result = self.dao.update_instance(
+                                    &instance_id,
+                                    old_instance.model_id.clone(),
+                                    value,
+                                    old_instance.api_key.clone(),
                                 );
-                                let result = self.dao.rename_instance(&instance_id, &new_id, value);
-                                (result, new_id)
+                                (result, instance_id.clone())
                             }
                         }
-                        EditField::ApiKey => (
-                            self.dao.update_instance(&instance_id, value),
-                            instance_id.clone(),
-                        ),
+                        EditField::ApiKey => {
+                            // 改 api_key 时保留 model_id 和 alias
+                            let old_instance = match self.dao.get_instance(&instance_id) {
+                                Some(i) => i,
+                                None => return,
+                            };
+                            (
+                                self.dao.update_instance(
+                                    &instance_id,
+                                    old_instance.model_id.clone(),
+                                    old_instance.alias.clone(),
+                                    value,
+                                ),
+                                instance_id.clone(),
+                            )
+                        }
                         EditField::KvCacheEnabled => {
                             // This case is handled in handle_edit_info_panel, not here
                             (Ok(()), instance_id.clone())

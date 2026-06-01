@@ -55,11 +55,19 @@ impl Dao for MemoryDaoImpl {
         Ok(())
     }
 
-    fn update_instance(&mut self, id: &str, api_key: String) -> Result<(), AppError> {
+    fn update_instance(
+        &mut self,
+        id: &str,
+        model_id: String,
+        alias: String,
+        api_key: String,
+    ) -> Result<(), AppError> {
         let instance = self
             .instances
             .get_mut(id)
             .ok_or_else(|| AppError::InstanceNotFound(id.to_string()))?;
+        instance.model_id = model_id;
+        instance.alias = alias;
         instance.api_key = api_key;
         tracing::info!("dao update_instance: id={}", id);
         Ok(())

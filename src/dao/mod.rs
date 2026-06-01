@@ -26,8 +26,15 @@ pub trait Dao {
     /// 删除实例，如果实例不存在则返回错误
     fn delete_instance(&mut self, id: &str) -> Result<(), AppError>;
 
-    /// 更新实例的 API Key，如果实例不存在则返回错误
-    fn update_instance(&mut self, id: &str, api_key: String) -> Result<(), AppError>;
+    /// 更新实例的 model_id、alias、api_key，如果实例不存在则返回错误
+    /// （注：id 不在签名中——id 与 model_id 解耦后，原地改 model 不会触发主键变更）
+    fn update_instance(
+        &mut self,
+        id: &str,
+        model_id: String,
+        alias: String,
+        api_key: String,
+    ) -> Result<(), AppError>;
 
     /// 更新实例别名
     fn set_alias(&mut self, id: &str, alias: String) -> Result<(), AppError>;
