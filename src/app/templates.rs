@@ -13,18 +13,6 @@ fn minimax_template() -> ProviderTemplate {
         "ANTHROPIC_BASE_URL".to_string(),
         "https://api.minimaxi.com/anthropic".to_string(),
     );
-    default_env.insert(
-        "ANTHROPIC_DEFAULT_HAIKU_MODEL".to_string(),
-        "MiniMax-M3".to_string(),
-    );
-    default_env.insert(
-        "ANTHROPIC_DEFAULT_OPUS_MODEL".to_string(),
-        "MiniMax-M3".to_string(),
-    );
-    default_env.insert(
-        "ANTHROPIC_DEFAULT_SONNET_MODEL".to_string(),
-        "MiniMax-M3".to_string(),
-    );
     default_env.insert("API_TIMEOUT_MS".to_string(), "3000000".to_string());
     default_env.insert(
         "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC".to_string(),
@@ -36,10 +24,34 @@ fn minimax_template() -> ProviderTemplate {
         "ANTHROPIC_MODEL".to_string(),
         "MiniMax-M3".to_string(),
     );
+    env_overrides_m3.insert(
+        "ANTHROPIC_DEFAULT_HAIKU_MODEL".to_string(),
+        "MiniMax-M3".to_string(),
+    );
+    env_overrides_m3.insert(
+        "ANTHROPIC_DEFAULT_OPUS_MODEL".to_string(),
+        "MiniMax-M3".to_string(),
+    );
+    env_overrides_m3.insert(
+        "ANTHROPIC_DEFAULT_SONNET_MODEL".to_string(),
+        "MiniMax-M3".to_string(),
+    );
 
     let mut env_overrides_m27 = HashMap::new();
     env_overrides_m27.insert(
         "ANTHROPIC_MODEL".to_string(),
+        "MiniMax-M2.7-highspeed".to_string(),
+    );
+    env_overrides_m27.insert(
+        "ANTHROPIC_DEFAULT_HAIKU_MODEL".to_string(),
+        "MiniMax-M2.7-highspeed".to_string(),
+    );
+    env_overrides_m27.insert(
+        "ANTHROPIC_DEFAULT_OPUS_MODEL".to_string(),
+        "MiniMax-M2.7-highspeed".to_string(),
+    );
+    env_overrides_m27.insert(
+        "ANTHROPIC_DEFAULT_SONNET_MODEL".to_string(),
         "MiniMax-M2.7-highspeed".to_string(),
     );
 
