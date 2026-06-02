@@ -10,6 +10,7 @@ import {
 } from '../api/hooks';
 import { ApiErrorBanner } from '../components/ApiErrorBanner';
 import { ConfirmDialog } from '../components/ConfirmDialog';
+import { ModelSelect } from '../components/ModelSelect';
 import { OpencodeModelSelect } from '../components/OpencodeModelSelect';
 import { SecretInput } from '../components/SecretInput';
 import { useUnsavedGuard } from '../hooks/useUnsavedGuard';
@@ -135,10 +136,10 @@ export function InstanceDetailPage() {
         </Field>
 
         <Field label="Model">
-          <input
+          <ModelSelect
+            models={templates?.find((t) => t.id === instance.templateId)?.models ?? []}
             value={draft.modelId ?? ''}
-            onChange={(e) => set('modelId', e.target.value)}
-            className="w-full px-3 py-1.5 text-sm rounded border border-input bg-background font-mono"
+            onChange={(v) => set('modelId', v)}
           />
         </Field>
 
