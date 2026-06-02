@@ -1,5 +1,9 @@
+import { useEffect } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import { Link, NavLink, Route, Routes } from 'react-router-dom';
 import { useHealth } from './api/hooks';
+import { apiGet } from './api/client';
+import type { Template } from './api/types';
 import { ThemeToggle } from './components/ThemeToggle';
 import { ApplyPage } from './routes/ApplyPage';
 import { ConfigPage } from './routes/ConfigPage';
@@ -9,6 +13,16 @@ import { SettingsPage } from './routes/SettingsPage';
 
 export default function App() {
   const { data: health } = useHealth();
+  const qc = useQueryClient();
+
+  // 启动时一次性预取 templates，让创建/编辑/Apply 打开时直接命中缓存。
+  useEffect(() => {
+    void qc.prefetchQuery({
+      queryKey: ['templates'],
+      queryFn: () => apiGet<Template[]>('/api/templates'),
+      staleTime: 60_000,
+    });
+  }, [qc]);
 
   return (
     <div className="min-h-screen bg-background text-foreground">
