@@ -19,6 +19,8 @@ pub struct ProviderTemplate {
     pub opencode_base_url: String,
     /// OpenCode 环境变量名，如 "MINIMAX_API_KEY"
     pub opencode_env_var: String,
+    /// OpenCode 支持的模型 ID 列表（来自 models.dev/api.json，硬编码在内存中）
+    pub opencode_models: Vec<String>,
 }
 
 /// 模型模板，定义特定模型对默认环境变量的覆盖项

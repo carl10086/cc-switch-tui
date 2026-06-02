@@ -77,6 +77,15 @@ fn minimax_template() -> ProviderTemplate {
         opencode_npm: "@ai-sdk/anthropic".to_string(),
         opencode_base_url: "https://api.minimaxi.com/anthropic/v1".to_string(),
         opencode_env_var: "MINIMAX_API_KEY".to_string(),
+        opencode_models: vec![
+            "MiniMax-M2".to_string(),
+            "MiniMax-M2.1".to_string(),
+            "MiniMax-M2.5".to_string(),
+            "MiniMax-M2.5-highspeed".to_string(),
+            "MiniMax-M2.7".to_string(),
+            "MiniMax-M2.7-highspeed".to_string(),
+            "MiniMax-M3".to_string(),
+        ],
     }
 }
 
@@ -102,5 +111,10 @@ fn kimi_template() -> ProviderTemplate {
         opencode_npm: "@ai-sdk/anthropic".to_string(),
         opencode_base_url: "https://api.kimi.com/coding/v1".to_string(),
         opencode_env_var: "KIMI_API_KEY".to_string(),
+        opencode_models: vec![
+            "k2p5".to_string(),
+            "k2p6".to_string(),
+            "kimi-k2-thinking".to_string(),
+        ],
     }
 }

@@ -19,6 +19,7 @@ fn create_test_template() -> ProviderTemplate {
         opencode_npm: String::new(),
         opencode_base_url: String::new(),
         opencode_env_var: String::new(),
+        opencode_models: vec![],
     }
 }
 

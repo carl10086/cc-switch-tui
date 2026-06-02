@@ -32,4 +32,5 @@ export interface Template {
   /** @deprecated 旧字段，保留兼容；新代码用 models[].id */
   availableModels: string[];
   models: TemplateModel[];
+  opencodeModels: string[];
 }

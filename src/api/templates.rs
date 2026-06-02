@@ -32,6 +32,8 @@ pub struct TemplateSummary {
     pub available_models: Vec<String>,
     /// 该 template 下所有可用的 model（带 name + opencode_model_id）。
     pub models: Vec<TemplateModelSummary>,
+    /// OpenCode 支持的模型 ID 列表（硬编码在内存中）。
+    pub opencode_models: Vec<String>,
 }
 
 impl From<&ProviderTemplate> for TemplateSummary {
@@ -51,6 +53,7 @@ impl From<&ProviderTemplate> for TemplateSummary {
                     opencode_model_id: m.opencode_model_id.clone(),
                 })
                 .collect(),
+            opencode_models: t.opencode_models.clone(),
         }
     }
 }

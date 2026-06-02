@@ -208,6 +208,7 @@ mod tests {
             opencode_npm: "@ai-sdk/anthropic".to_string(),
             opencode_base_url: "https://api.minimaxi.com/anthropic/v1".to_string(),
             opencode_env_var: "MINIMAX_API_KEY".to_string(),
+            opencode_models: vec!["MiniMax-M2.7-highspeed".to_string()],
         };
         let instance = ProviderInstance {
             id: "minimax-MiniMax-M2.7-highspeed-cl-mini".to_string(),
@@ -251,6 +252,7 @@ mod tests {
             opencode_npm: "@ai-sdk/anthropic".to_string(),
             opencode_base_url: "https://api.minimaxi.com/anthropic/v1".to_string(),
             opencode_env_var: "MINIMAX_API_KEY".to_string(),
+            opencode_models: vec!["MiniMax-M2.7-highspeed".to_string()],
         };
         let instance = ProviderInstance {
             id: "minimax-MiniMax-M2.7-highspeed-cl-mini".to_string(),
@@ -290,6 +292,7 @@ mod tests {
             opencode_npm: String::new(),
             opencode_base_url: String::new(),
             opencode_env_var: String::new(),
+            opencode_models: vec!["qwen3-27b".to_string()],
         };
         let instance = ProviderInstance {
             id: "llama-qwen3-27b-cl-local".to_string(),

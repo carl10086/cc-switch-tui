@@ -171,7 +171,7 @@ export function InstanceDetailPage() {
 
         <Field label="OpenCode Model ID">
           <OpencodeModelSelect
-            models={templates?.find((t) => t.id === instance.templateId)?.models ?? []}
+            models={templates?.find((t) => t.id === instance.templateId)?.opencodeModels ?? []}
             value={draft.opencodeModelId ?? ''}
             onChange={(v) => set('opencodeModelId', v)}
           />

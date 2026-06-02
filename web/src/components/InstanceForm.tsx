@@ -154,7 +154,7 @@ export function InstanceForm({
 
       <Field label="OpenCode Model ID" error={errors.opencodeModelId}>
         <OpencodeModelSelect
-          models={currentTemplate?.models ?? []}
+          models={currentTemplate?.opencodeModels ?? []}
           value={values.opencodeModelId ?? ''}
           onChange={(v) => set('opencodeModelId', v)}
         />
