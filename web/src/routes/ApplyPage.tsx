@@ -149,6 +149,15 @@ export function ApplyPage() {
   );
 }
 
+const APPLY_BTN_BASE =
+  'inline-flex items-center gap-2 px-4 py-2 text-sm rounded font-medium transition-colors';
+const APPLY_BTN_STATE: Record<ApplyState, { className: string; label: string }> = {
+  idle: { className: 'bg-primary text-primary-foreground hover:opacity-90', label: '⚡ Apply all' },
+  loading: { className: 'bg-primary text-primary-foreground opacity-80 cursor-wait', label: 'Writing…' },
+  success: { className: 'bg-green-600 text-white', label: '✓ Done' },
+  error: { className: 'bg-red-600 text-white hover:bg-red-700', label: 'Retry' },
+};
+
 function ApplyButton({
   state,
   disabled,
@@ -158,19 +167,7 @@ function ApplyButton({
   disabled: boolean;
   onClick: () => void;
 }) {
-  const base = 'inline-flex items-center gap-2 px-4 py-2 text-sm rounded font-medium transition-colors';
-  const idleCls = 'bg-primary text-primary-foreground hover:opacity-90';
-  const loadingCls = 'bg-primary text-primary-foreground opacity-80 cursor-wait';
-  const successCls = 'bg-green-600 text-white';
-  const errorCls = 'bg-red-600 text-white hover:bg-red-700';
-  const cls =
-    state === 'loading'
-      ? `${base} ${loadingCls}`
-      : state === 'success'
-        ? `${base} ${successCls}`
-        : state === 'error'
-          ? `${base} ${errorCls}`
-          : `${base} ${idleCls}`;
+  const { className, label } = APPLY_BTN_STATE[state];
 
   return (
     <button
@@ -179,18 +176,12 @@ function ApplyButton({
       disabled={state === 'loading' || disabled}
       data-testid="apply-all"
       data-state={state}
-      className={cls}
+      className={`${APPLY_BTN_BASE} ${className}`}
     >
       {state === 'loading' && (
         <span className="inline-block w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin" />
       )}
-      {state === 'success'
-        ? '✓ Done'
-        : state === 'loading'
-          ? 'Writing…'
-          : state === 'error'
-            ? 'Retry'
-            : '⚡ Apply all'}
+      {label}
     </button>
   );
 }
