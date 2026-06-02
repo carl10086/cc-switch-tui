@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { ApiError } from '../api/client';
 import { useTemplates } from '../api/hooks';
 import { instanceSchema, type InstanceFormValues } from '../lib/validate';
+import { OpencodeModelSelect } from './OpencodeModelSelect';
 import { SecretInput } from './SecretInput';
 
 export function InstanceForm({
@@ -39,7 +40,7 @@ export function InstanceForm({
     setValues((v) => ({
       ...v,
       templateId: first.id,
-      modelId: v.modelId || first.availableModels[0] || '',
+      modelId: v.modelId || first.models[0]?.id || '',
     }));
   }, [templates, values.templateId]);
 
@@ -62,8 +63,7 @@ export function InstanceForm({
     }));
   }, [currentTemplate, values.modelId]);
 
-  // 切换 model 时同步重置 opencodeModelId 为该 model 的 opencode_model_id
-  // （仅当 opencodeModelId 与上一个 model 的 opencode id 一致，或为空时才自动重置 — 避免覆盖用户手动改过的值）
+  // 切换 model 时同步设置 opencodeModelId — 仅当用户没手动改过（即仍为空）时才覆盖
   useEffect(() => {
     if (!currentModel) return;
     setValues((v) => {
@@ -165,27 +165,11 @@ export function InstanceForm({
       </Field>
 
       <Field label="OpenCode Model ID" error={errors.opencodeModelId}>
-        {currentTemplate && currentTemplate.models.length > 0 ? (
-          <select
-            value={values.opencodeModelId ?? ''}
-            onChange={(e) => set('opencodeModelId', e.target.value)}
-            className="w-full px-3 py-1.5 text-sm rounded border border-input bg-background font-mono"
-          >
-            <option value="">— default (use model id) —</option>
-            {currentTemplate.models.map((m) => (
-              <option key={m.id} value={m.opencodeModelId}>
-                {m.name} → {m.opencodeModelId}
-              </option>
-            ))}
-          </select>
-        ) : (
-          <input
-            value={values.opencodeModelId ?? ''}
-            onChange={(e) => set('opencodeModelId', e.target.value)}
-            placeholder="defaults to model"
-            className="w-full px-3 py-1.5 text-sm rounded border border-input bg-background font-mono"
-          />
-        )}
+        <OpencodeModelSelect
+          models={currentTemplate?.models ?? []}
+          value={values.opencodeModelId ?? ''}
+          onChange={(v) => set('opencodeModelId', v)}
+        />
       </Field>
 
       <label className="flex items-center gap-2 text-sm">

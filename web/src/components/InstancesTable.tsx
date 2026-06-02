@@ -44,7 +44,6 @@ export function InstancesTable({ instances }: { instances: Instance[] }) {
               key={i.id}
               onClick={() => navigate(`/instances/${i.id}`)}
               className="cursor-pointer hover:bg-muted/50 transition-colors"
-              data-testid={`instance-row-${i.alias}`}
             >
               <TableCell className="font-mono">{i.alias}</TableCell>
               <TableCell>

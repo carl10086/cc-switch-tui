@@ -14,13 +14,19 @@ help: ## Show this help
 	@awk 'BEGIN {FS = ":.*?## "} /^[a-zA-Z_-]+:.*?## / {printf "  %-15s %s\n", $$1, $$2}' $(MAKEFILE_LIST)
 
 # ----- 开发 -----
-dev: ## Vite dev server (5173) + cargo run (7480)
-	@echo "==> 启动 Vite dev server (5173) + cargo run (7480)"
-	@echo "    浏览器访问 http://127.0.0.1:5173"
+dev: ## Vite (:5173, HMR) + cargo run (:7480) — 改 web 文件自动刷新
+	@echo ""
+	@echo "==> 启动开发环境"
+	@echo "    前端 (Vite HMR)        http://127.0.0.1:5173  ← 浏览器开这个"
+	@echo "    后端 (cargo run)       http://127.0.0.1:7480  ← API only, 不需要访问"
+	@echo ""
+	@echo "    改 web/src/**/*.tsx   → Vite HMR 即时刷新（无需重启）"
+	@echo "    改 src/**/*.rs        → Ctrl+C 后重新跑 make dev (cargo 改动需重启)"
+	@echo ""
 	cd $(WEB_DIR) && npm run dev &
 	cargo run
 
-dev-rust-only: ## 仅 cargo run，使用已编译的 web-dist/
+dev-rust-only: ## 仅 cargo run（前端用 :7480 自带的 embed dist）
 	@echo "==> 仅 Rust；前提: web-dist/ 已存在 (跑过 make web-build)"
 	cargo run
 

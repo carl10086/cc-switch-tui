@@ -10,6 +10,7 @@ import {
 } from '../api/hooks';
 import { ApiErrorBanner } from '../components/ApiErrorBanner';
 import { ConfirmDialog } from '../components/ConfirmDialog';
+import { OpencodeModelSelect } from '../components/OpencodeModelSelect';
 import { SecretInput } from '../components/SecretInput';
 import { useUnsavedGuard } from '../hooks/useUnsavedGuard';
 
@@ -149,32 +150,11 @@ export function InstanceDetailPage() {
         </Field>
 
         <Field label="OpenCode Model ID">
-          {(() => {
-            const tpl = templates?.find((t) => t.id === instance.templateId);
-            if (!tpl || tpl.models.length === 0) {
-              return (
-                <input
-                  value={draft.opencodeModelId ?? ''}
-                  onChange={(e) => set('opencodeModelId', e.target.value)}
-                  className="w-full px-3 py-1.5 text-sm rounded border border-input bg-background font-mono"
-                />
-              );
-            }
-            return (
-              <select
-                value={draft.opencodeModelId ?? ''}
-                onChange={(e) => set('opencodeModelId', e.target.value)}
-                className="w-full px-3 py-1.5 text-sm rounded border border-input bg-background font-mono"
-              >
-                <option value="">— default (use model id) —</option>
-                {tpl.models.map((m) => (
-                  <option key={m.id} value={m.opencodeModelId}>
-                    {m.name} → {m.opencodeModelId}
-                  </option>
-                ))}
-              </select>
-            );
-          })()}
+          <OpencodeModelSelect
+            models={templates?.find((t) => t.id === instance.templateId)?.models ?? []}
+            value={draft.opencodeModelId ?? ''}
+            onChange={(v) => set('opencodeModelId', v)}
+          />
         </Field>
 
         <label className="flex items-center gap-2 text-sm">
