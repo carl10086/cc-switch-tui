@@ -64,6 +64,14 @@ export function InstancesTable({ instances }: { instances: Instance[] }) {
                     KV
                   </span>
                 )}
+                {i.contextWindowEnabled && (
+                  <span
+                    className="text-xs px-1.5 py-0.5 rounded bg-muted text-muted-foreground ml-1"
+                    title="Extended context window enabled"
+                  >
+                    CTX
+                  </span>
+                )}
               </TableCell>
               <TableCell className="text-right">
                 <button

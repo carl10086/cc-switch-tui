@@ -9,6 +9,12 @@ interface Props {
   placeholder?: string;
 }
 
+function formatTokens(n: number): string {
+  if (n >= 1_000_000) return `${n / 1_000_000}M`;
+  if (n >= 1_000) return `${n / 1_000}K`;
+  return n.toString();
+}
+
 /**
  * Model 字段的 select/input 切换组件。
  * 当 template.models 非空时显示下拉（option 显示 `name (id)`），为空时降级为 input。
@@ -32,7 +38,10 @@ export function ModelSelect({ models, value, onChange, placeholder }: Props) {
       className="w-full px-3 py-1.5 text-sm rounded border border-input bg-background font-mono"
     >
       {models.map((m) => (
-        <option key={m.id} value={m.id}>{m.name} ({m.id})</option>
+        <option key={m.id} value={m.id}>
+          {m.name} ({m.id})
+          {m.contextWindow ? ` · ${formatTokens(m.contextWindow)} context` : ''}
+        </option>
       ))}
     </select>
   );
