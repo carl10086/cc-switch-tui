@@ -78,11 +78,6 @@ fn minimax_template() -> ProviderTemplate {
         opencode_base_url: "https://api.minimaxi.com/anthropic/v1".to_string(),
         opencode_env_var: "MINIMAX_API_KEY".to_string(),
         opencode_models: vec![
-            "MiniMax-M2".to_string(),
-            "MiniMax-M2.1".to_string(),
-            "MiniMax-M2.5".to_string(),
-            "MiniMax-M2.5-highspeed".to_string(),
-            "MiniMax-M2.7".to_string(),
             "MiniMax-M2.7-highspeed".to_string(),
             "MiniMax-M3".to_string(),
         ],
