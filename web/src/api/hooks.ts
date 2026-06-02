@@ -99,6 +99,50 @@ export function useImportConfig() {
   });
 }
 
+// ===== Settings + Diagnostics =====
+
+export interface Settings {
+  autoOpenBrowser: boolean;
+  defaultTemplate: string | null;
+}
+
+export interface Diagnostics {
+  status: 'ok' | 'warn' | 'error';
+  dbPath: string;
+  dbWritable: boolean;
+  aliasesPath: string;
+  aliasesWritable: boolean;
+  zshrcPath: string;
+  zshrcWritable: boolean;
+  opencodeDir: string;
+  opencodeDirWritable: boolean;
+  instanceCount: number;
+  templateCount: number;
+}
+
+export function useSettings() {
+  return useQuery({
+    queryKey: ['settings'],
+    queryFn: () => apiGet<Settings>('/api/settings'),
+  });
+}
+
+export function useUpdateSettings() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (settings: Settings) => apiPatch<Settings>('/api/settings', settings),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['settings'] }),
+  });
+}
+
+export function useDiagnostics() {
+  return useQuery({
+    queryKey: ['diagnostics'],
+    queryFn: () => apiGet<Diagnostics>('/api/diagnostics'),
+    refetchInterval: 30_000, // 每 30s 刷新
+  });
+}
+
 export function useInstance(id: string | undefined) {
   return useQuery({
     queryKey: ['instances', id],

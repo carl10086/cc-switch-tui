@@ -6,6 +6,7 @@ import { ConfigPage } from './routes/ConfigPage';
 import { InstanceDetailPage } from './routes/InstanceDetailPage';
 import { InstancesPage } from './routes/InstancesPage';
 import { OpencodePage } from './routes/OpencodePage';
+import { SettingsPage } from './routes/SettingsPage';
 
 export default function App() {
   const { data: health } = useHealth();
@@ -38,6 +39,7 @@ export default function App() {
           <StyledNavLink to="/aliases">Aliases</StyledNavLink>
           <StyledNavLink to="/opencode">OpenCode</StyledNavLink>
           <StyledNavLink to="/config">Config</StyledNavLink>
+          <StyledNavLink to="/settings">Settings</StyledNavLink>
         </div>
       </nav>
 
@@ -48,6 +50,7 @@ export default function App() {
           <Route path="/aliases" element={<AliasesPage />} />
           <Route path="/opencode" element={<OpencodePage />} />
           <Route path="/config" element={<ConfigPage />} />
+          <Route path="/settings" element={<SettingsPage />} />
         </Routes>
       </main>
     </div>

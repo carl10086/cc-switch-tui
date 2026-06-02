@@ -1,11 +1,13 @@
-use axum::{Router, routing::{get, post}};
+use axum::{Router, routing::{get, post, put}};
 
 pub mod aliases;
 pub mod config;
+pub mod diagnostics;
 pub mod error;
 pub mod health;
 pub mod instances;
 pub mod opencode;
+pub mod settings;
 pub mod state;
 pub mod static_fallback;
 pub mod templates;
@@ -39,6 +41,8 @@ pub fn router(state: AppState) -> Router {
         .route("/api/opencode-config/:id/apply", post(opencode::apply))
         .route("/api/config/export", get(config::export))
         .route("/api/config/import", post(config::import))
+        .route("/api/settings", get(settings::get).put(settings::put))
+        .route("/api/diagnostics", get(diagnostics::get))
         .with_state(state)
         .fallback(static_fallback::spa_fallback)
 }
