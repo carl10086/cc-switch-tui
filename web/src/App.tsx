@@ -1,37 +1,55 @@
+import { Link, Route, Routes } from 'react-router-dom';
 import { useHealth } from './api/hooks';
 import { ThemeToggle } from './components/ThemeToggle';
+import { InstancesPage } from './routes/InstancesPage';
 
 export default function App() {
-  const { data, isLoading, isError, error } = useHealth();
+  const { data: health } = useHealth();
 
   return (
-    <div className="min-h-screen bg-background text-foreground p-8">
-      <div className="flex items-start justify-between mb-6">
-        <h1 className="text-3xl font-bold">Hello cc-switch</h1>
-        <ThemeToggle />
-      </div>
-      <p className="text-sm text-muted-foreground">
-        S0 完成：后端联通 + 主题切换可用。
-      </p>
-      <div className="mt-6 p-4 rounded border border-border bg-card text-card-foreground max-w-xl">
-        <div className="text-sm font-semibold mb-1">Backend status</div>
-        {isLoading && <div className="text-muted-foreground">Checking…</div>}
-        {isError && (
-          <div className="text-red-600">
-            error: {(error as Error).message}
+    <div className="min-h-screen bg-background text-foreground">
+      <header className="border-b border-border">
+        <div className="max-w-6xl mx-auto px-6 py-3 flex items-center justify-between">
+          <Link to="/" className="text-lg font-semibold">
+            cc-switch
+          </Link>
+          <div className="flex items-center gap-3 text-xs">
+            {health && (
+              <span
+                className="text-muted-foreground"
+                title={`v${health.version} · db: ${health.dbPath}`}
+              >
+                <span className="inline-block w-1.5 h-1.5 rounded-full bg-green-500 mr-1" />
+                {health.status}
+              </span>
+            )}
+            <ThemeToggle />
           </div>
-        )}
-        {data && (
-          <div>
-            <span className="inline-block px-2 py-1 rounded bg-green-100 text-green-800 text-xs font-mono dark:bg-green-900 dark:text-green-100">
-              {data.status}
-            </span>
-            <span className="ml-3 text-sm text-muted-foreground">
-              v{data.version} · db: {data.dbPath}
-            </span>
-          </div>
-        )}
-      </div>
+        </div>
+      </header>
+
+      <nav className="border-b border-border">
+        <div className="max-w-6xl mx-auto px-6 flex gap-6 text-sm">
+          <NavLink to="/">Instances</NavLink>
+        </div>
+      </nav>
+
+      <main className="max-w-6xl mx-auto px-6 py-6">
+        <Routes>
+          <Route path="/" element={<InstancesPage />} />
+        </Routes>
+      </main>
     </div>
+  );
+}
+
+function NavLink({ to, children }: { to: string; children: React.ReactNode }) {
+  return (
+    <Link
+      to={to}
+      className="py-2 border-b-2 border-transparent hover:border-primary text-muted-foreground hover:text-foreground"
+    >
+      {children}
+    </Link>
   );
 }

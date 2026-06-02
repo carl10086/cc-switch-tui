@@ -4,3 +4,14 @@ export interface HealthResponse {
   version: string;
   dbPath: string;
 }
+
+// 与 Rust src/api/instances.rs::InstanceSummary 对齐
+// 注：apiKey 仅在 detail 接口返回（S2+ 才会加）
+export interface Instance {
+  id: string;
+  templateId: string;
+  alias: string;
+  modelId: string;
+  opencodeModelId: string;
+  kvCacheEnabled: boolean;
+}

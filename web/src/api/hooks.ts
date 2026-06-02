@@ -3,7 +3,7 @@
 
 import { useQuery } from '@tanstack/react-query';
 import { apiGet } from './client';
-import type { HealthResponse } from './types';
+import type { HealthResponse, Instance } from './types';
 
 // ===== Queries (GET) =====
 
@@ -14,5 +14,12 @@ export function useHealth() {
     staleTime: 0,
     retry: 1,
     refetchOnWindowFocus: false,
+  });
+}
+
+export function useInstances() {
+  return useQuery({
+    queryKey: ['instances'],
+    queryFn: () => apiGet<Instance[]>('/api/instances'),
   });
 }
