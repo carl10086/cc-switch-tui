@@ -93,9 +93,8 @@ describe('InstanceDetailPage', () => {
     });
   });
 
-  it('changing model syncs opencodeModelId to new model.opencodeModelId', async () => {
+  it('changing model does NOT sync opencodeModelId', async () => {
     renderDetail(makeFetchStub());
-    // wait for both queries (instance + templates) + form rendered
     await waitFor(() => {
       const selects = screen.getAllByRole('combobox');
       expect(selects.length).toBe(2);
@@ -116,8 +115,10 @@ describe('InstanceDetailPage', () => {
     nativeSetter.call(modelSelect, 'MiniMax-M2.7-highspeed');
     modelSelect.dispatchEvent(new Event('change', { bubbles: true }));
 
+    // opencodeModelId 应保持不变（不会自动同步到 M2.7-highspeed）
     await waitFor(() => {
-      expect(ocSelect.value).toBe('MiniMax-M2.7-highspeed');
+      expect(modelSelect.value).toBe('MiniMax-M2.7-highspeed');
     });
+    expect(ocSelect.value).toBe('MiniMax-M3');
   });
 });

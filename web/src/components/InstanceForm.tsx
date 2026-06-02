@@ -50,11 +50,6 @@ export function InstanceForm({
     () => templates?.find((t) => t.id === values.templateId),
     [templates, values.templateId],
   );
-  const currentModel = useMemo(
-    () => currentTemplate?.models.find((m) => m.id === values.modelId),
-    [currentTemplate, values.modelId],
-  );
-
   useEffect(() => {
     if (!currentTemplate) return;
     if (currentTemplate.models.some((m) => m.id === values.modelId)) return;
@@ -63,15 +58,6 @@ export function InstanceForm({
       modelId: currentTemplate.models[0]?.id ?? '',
     }));
   }, [currentTemplate, values.modelId]);
-
-  // 切换 model 时同步设置 opencodeModelId — 仅当用户没手动改过（即仍为空）时才覆盖
-  useEffect(() => {
-    if (!currentModel) return;
-    setValues((v) => {
-      if (v.opencodeModelId && v.opencodeModelId !== '') return v;
-      return { ...v, opencodeModelId: currentModel.opencodeModelId };
-    });
-  }, [currentModel]);
 
   function set<K extends keyof InstanceFormValues>(key: K, value: InstanceFormValues[K]) {
     setValues((v) => ({ ...v, [key]: value }));
