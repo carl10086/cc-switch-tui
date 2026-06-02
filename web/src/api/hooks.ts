@@ -68,6 +68,37 @@ export function useApplyOpencodeConfig() {
   });
 }
 
+// ===== Config Import/Export =====
+
+export interface ExportedConfig {
+  version: number;
+  exportedAt: string;
+  instances: Array<{
+    id: string;
+    templateId: string;
+    alias: string;
+    modelId: string;
+    opencodeModelId: string;
+    kvCacheEnabled: boolean;
+  }>;
+}
+
+export interface ImportResult {
+  created: number;
+  skipped: number;
+  skippedAliases: string[];
+}
+
+export function useImportConfig() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (payload: unknown) => apiPost<ImportResult>('/api/config/import', payload),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['instances'] });
+    },
+  });
+}
+
 export function useInstance(id: string | undefined) {
   return useQuery({
     queryKey: ['instances', id],

@@ -1,6 +1,7 @@
 use axum::{Router, routing::{get, post}};
 
 pub mod aliases;
+pub mod config;
 pub mod error;
 pub mod health;
 pub mod instances;
@@ -36,6 +37,8 @@ pub fn router(state: AppState) -> Router {
         .route("/api/aliases/apply", post(aliases::apply))
         .route("/api/opencode-config/:id", get(opencode::get))
         .route("/api/opencode-config/:id/apply", post(opencode::apply))
+        .route("/api/config/export", get(config::export))
+        .route("/api/config/import", post(config::import))
         .with_state(state)
         .fallback(static_fallback::spa_fallback)
 }
