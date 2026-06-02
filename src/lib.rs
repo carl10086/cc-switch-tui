@@ -5,5 +5,6 @@ pub mod domain;
 pub mod event;
 pub mod opencode_config;
 pub mod opencode_fetch;
+pub mod port;
 pub mod shell;
 pub mod ui;
