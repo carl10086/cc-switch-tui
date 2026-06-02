@@ -26,7 +26,7 @@ const SAMPLE_TEMPLATES = [
       { id: 'MiniMax-M3', name: 'MiniMax M3', opencodeModelId: 'MiniMax-M3' },
       { id: 'MiniMax-M2.7-highspeed', name: 'MiniMax M2.7 Highspeed', opencodeModelId: 'MiniMax-M2.7-highspeed' },
     ],
-    opencodeModels: ['MiniMax-M2', 'MiniMax-M2.1', 'MiniMax-M2.5', 'MiniMax-M2.5-highspeed', 'MiniMax-M2.7', 'MiniMax-M2.7-highspeed', 'MiniMax-M3'],
+    opencodeModels: ['MiniMax-M2.7-highspeed', 'MiniMax-M3'],
   },
 ];
 
