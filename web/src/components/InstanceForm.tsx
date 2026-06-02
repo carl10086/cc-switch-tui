@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { ApiError } from '../api/client';
 import { useTemplates } from '../api/hooks';
 import { instanceSchema, type InstanceFormValues } from '../lib/validate';
+import { ModelSelect } from './ModelSelect';
 import { OpencodeModelSelect } from './OpencodeModelSelect';
 import { SecretInput } from './SecretInput';
 
@@ -136,24 +137,11 @@ export function InstanceForm({
       </Field>
 
       <Field label="Model" error={errors.modelId}>
-        {currentTemplate && currentTemplate.models.length > 0 ? (
-          <select
-            value={values.modelId}
-            onChange={(e) => set('modelId', e.target.value)}
-            className="w-full px-3 py-1.5 text-sm rounded border border-input bg-background font-mono"
-          >
-            {currentTemplate.models.map((m) => (
-              <option key={m.id} value={m.id}>{m.name} ({m.id})</option>
-            ))}
-          </select>
-        ) : (
-          <input
-            value={values.modelId}
-            onChange={(e) => set('modelId', e.target.value)}
-            placeholder="MiniMax-M3"
-            className="w-full px-3 py-1.5 text-sm rounded border border-input bg-background font-mono"
-          />
-        )}
+        <ModelSelect
+          models={currentTemplate?.models ?? []}
+          value={values.modelId}
+          onChange={(v) => set('modelId', v)}
+        />
       </Field>
 
       <Field label="API Key" error={errors.apiKey}>
