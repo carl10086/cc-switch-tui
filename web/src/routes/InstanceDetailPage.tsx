@@ -42,6 +42,25 @@ export function InstanceDetailPage() {
     }
   }, [instance]);
 
+  // 切换 model 时，若 opencodeModelId 仍指向旧 model 的 id（或为空），自动同步到新 model 的 opencodeModelId。
+  // 这和 InstanceForm 的行为一致 — 详见 .ys-powers/specs/2026-06-02-fix-m1-ux-bugs-design.md
+  useEffect(() => {
+    if (!templates || !instance) return;
+    const currentTemplate = templates.find((t) => t.id === instance.templateId);
+    if (!currentTemplate) return;
+    const newModel = currentTemplate.models.find((m) => m.id === draft.modelId);
+    if (!newModel) return;
+    const ocId = draft.opencodeModelId ?? '';
+    const oldModelIds = new Set(currentTemplate.models.map((m) => m.opencodeModelId));
+    if (ocId === '' || oldModelIds.has(ocId)) {
+      if (ocId !== newModel.opencodeModelId) {
+        setDraft((d) => ({ ...d, opencodeModelId: newModel.opencodeModelId }));
+        setDirty(true);
+      }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [draft.modelId]);
+
   useUnsavedGuard(dirty);
 
   if (isLoading) return <div className="text-muted-foreground">Loading…</div>;
