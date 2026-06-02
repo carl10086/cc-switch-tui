@@ -1,11 +1,10 @@
 [package]
 name = "cc-switch-tui"
-version = "0.3.0"
+version = "0.4.0"
 edition = "2024"
 default-run = "cc-switch-tui"
 
 [dependencies]
-# 现有依赖
 chrono = { version = "0.4", features = ["serde"] }
 thiserror = "1"
 tracing = "0.1"
@@ -16,7 +15,7 @@ serde_json = { version = "1.0.149", features = ["preserve_order"] }
 ureq = { version = "3.3.0", features = ["platform-verifier"] }
 serde = { version = "1.0.228", features = ["derive"] }
 
-# 新增依赖（S0-T3 引入）
+# S0 引入
 axum = "0.7"
 tokio = { version = "1", features = ["rt-multi-thread", "macros", "signal", "net", "time"] }
 tower = "0.4"
@@ -25,14 +24,6 @@ include_dir = "0.7"
 webbrowser = "1"
 mime_guess = "2"
 
-# S0-T3 之后 T9 才删除（暂保留以允许 T3 阶段 cargo build 通过）
-ratatui = "0.26"
-crossterm = "0.27"
-
 [dev-dependencies]
 tempfile = "3"
 reqwest = { version = "0.12", features = ["json"] }
-
-[[bin]]
-name = "migrate_instances_id"
-path = "tools/migrate_instances_id.rs"

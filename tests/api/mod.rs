@@ -5,7 +5,7 @@ use std::net::SocketAddr;
 use tokio::net::TcpListener;
 
 pub async fn spawn_app() -> SocketAddr {
-    let templates = cc_switch_tui::app::templates::register_templates();
+    let templates = cc_switch_tui::templates::register_templates();
     let dao = cc_switch_tui::dao::SqliteDaoImpl::new(":memory:", templates)
         .expect("failed to create in-memory DB");
     let state = cc_switch_tui::api::state::AppState::new(dao);

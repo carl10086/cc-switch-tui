@@ -1,8 +1,8 @@
 use cc_switch_tui::api;
 use cc_switch_tui::api::state::AppState;
-use cc_switch_tui::app::templates::register_templates;
 use cc_switch_tui::dao::SqliteDaoImpl;
 use cc_switch_tui::port;
+use cc_switch_tui::templates::register_templates;
 use std::io;
 use std::path::PathBuf;
 
