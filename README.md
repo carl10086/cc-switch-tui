@@ -1,10 +1,10 @@
 # cc-switch-tui
 
-管理 Claude Code 模型提供商的 Rust TUI 工具。
+管理 Claude Code 模型提供商的 Rust Web 工具。
 
 ## 功能列表
 
-- **TUI 管理** — 交互式界面管理 Provider Instance
+- **Web 管理** — 浏览器界面管理 Provider Instance
 - **多 Provider** — 支持 MiniMax、Kimi 等多 Provider
 - **多 Alias** — 同一模型支持多个配置实例
 - **Shell Function 隔离** — 使用函数代替 alias，环境变量隔离更好
@@ -43,7 +43,7 @@ source ~/.cc-switch-tui/aliases.zsh
 
 然后重新加载 shell 或执行 `source ~/.zshrc`。
 
-启动后通过 TUI 创建第一个 Instance。
+启动后会自动打开浏览器，通过 Web 界面创建第一个 Instance。
 
 ## 核心概念
 
@@ -52,18 +52,6 @@ source ~/.cc-switch-tui/aliases.zsh
 **Instance** — 用户创建的 Provider 配置实例，包含 API Key、自定义别名和可选的 KV Cache 优化开关。
 
 **Alias** — 根据 Instance 生成的 shell function，激活后切换环境变量。
-
-## 键盘快捷键
-
-| 按键   | 功能               |
-|--------|--------------------|
-| j/↑   | 上一项             |
-| k/↓   | 下一项             |
-| Enter  | 选择/确认          |
-| n      | 创建新 Instance     |
-| e      | 编辑选中 Instance   |
-| d      | 删除选中 Instance   |
-| q      | 退出               |
 
 ## 进阶功能
 
