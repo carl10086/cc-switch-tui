@@ -80,6 +80,7 @@ export interface ExportedConfig {
     modelId: string;
     opencodeModelId: string;
     kvCacheEnabled: boolean;
+    contextWindowEnabled: boolean;
   }>;
 }
 
@@ -164,6 +165,7 @@ export function useCreateInstance() {
       apiKey: string;
       opencodeModelId?: string;
       kvCacheEnabled?: boolean;
+      contextWindowEnabled?: boolean;
     }) => apiPost<InstanceDetail>('/api/instances', req),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['instances'] }),
   });
@@ -179,6 +181,7 @@ export function useUpdateInstance(id: string) {
       apiKey?: string;
       opencodeModelId?: string;
       kvCacheEnabled?: boolean;
+      contextWindowEnabled?: boolean;
     }) => apiPatch<InstanceDetail>(`/api/instances/${id}`, patch),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['instances'] });
@@ -216,5 +219,6 @@ export interface InstanceDetail {
   modelId: string;
   opencodeModelId: string;
   kvCacheEnabled: boolean;
+  contextWindowEnabled: boolean;
   createdAt: string;
 }

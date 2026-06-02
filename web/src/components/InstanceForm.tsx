@@ -30,6 +30,7 @@ export function InstanceForm({
     apiKey: initial?.apiKey ?? '',
     opencodeModelId: initial?.opencodeModelId ?? '',
     kvCacheEnabled: initial?.kvCacheEnabled ?? false,
+    contextWindowEnabled: initial?.contextWindowEnabled ?? false,
   });
   const [errors, setErrors] = useState<Record<string, string>>({});
 
