@@ -4,3 +4,9 @@
 .idea
 /dist
 /app.log
+/.codegraph
+/web/node_modules
+/web/dist
+/web/.vite
+/web/*.tsbuildinfo
+/node_modules

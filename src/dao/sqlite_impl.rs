@@ -274,7 +274,7 @@ impl Dao for SqliteDaoImpl {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::app::templates::register_templates;
+    use crate::templates::register_templates;
 
     fn create_test_dao() -> SqliteDaoImpl {
         let templates = register_templates();

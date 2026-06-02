@@ -1,0 +1,220 @@
+/// TanStack Query hooks for all API endpoints.
+/// 每个 hook 暴露 query（GET）或 mutation（POST/PATCH/DELETE）。
+
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { apiDelete, apiGet, apiGetText, apiPatch, apiPost } from './client';
+import type { HealthResponse, Instance, Template } from './types';
+
+// ===== Queries (GET) =====
+
+export function useHealth() {
+  return useQuery({
+    queryKey: ['health'],
+    queryFn: () => apiGet<HealthResponse>('/api/health'),
+    staleTime: 0,
+    retry: 1,
+    refetchOnWindowFocus: false,
+  });
+}
+
+export function useInstances() {
+  return useQuery({
+    queryKey: ['instances'],
+    queryFn: () => apiGet<Instance[]>('/api/instances'),
+  });
+}
+
+export function useTemplates() {
+  return useQuery({
+    queryKey: ['templates'],
+    queryFn: () => apiGet<Template[]>('/api/templates'),
+    staleTime: 60_000, // 模板列表不变，缓存 1 分钟
+  });
+}
+
+export function useAliasesContent() {
+  return useQuery({
+    queryKey: ['aliases', 'content'],
+    queryFn: () => apiGetText('/api/aliases'),
+  });
+}
+
+export function useApplyAliases() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: () => apiPost<{ path: string }>('/api/aliases/apply', {}),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['aliases', 'content'] });
+    },
+  });
+}
+
+export function useOpencodeConfig(instanceId: string | undefined) {
+  return useQuery({
+    queryKey: ['opencode-config', instanceId],
+    queryFn: () => apiGet<Record<string, unknown>>(`/api/opencode-config/${instanceId}`),
+    enabled: !!instanceId,
+  });
+}
+
+export function useApplyOpencodeConfig() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (instanceId: string) =>
+      apiPost<{ path: string }>(`/api/opencode-config/${instanceId}/apply`, {}),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['opencode-config'] });
+    },
+  });
+}
+
+// ===== Config Import/Export =====
+
+export interface ExportedConfig {
+  version: number;
+  exportedAt: string;
+  instances: Array<{
+    id: string;
+    templateId: string;
+    alias: string;
+    modelId: string;
+    opencodeModelId: string;
+    kvCacheEnabled: boolean;
+  }>;
+}
+
+export interface ImportResult {
+  created: number;
+  skipped: number;
+  skippedAliases: string[];
+}
+
+export function useImportConfig() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (payload: unknown) => apiPost<ImportResult>('/api/config/import', payload),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['instances'] });
+    },
+  });
+}
+
+// ===== Settings + Diagnostics =====
+
+export interface Settings {
+  autoOpenBrowser: boolean;
+  defaultTemplate: string | null;
+}
+
+export interface Diagnostics {
+  status: 'ok' | 'warn' | 'error';
+  dbPath: string;
+  dbWritable: boolean;
+  aliasesPath: string;
+  aliasesWritable: boolean;
+  zshrcPath: string;
+  zshrcWritable: boolean;
+  opencodeDir: string;
+  opencodeDirWritable: boolean;
+  instanceCount: number;
+  templateCount: number;
+}
+
+export function useSettings() {
+  return useQuery({
+    queryKey: ['settings'],
+    queryFn: () => apiGet<Settings>('/api/settings'),
+  });
+}
+
+export function useUpdateSettings() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (settings: Settings) => apiPatch<Settings>('/api/settings', settings),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['settings'] }),
+  });
+}
+
+export function useDiagnostics() {
+  return useQuery({
+    queryKey: ['diagnostics'],
+    queryFn: () => apiGet<Diagnostics>('/api/diagnostics'),
+    refetchInterval: 30_000, // 每 30s 刷新
+  });
+}
+
+export function useInstance(id: string | undefined) {
+  return useQuery({
+    queryKey: ['instances', id],
+    queryFn: () => apiGet<InstanceDetail>(`/api/instances/${id}`),
+    enabled: !!id,
+  });
+}
+
+// ===== Mutations (POST/PATCH/DELETE) =====
+
+/// POST /api/instances 创建 instance
+export function useCreateInstance() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (req: {
+      templateId: string;
+      alias: string;
+      modelId: string;
+      apiKey: string;
+      opencodeModelId?: string;
+      kvCacheEnabled?: boolean;
+    }) => apiPost<InstanceDetail>('/api/instances', req),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['instances'] }),
+  });
+}
+
+/// PATCH /api/instances/:id 改 model/apiKey/opencodeModelId/kvCacheEnabled
+/// 注：alias 暂不支持通过 PATCH 修改（需要 delete + recreate）
+export function useUpdateInstance(id: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (patch: {
+      modelId?: string;
+      apiKey?: string;
+      opencodeModelId?: string;
+      kvCacheEnabled?: boolean;
+    }) => apiPatch<InstanceDetail>(`/api/instances/${id}`, patch),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['instances'] });
+    },
+  });
+}
+
+/// DELETE /api/instances/:id
+export function useDeleteInstance() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => apiDelete(`/api/instances/${id}`),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['instances'] }),
+  });
+}
+
+/// POST /api/instances/:id/duplicate
+export function useDuplicateInstance() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) =>
+      apiPost<InstanceDetail>(`/api/instances/${id}/duplicate`, {}),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['instances'] }),
+  });
+}
+
+// ===== Types =====
+
+/// 详情响应：包含 apiKey
+export interface InstanceDetail {
+  id: string;
+  templateId: string;
+  alias: string;
+  apiKey: string;
+  modelId: string;
+  opencodeModelId: string;
+  kvCacheEnabled: boolean;
+  createdAt: string;
+}

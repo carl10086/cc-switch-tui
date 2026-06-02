@@ -1,26 +1,95 @@
 use crate::domain::{ProviderInstance, ProviderTemplate};
 use crate::shell;
-use serde_json::json;
+use serde_json::{Value, json};
 use std::collections::{HashMap, HashSet};
 use std::fs;
 use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
 
-/// 生成所有 opencode 配置文件，返回每个 alias 对应的配置文件路径
+/// 单个 instance 的 opencode 配置 JSON（不写盘）。
+/// 返回 None 表示该 instance 不应该生成 opencode 配置（缺字段等）。
+pub fn render_opencode_config(
+    instance: &ProviderInstance,
+    template: &ProviderTemplate,
+) -> Option<Value> {
+    if instance.alias.is_empty() {
+        return None;
+    }
+    let model_template = template.models.iter().find(|m| m.id == instance.model_id);
+    let opencode_model_id = if instance.opencode_model_id.is_empty() {
+        model_template
+            .map(|m| m.opencode_model_id.clone())
+            .unwrap_or_default()
+    } else {
+        instance.opencode_model_id.clone()
+    };
+    if template.opencode_provider_id.is_empty() || opencode_model_id.is_empty() {
+        return None;
+    }
+    let model_name = model_template
+        .map(|m| m.name.clone())
+        .unwrap_or_else(|| opencode_model_id.clone());
+
+    Some(json!({
+        "$schema": "https://opencode.ai/config.json",
+        "model": format!("{}/{}", template.opencode_provider_id, opencode_model_id),
+        "provider": {
+            &template.opencode_provider_id: {
+                "npm": &template.opencode_npm,
+                "name": &template.name,
+                "options": {
+                    "baseURL": &template.opencode_base_url,
+                    "apiKey": format!("{{env:{}}}", &template.opencode_env_var)
+                },
+                "models": {
+                    &opencode_model_id: {
+                        "name": model_name
+                    }
+                }
+            }
+        }
+    }))
+}
+
+/// 配置文件的实际路径：`{dir}/opencode/{alias}.json`
+pub fn opencode_config_path(dir: &Path, alias: &str) -> PathBuf {
+    dir.join("opencode").join(format!("{alias}.json"))
+}
+
+/// 写入单个 instance 的配置到 `{dir}/opencode/{alias}.json`。
+/// 权限设为 600（仅 owner 可读写）。返回 Some(path) 成功，None 表示跳过。
+pub fn write_opencode_config(
+    dir: &Path,
+    instance: &ProviderInstance,
+    template: &ProviderTemplate,
+) -> std::io::Result<Option<PathBuf>> {
+    let Some(config) = render_opencode_config(instance, template) else {
+        return Ok(None);
+    };
+    let path = opencode_config_path(dir, &instance.alias);
+    if let Some(parent) = path.parent() {
+        fs::create_dir_all(parent)?;
+    }
+    let json_str = serde_json::to_string_pretty(&config)
+        .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))?;
+    fs::write(&path, json_str)?;
+    fs::set_permissions(&path, fs::Permissions::from_mode(0o600))?;
+    Ok(Some(path))
+}
+
+/// 生成所有 opencode 配置文件，返回每个 alias 对应的配置文件路径。
+/// 保留向后兼容 — main.rs / shell::generate_aliases 都调用此函数。
 pub fn generate_opencode_configs(
     dir: &Path,
     instances: &[ProviderInstance],
     templates: &[ProviderTemplate],
 ) -> std::io::Result<HashMap<String, PathBuf>> {
-    let opencode_dir = dir.join("opencode");
-    fs::create_dir_all(&opencode_dir)?;
+    fs::create_dir_all(dir.join("opencode"))?;
 
-    // 用 HashMap 索引模板，避免每次线性查找
     let template_map: HashMap<&str, &ProviderTemplate> =
         templates.iter().map(|t| (t.id.as_str(), t)).collect();
 
     let mut result = HashMap::new();
-
     for instance in instances {
         if instance.alias.is_empty() {
             continue;
@@ -28,63 +97,10 @@ pub fn generate_opencode_configs(
         let Some(template) = template_map.get(instance.template_id.as_str()) else {
             continue;
         };
-
-        // 查找当前 instance 对应的模型模板
-        let model_template = template.models.iter().find(|m| m.id == instance.model_id);
-
-        // 确定使用的 opencode model id：优先用 instance 上设置的，否则 fallback 到模板 model 的映射
-        let opencode_model_id = if instance.opencode_model_id.is_empty() {
-            model_template
-                .map(|m| m.opencode_model_id.clone())
-                .unwrap_or_default()
-        } else {
-            instance.opencode_model_id.clone()
-        };
-
-        if template.opencode_provider_id.is_empty() || opencode_model_id.is_empty() {
-            continue;
+        if let Some(path) = write_opencode_config(dir, instance, template)? {
+            result.insert(instance.alias.clone(), path);
         }
-
-        // json! 宏会 consume 其参数，因此需要提前 clone
-        let provider_id = template.opencode_provider_id.clone();
-        let npm = template.opencode_npm.clone();
-        let name = template.name.clone();
-        let base_url = template.opencode_base_url.clone();
-        let env_var = template.opencode_env_var.clone();
-        let model_name = model_template
-            .map(|m| m.name.clone())
-            .unwrap_or_else(|| opencode_model_id.clone());
-
-        let config = json!({
-            "$schema": "https://opencode.ai/config.json",
-            "model": format!("{}/{}", provider_id, opencode_model_id),
-            "provider": {
-                provider_id: {
-                    "npm": npm,
-                    "name": name,
-                    "options": {
-                        "baseURL": base_url,
-                        "apiKey": format!("{{env:{}}}", env_var)
-                    },
-                    "models": {
-                        opencode_model_id: {
-                            "name": model_name
-                        }
-                    }
-                }
-            }
-        });
-
-        let file_name = format!("{}.json", instance.alias);
-        let file_path = opencode_dir.join(&file_name);
-        let json = serde_json::to_string_pretty(&config)
-            .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))?;
-        fs::write(&file_path, json)?;
-        // 设置权限为 600，避免其他用户读取
-        fs::set_permissions(&file_path, fs::Permissions::from_mode(0o600))?;
-        result.insert(instance.alias.clone(), file_path);
     }
-
     Ok(result)
 }
 

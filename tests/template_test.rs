@@ -1,4 +1,4 @@
-use cc_switch_tui::app::templates::register_templates;
+use cc_switch_tui::templates::register_templates;
 
 #[test]
 fn test_minimax_template_registered() {

@@ -1,26 +1,21 @@
-use cc_switch_tui::app::state::App;
-use cc_switch_tui::app::templates::register_templates;
-use cc_switch_tui::dao::Dao;
-use cc_switch_tui::dao::sqlite_impl::SqliteDaoImpl;
-use cc_switch_tui::opencode_fetch;
-use cc_switch_tui::shell;
-use cc_switch_tui::ui;
-use crossterm::{
-    event::{self, DisableMouseCapture, EnableMouseCapture, Event},
-    terminal::{EnterAlternateScreen, LeaveAlternateScreen, disable_raw_mode, enable_raw_mode},
-};
-use ratatui::Terminal;
-use ratatui::backend::CrosstermBackend;
+use cc_switch_tui::api;
+use cc_switch_tui::api::state::AppState;
+use cc_switch_tui::dao::SqliteDaoImpl;
+use cc_switch_tui::port;
+use cc_switch_tui::templates::register_templates;
 use std::io;
-use std::time::Duration;
+use std::path::PathBuf;
 
-fn main() -> io::Result<()> {
+const DEFAULT_PORT: u16 = 7480;
+
+#[tokio::main]
+async fn main() -> io::Result<()> {
+    // 日志初始化（沿用 v0.3.0 模式）
     let log_file = std::fs::OpenOptions::new()
         .create(true)
         .append(true)
         .open("app.log")
         .expect("无法创建日志文件");
-
     tracing_subscriber::fmt()
         .with_writer(move || log_file.try_clone().unwrap())
         .with_env_filter(
@@ -30,79 +25,62 @@ fn main() -> io::Result<()> {
         .with_ansi(false)
         .with_target(true)
         .init();
+    tracing::info!("cc-switch-tui starting (web mode)");
 
-    tracing::info!("cc-switch-tui starting");
-
-    let zshrc_modified = shell::ensure_zshrc_source(
-        &dirs::home_dir()
-            .unwrap_or_else(|| std::path::PathBuf::from("."))
-            .join(".zshrc"),
-    )
-    .unwrap_or(false);
-
-    enable_raw_mode()?;
-    let mut stdout = io::stdout();
-    crossterm::execute!(stdout, EnterAlternateScreen, EnableMouseCapture)?;
-    let backend = CrosstermBackend::new(stdout);
-    let mut terminal = Terminal::new(backend)?;
-
-    let db_path = ".cc-switch-tui/db.sqlite";
+    // 初始化 DAO + AppState
     let templates = register_templates();
+    let db_path = ".cc-switch-tui/db.sqlite";
     let dao = SqliteDaoImpl::new(db_path, templates).expect("无法初始化数据库");
-    let mut app = App::new_with_dao(dao);
-    app.zshrc_modified = zshrc_modified;
+    let state = AppState::new(dao);
 
-    // 启动时从 models.dev/api.json 拉取 OpenCode 模型列表并缓存到内存
-    match opencode_fetch::fetch_opencode_models() {
-        Ok(cache) => app.opencode_model_cache = cache,
-        Err(e) => app.error_message = Some(format!("无法加载 OpenCode 模型列表: {}", e)),
+    // 端口策略：先读 cached port，失败就 fallback 到 7480，再 +N 扫描
+    let cc_dir = cc_switch_tui_home();
+    let port_file = cc_dir.join("port");
+    let cached = port::read_cached_port(&port_file);
+    let start_port = cached.unwrap_or(DEFAULT_PORT);
+    tracing::info!("trying port {} (cached: {:?})", start_port, cached);
+
+    let (listener, actual_port) = port::try_bind(start_port, 100)
+        .await
+        .map_err(|e| io::Error::new(io::ErrorKind::AddrInUse, e))?;
+    let actual_addr = listener.local_addr()?;
+    tracing::info!("listening on http://{}", actual_addr);
+
+    // 写 port 到文件
+    if let Err(e) = port::write_port_file(&port_file, actual_port) {
+        tracing::warn!("failed to write port file: {e}");
     }
 
-    // 启动时预生成 aliases.zsh，避免 zsh source 时报文件不存在
-    let alias_dir = dirs::home_dir()
-        .unwrap_or_else(|| std::path::PathBuf::from("."))
-        .join(".cc-switch-tui");
-    let instances: Vec<_> = app.dao.list_instances().into_iter().cloned().collect();
-    let templates: Vec<_> = app.dao.get_templates().into_iter().cloned().collect();
-    let _ = shell::generate_aliases(&alias_dir, &instances, &templates);
-
-    let res = run_app(&mut terminal, &mut app);
-
-    disable_raw_mode()?;
-    crossterm::execute!(
-        terminal.backend_mut(),
-        LeaveAlternateScreen,
-        DisableMouseCapture
-    )?;
-    terminal.show_cursor()?;
-
-    if let Err(e) = res {
-        eprintln!("Error: {}", e);
+    // 自动开浏览器（尊重 settings.autoOpenBrowser）
+    let url = format!("http://{}", actual_addr);
+    let auto_open = {
+        let s = state.settings.read().await;
+        s.auto_open_browser
+    };
+    if auto_open {
+        if let Err(e) = webbrowser::open(&url) {
+            tracing::warn!("无法自动打开浏览器: {}。请手动访问 {}", e, url);
+        }
+    } else {
+        tracing::info!("auto_open_browser disabled; manually visit {}", url);
     }
+
+    // 启动 axum server + graceful shutdown
+    let app = api::router(state);
+    tracing::info!("server ready, open {} in your browser", url);
+    let port_file_for_cleanup = port_file.clone();
+    axum::serve(listener, app)
+        .with_graceful_shutdown(port::wait_for_shutdown(move || {
+            port::clear_port_file(&port_file_for_cleanup);
+        }))
+        .await?;
 
     tracing::info!("cc-switch-tui exiting");
     Ok(())
 }
 
-fn run_app<B: ratatui::backend::Backend>(
-    terminal: &mut Terminal<B>,
-    app: &mut App<SqliteDaoImpl>,
-) -> io::Result<()> {
-    let tick_rate = Duration::from_millis(100);
-
-    loop {
-        terminal.draw(|f| ui::draw(f, app))?;
-
-        if event::poll(tick_rate)? {
-            if let Event::Key(key) = event::read()? {
-                if key.kind == event::KeyEventKind::Press {
-                    app.on_key(key);
-                }
-            }
-        }
-
-        if app.should_quit {
-            return Ok(());
-        }
-    }
+fn cc_switch_tui_home() -> PathBuf {
+    dirs::home_dir()
+        .unwrap_or_else(|| std::path::PathBuf::from("."))
+        .join(".cc-switch-tui")
 }
