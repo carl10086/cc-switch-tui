@@ -203,6 +203,7 @@ mod tests {
                 name: "MiniMax M2.7 Highspeed".to_string(),
                 env_overrides: HashMap::new(),
                 opencode_model_id: "MiniMax-M2.7-highspeed".to_string(),
+                context_window: None,
             }],
             opencode_provider_id: "minimax-cn".to_string(),
             opencode_npm: "@ai-sdk/anthropic".to_string(),
@@ -219,6 +220,7 @@ mod tests {
             alias: "cl-mini".to_string(),
             opencode_model_id: "MiniMax-M2.7-highspeed".to_string(),
             kv_cache_enabled: false,
+            context_window_enabled: false,
         };
         generate_aliases(temp.path(), &[instance], &[template]).unwrap();
 
@@ -247,6 +249,7 @@ mod tests {
                 name: "MiniMax M2.7 Highspeed".to_string(),
                 env_overrides: HashMap::new(),
                 opencode_model_id: "MiniMax-M2.7-highspeed".to_string(),
+                context_window: None,
             }],
             opencode_provider_id: "minimax-cn".to_string(),
             opencode_npm: "@ai-sdk/anthropic".to_string(),
@@ -263,6 +266,7 @@ mod tests {
             alias: "cl-mini".to_string(),
             opencode_model_id: "MiniMax-M2.7-highspeed".to_string(),
             kv_cache_enabled: false,
+            context_window_enabled: false,
         };
         generate_aliases(temp.path(), &[instance], &[template]).unwrap();
 
@@ -287,6 +291,7 @@ mod tests {
                 name: "Qwen3 27B".to_string(),
                 env_overrides: HashMap::new(),
                 opencode_model_id: "qwen3-27b".to_string(),
+                context_window: None,
             }],
             opencode_provider_id: String::new(),
             opencode_npm: String::new(),
@@ -303,6 +308,7 @@ mod tests {
             alias: "cl-local".to_string(),
             opencode_model_id: "qwen3-27b".to_string(),
             kv_cache_enabled: true,
+            context_window_enabled: false,
         };
         generate_aliases(temp.path(), &[instance], &[template]).unwrap();
 

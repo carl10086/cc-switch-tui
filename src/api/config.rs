@@ -92,6 +92,7 @@ impl From<ImportedInstance> for ProviderInstance {
             created_at: Utc::now(),
             opencode_model_id: i.opencode_model_id,
             kv_cache_enabled: i.kv_cache_enabled,
+            context_window_enabled: false,
         }
     }
 }

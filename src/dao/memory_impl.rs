@@ -140,6 +140,7 @@ impl Dao for MemoryDaoImpl {
             alias,
             opencode_model_id: instance.opencode_model_id,
             kv_cache_enabled: instance.kv_cache_enabled,
+            context_window_enabled: instance.context_window_enabled,
         };
         self.instances.insert(new_id.to_string(), new_instance);
 

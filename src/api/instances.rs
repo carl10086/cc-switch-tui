@@ -111,6 +111,7 @@ pub async fn create(
         alias: req.alias,
         opencode_model_id: req.opencode_model_id.unwrap_or_default(),
         kv_cache_enabled: req.kv_cache_enabled.unwrap_or(false),
+        context_window_enabled: false,
     };
 
     let mut dao = state.dao.lock().await;
@@ -247,6 +248,7 @@ pub async fn duplicate(
         alias: new_alias,
         opencode_model_id: original.opencode_model_id,
         kv_cache_enabled: original.kv_cache_enabled,
+        context_window_enabled: original.context_window_enabled,
     };
 
     dao.create_instance(new_instance).map_err(|e| match e {

@@ -91,6 +91,7 @@ impl SqliteDaoImpl {
                 alias: row.get(5)?,
                 opencode_model_id: row.get(6)?,
                 kv_cache_enabled: row.get::<_, i32>("kv_cache_enabled")? != 0,
+                context_window_enabled: false,
             })
         }))?;
         self.instances.clear();
@@ -300,6 +301,7 @@ mod tests {
             alias: "cl-mini".to_string(),
             opencode_model_id: String::new(),
             kv_cache_enabled: false,
+            context_window_enabled: false,
         };
         dao.create_instance(instance.clone()).unwrap();
         let found = dao.get_instance(&instance.id).unwrap();
@@ -319,6 +321,7 @@ mod tests {
             alias: "cl-mini".to_string(),
             opencode_model_id: String::new(),
             kv_cache_enabled: false,
+            context_window_enabled: false,
         };
         dao.create_instance(instance).unwrap();
         dao.set_alias("minimax-MiniMax-M2.7-highspeed", "cl-mini".to_string())
@@ -339,6 +342,7 @@ mod tests {
             alias: "cl-mini".to_string(),
             opencode_model_id: String::new(),
             kv_cache_enabled: false,
+            context_window_enabled: false,
         };
         dao.create_instance(instance).unwrap();
         dao.update_instance(
@@ -378,6 +382,7 @@ mod tests {
             alias: "cl-mini".to_string(),
             opencode_model_id: String::new(),
             kv_cache_enabled: false,
+            context_window_enabled: false,
         };
         dao.create_instance(instance).unwrap();
 
@@ -409,6 +414,7 @@ mod tests {
             alias: "cl-mini".to_string(),
             opencode_model_id: String::new(),
             kv_cache_enabled: false,
+            context_window_enabled: false,
         };
         dao.create_instance(instance).unwrap();
         dao.delete_instance("minimax-MiniMax-M2.7-highspeed")
@@ -435,6 +441,7 @@ mod tests {
             alias: "cl-mini".to_string(),
             opencode_model_id: String::new(),
             kv_cache_enabled: false,
+            context_window_enabled: false,
         };
         dao.create_instance(instance.clone()).unwrap();
         let result = dao.create_instance(instance);
@@ -453,6 +460,7 @@ mod tests {
             alias: "cl-mini".to_string(),
             opencode_model_id: String::new(),
             kv_cache_enabled: false,
+            context_window_enabled: false,
         };
         dao.create_instance(instance).unwrap();
 
@@ -485,6 +493,7 @@ mod tests {
             alias: "cl-mini".to_string(),
             opencode_model_id: String::new(),
             kv_cache_enabled: false,
+            context_window_enabled: false,
         };
         let instance2 = ProviderInstance {
             id: "minimax-MiniMax-M2.7-highspeed-cl-mini".to_string(),
@@ -495,6 +504,7 @@ mod tests {
             alias: "cl-mini".to_string(),
             opencode_model_id: String::new(),
             kv_cache_enabled: false,
+            context_window_enabled: false,
         };
         dao.create_instance(instance1).unwrap();
         dao.create_instance(instance2).unwrap();
