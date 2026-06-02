@@ -49,6 +49,25 @@ export function useApplyAliases() {
   });
 }
 
+export function useOpencodeConfig(instanceId: string | undefined) {
+  return useQuery({
+    queryKey: ['opencode-config', instanceId],
+    queryFn: () => apiGet<Record<string, unknown>>(`/api/opencode-config/${instanceId}`),
+    enabled: !!instanceId,
+  });
+}
+
+export function useApplyOpencodeConfig() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (instanceId: string) =>
+      apiPost<{ path: string }>(`/api/opencode-config/${instanceId}/apply`, {}),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['opencode-config'] });
+    },
+  });
+}
+
 export function useInstance(id: string | undefined) {
   return useQuery({
     queryKey: ['instances', id],

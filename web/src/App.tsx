@@ -4,6 +4,7 @@ import { ThemeToggle } from './components/ThemeToggle';
 import { AliasesPage } from './routes/AliasesPage';
 import { InstanceDetailPage } from './routes/InstanceDetailPage';
 import { InstancesPage } from './routes/InstancesPage';
+import { OpencodePage } from './routes/OpencodePage';
 
 export default function App() {
   const { data: health } = useHealth();
@@ -34,6 +35,7 @@ export default function App() {
         <div className="max-w-6xl mx-auto px-6 flex gap-6 text-sm">
           <StyledNavLink to="/">Instances</StyledNavLink>
           <StyledNavLink to="/aliases">Aliases</StyledNavLink>
+          <StyledNavLink to="/opencode">OpenCode</StyledNavLink>
         </div>
       </nav>
 
@@ -42,6 +44,7 @@ export default function App() {
           <Route path="/" element={<InstancesPage />} />
           <Route path="/instances/:id" element={<InstanceDetailPage />} />
           <Route path="/aliases" element={<AliasesPage />} />
+          <Route path="/opencode" element={<OpencodePage />} />
         </Routes>
       </main>
     </div>

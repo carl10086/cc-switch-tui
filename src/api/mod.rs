@@ -4,6 +4,7 @@ pub mod aliases;
 pub mod error;
 pub mod health;
 pub mod instances;
+pub mod opencode;
 pub mod state;
 pub mod static_fallback;
 pub mod templates;
@@ -33,6 +34,8 @@ pub fn router(state: AppState) -> Router {
         .route("/api/templates", get(templates::list))
         .route("/api/aliases", get(aliases::get))
         .route("/api/aliases/apply", post(aliases::apply))
+        .route("/api/opencode-config/:id", get(opencode::get))
+        .route("/api/opencode-config/:id/apply", post(opencode::apply))
         .with_state(state)
         .fallback(static_fallback::spa_fallback)
 }
