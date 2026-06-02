@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { useAliasesContent, useApplyAliases } from '../api/hooks';
+import { AliasesPreview } from '../components/AliasesPreview';
 import { ApiErrorBanner } from '../components/ApiErrorBanner';
 
 export function AliasesPage() {
@@ -33,6 +34,10 @@ export function AliasesPage() {
 
       <p className="text-sm text-muted-foreground mb-4">
         预览 <code className="px-1 py-0.5 rounded bg-muted">~/.cc-switch-tui/aliases.zsh</code> 内容。点 Apply 会写入该文件（同时也会重新生成 OpenCode 配置文件）。改完后 <code>source ~/.zshrc</code> 生效。
+        <br />
+        <span className="text-xs">
+          敏感环境变量（KEY/TOKEN/SECRET/PASSWORD/CREDENTIAL）默认脱敏显示，点 Reveal 按钮可临时查看明文。
+        </span>
       </p>
 
       {isError && <div className="mb-4"><ApiErrorBanner error={error} /></div>}
@@ -49,9 +54,7 @@ export function AliasesPage() {
       {isLoading ? (
         <div className="text-muted-foreground">Loading…</div>
       ) : (
-        <pre className="bg-card border border-border rounded p-4 text-xs font-mono overflow-x-auto max-h-[60vh] overflow-y-auto whitespace-pre">
-          {data ?? ''}
-        </pre>
+        <AliasesPreview content={data ?? ''} />
       )}
     </section>
   );
