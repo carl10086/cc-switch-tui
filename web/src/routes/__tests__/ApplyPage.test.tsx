@@ -6,11 +6,15 @@ import { MemoryRouter } from 'react-router-dom';
 import { ApplyPage } from '../ApplyPage';
 
 // Mock api client hooks via a global fetch stub.
-function makeFetchStub(handlers: Record<string, () => unknown>) {
+function makeFetchStub(
+  handlers: Record<string, () => unknown>,
+  overrides: Record<string, (url: string) => Response> = {},
+) {
   return vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
     const url = typeof input === 'string' ? input : input.toString();
     const method = (init?.method ?? 'GET').toUpperCase();
     const key = `${method} ${url}`;
+    if (overrides[key]) return overrides[key](url);
     const handler = handlers[key];
     if (!handler) {
       return new Response(JSON.stringify({ error: `unmocked ${key}` }), {
@@ -123,45 +127,23 @@ describe('ApplyPage', () => {
   });
 
   it('shows error banner when apply fails', async () => {
-    // override to return 500 for apply POST
-    vi.stubGlobal(
-      'fetch',
-      vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
-        const url = typeof input === 'string' ? input : input.toString();
-        const method = (init?.method ?? 'GET').toUpperCase();
-        if (`${method} ${url}` === 'POST /api/aliases/apply') {
-          return new Response(
+    const fetchStub = makeFetchStub(
+      {
+        'GET /api/instances': () => SAMPLE_INSTANCES,
+        'GET /api/templates': () => SAMPLE_TEMPLATES,
+        'GET /api/aliases': () => SAMPLE_ALIASES,
+        'GET /api/opencode-config/minimax-cl-mini': () => SAMPLE_OPENCODE,
+      },
+      {
+        'POST /api/aliases/apply': () =>
+          new Response(
             JSON.stringify({ error: { code: 'INTERNAL', message: 'disk full' } }),
             { status: 500, headers: { 'Content-Type': 'application/json' } },
-          );
-        }
-        // fall through to GET handlers
-        const handlers: Record<string, () => unknown> = {
-          'GET /api/instances': () => SAMPLE_INSTANCES,
-          'GET /api/templates': () => SAMPLE_TEMPLATES,
-          'GET /api/aliases': () => SAMPLE_ALIASES,
-          'GET /api/opencode-config/minimax-cl-mini': () => SAMPLE_OPENCODE,
-        };
-        const h = handlers[`${method} ${url}`];
-        if (!h) return new Response('not found', { status: 404 });
-        return new Response(JSON.stringify(h()), {
-          status: 200,
-          headers: { 'Content-Type': 'application/json' },
-        });
-      }),
+          ),
+      },
     );
-
     const user = userEvent.setup();
-    const qc = new QueryClient({
-      defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
-    });
-    render(
-      <QueryClientProvider client={qc}>
-        <MemoryRouter>
-          <ApplyPage />
-        </MemoryRouter>
-      </QueryClientProvider>,
-    );
+    renderApply(fetchStub);
 
     await waitFor(() => {
       expect(screen.getByRole('button', { name: /apply all/i })).toBeInTheDocument();
