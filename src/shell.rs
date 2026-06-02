@@ -84,6 +84,18 @@ fn build_env(
             env.extend(model.env_overrides.clone());
         }
     }
+    // 若实例开启了 context window 且模型有预设值，注入相关环境变量
+    if instance.context_window_enabled {
+        if let Some(template) = templates.iter().find(|t| t.id == instance.template_id) {
+            if let Some(model) = template.models.iter().find(|m| m.id == instance.model_id) {
+                if let Some(window) = model.context_window {
+                    env.insert("DISABLE_COMPACT".to_string(), "1".to_string());
+                    env.insert("CLAUDE_CODE_MAX_CONTEXT_TOKENS".to_string(), window.to_string());
+                    env.insert("CLAUDE_CODE_AUTO_COMPACT_WINDOW".to_string(), window.to_string());
+                }
+            }
+        }
+    }
     env.insert("ANTHROPIC_AUTH_TOKEN".to_string(), instance.api_key.clone());
     env.insert(
         "CMUX_PRESERVE_CLAUDE_AUTH_SELECTION_ENV".to_string(),
@@ -99,6 +111,9 @@ fn get_all_env_vars(templates: &[ProviderTemplate]) -> Vec<String> {
         "ANTHROPIC_AUTH_TOKEN".to_string(),
         "CMUX_PRESERVE_CLAUDE_AUTH_SELECTION_ENV".to_string(),
         "CC_SWITCH_ALIAS".to_string(),
+        "DISABLE_COMPACT".to_string(),
+        "CLAUDE_CODE_MAX_CONTEXT_TOKENS".to_string(),
+        "CLAUDE_CODE_AUTO_COMPACT_WINDOW".to_string(),
     ]);
     for template in templates {
         set.extend(template.default_env.keys().cloned());
@@ -317,6 +332,95 @@ mod tests {
         assert!(content.contains("--exclude-dynamic-system-prompt-sections"));
         assert!(content.contains("includeGitInstructions"));
         assert!(content.contains("command claude --exclude-dynamic-system-prompt-sections"));
+    }
+
+    #[test]
+    fn test_build_env_injects_context_window_vars() {
+        let temp = TempDir::new().unwrap();
+        let mut env = HashMap::new();
+        env.insert(
+            "ANTHROPIC_BASE_URL".to_string(),
+            "https://api.minimaxi.com/anthropic".to_string(),
+        );
+        let template = ProviderTemplate {
+            id: "minimax".to_string(),
+            name: "MiniMax".to_string(),
+            default_env: env,
+            models: vec![ModelTemplate {
+                id: "MiniMax-M3".to_string(),
+                name: "MiniMax M3".to_string(),
+                env_overrides: HashMap::new(),
+                opencode_model_id: "MiniMax-M3".to_string(),
+                context_window: Some(1_000_000),
+            }],
+            opencode_provider_id: "minimax-cn".to_string(),
+            opencode_npm: "@ai-sdk/anthropic".to_string(),
+            opencode_base_url: "https://api.minimaxi.com/anthropic/v1".to_string(),
+            opencode_env_var: "MINIMAX_API_KEY".to_string(),
+            opencode_models: vec!["MiniMax-M3".to_string()],
+        };
+        let instance = ProviderInstance {
+            id: "minimax-MiniMax-M3-cl-m3".to_string(),
+            template_id: "minimax".to_string(),
+            model_id: "MiniMax-M3".to_string(),
+            api_key: "sk-test".to_string(),
+            created_at: chrono::Utc::now(),
+            alias: "cl-m3".to_string(),
+            opencode_model_id: "MiniMax-M3".to_string(),
+            kv_cache_enabled: false,
+            context_window_enabled: true,
+        };
+        generate_aliases(temp.path(), &[instance], &[template]).unwrap();
+
+        let content = std::fs::read_to_string(temp.path().join("aliases.zsh")).unwrap();
+        assert!(content.contains("export DISABLE_COMPACT=1"));
+        assert!(content.contains("export CLAUDE_CODE_MAX_CONTEXT_TOKENS=1000000"));
+        assert!(content.contains("export CLAUDE_CODE_AUTO_COMPACT_WINDOW=1000000"));
+        assert!(content.contains("DISABLE_COMPACT"));
+    }
+
+    #[test]
+    fn test_build_env_skips_context_window_when_disabled() {
+        let temp = TempDir::new().unwrap();
+        let mut env = HashMap::new();
+        env.insert(
+            "ANTHROPIC_BASE_URL".to_string(),
+            "https://api.minimaxi.com/anthropic".to_string(),
+        );
+        let template = ProviderTemplate {
+            id: "minimax".to_string(),
+            name: "MiniMax".to_string(),
+            default_env: env,
+            models: vec![ModelTemplate {
+                id: "MiniMax-M3".to_string(),
+                name: "MiniMax M3".to_string(),
+                env_overrides: HashMap::new(),
+                opencode_model_id: "MiniMax-M3".to_string(),
+                context_window: Some(1_000_000),
+            }],
+            opencode_provider_id: "minimax-cn".to_string(),
+            opencode_npm: "@ai-sdk/anthropic".to_string(),
+            opencode_base_url: "https://api.minimaxi.com/anthropic/v1".to_string(),
+            opencode_env_var: "MINIMAX_API_KEY".to_string(),
+            opencode_models: vec!["MiniMax-M3".to_string()],
+        };
+        let instance = ProviderInstance {
+            id: "minimax-MiniMax-M3-cl-m3".to_string(),
+            template_id: "minimax".to_string(),
+            model_id: "MiniMax-M3".to_string(),
+            api_key: "sk-test".to_string(),
+            created_at: chrono::Utc::now(),
+            alias: "cl-m3".to_string(),
+            opencode_model_id: "MiniMax-M3".to_string(),
+            kv_cache_enabled: false,
+            context_window_enabled: false,
+        };
+        generate_aliases(temp.path(), &[instance], &[template]).unwrap();
+
+        let content = std::fs::read_to_string(temp.path().join("aliases.zsh")).unwrap();
+        assert!(!content.contains("export DISABLE_COMPACT=1"));
+        assert!(!content.contains("export CLAUDE_CODE_MAX_CONTEXT_TOKENS"));
+        assert!(!content.contains("export CLAUDE_CODE_AUTO_COMPACT_WINDOW"));
     }
 
     #[test]
