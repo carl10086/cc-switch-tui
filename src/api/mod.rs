@@ -5,6 +5,7 @@ pub mod health;
 pub mod instances;
 pub mod state;
 pub mod static_fallback;
+pub mod templates;
 
 use state::AppState;
 
@@ -28,6 +29,7 @@ pub fn router(state: AppState) -> Router {
             "/api/instances/:id/duplicate",
             post(instances::duplicate),
         )
+        .route("/api/templates", get(templates::list))
         .with_state(state)
         .fallback(static_fallback::spa_fallback)
 }

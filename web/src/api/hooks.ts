@@ -3,7 +3,7 @@
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { apiDelete, apiGet, apiPatch, apiPost } from './client';
-import type { HealthResponse, Instance } from './types';
+import type { HealthResponse, Instance, Template } from './types';
 
 // ===== Queries (GET) =====
 
@@ -21,6 +21,14 @@ export function useInstances() {
   return useQuery({
     queryKey: ['instances'],
     queryFn: () => apiGet<Instance[]>('/api/instances'),
+  });
+}
+
+export function useTemplates() {
+  return useQuery({
+    queryKey: ['templates'],
+    queryFn: () => apiGet<Template[]>('/api/templates'),
+    staleTime: 60_000, // 模板列表不变，缓存 1 分钟
   });
 }
 

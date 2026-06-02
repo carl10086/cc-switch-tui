@@ -1,14 +1,8 @@
-import { useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { ApiError } from '../api/client';
+import { useTemplates } from '../api/hooks';
 import { instanceSchema, type InstanceFormValues } from '../lib/validate';
 import { SecretInput } from './SecretInput';
-
-/// 临时硬编码的 templates + models 列表。
-/// S4 会换成从 /api/templates 拉取。
-const HARDCODED_TEMPLATES = [
-  { id: 'minimax', name: 'MiniMax', defaultModel: 'MiniMax-M3' },
-  { id: 'kimi', name: 'Kimi', defaultModel: 'kimi-for-coding' },
-] as const;
 
 export function InstanceForm({
   onSubmit,
@@ -25,15 +19,43 @@ export function InstanceForm({
   initial?: Partial<InstanceFormValues>;
   submitLabel?: string;
 }) {
+  const { data: templates, isLoading: templatesLoading } = useTemplates();
+
   const [values, setValues] = useState<InstanceFormValues>({
-    templateId: initial?.templateId ?? 'minimax',
+    templateId: initial?.templateId ?? '',
     alias: initial?.alias ?? '',
-    modelId: initial?.modelId ?? 'MiniMax-M3',
+    modelId: initial?.modelId ?? '',
     apiKey: initial?.apiKey ?? '',
     opencodeModelId: initial?.opencodeModelId ?? '',
     kvCacheEnabled: initial?.kvCacheEnabled ?? false,
   });
   const [errors, setErrors] = useState<Record<string, string>>({});
+
+  // 加载 templates 后，设置默认 template + model
+  useEffect(() => {
+    if (!templates || templates.length === 0) return;
+    if (values.templateId) return; // already set (e.g. from initial)
+    const first = templates[0];
+    setValues((v) => ({
+      ...v,
+      templateId: first.id,
+      modelId: v.modelId || first.availableModels[0] || '',
+    }));
+  }, [templates, values.templateId]);
+
+  // 切换 template 时，若当前 model 不在新 template 的 availableModels 里，替换为第一个
+  const currentTemplate = useMemo(
+    () => templates?.find((t) => t.id === values.templateId),
+    [templates, values.templateId],
+  );
+  useEffect(() => {
+    if (!currentTemplate) return;
+    if (currentTemplate.availableModels.includes(values.modelId)) return;
+    setValues((v) => ({
+      ...v,
+      modelId: currentTemplate.availableModels[0] ?? '',
+    }));
+  }, [currentTemplate, values.modelId]);
 
   function set<K extends keyof InstanceFormValues>(key: K, value: InstanceFormValues[K]) {
     setValues((v) => ({ ...v, [key]: value }));
@@ -56,18 +78,23 @@ export function InstanceForm({
     await onSubmit(result.data);
   }
 
-  // 提取服务端 field error (ApiError.field)
-  const serverFieldError =
-    serverError instanceof ApiError && serverError.code === 'VALIDATION_ERROR' &&
-    typeof (serverError as ApiError & { _field?: string })._field === 'string'
-      ? ((serverError as unknown) as { _field?: string })._field
-      : undefined;
+  // 提取服务端 field error (ApiError.field — 通过 _field hack 标记)
+  const enrichedServerError =
+    serverError instanceof ApiError &&
+    (serverError as ApiError & { _field?: string })._field
+      ? serverError
+      : null;
   const generalServerError =
-    serverError && !(serverError instanceof ApiError)
-      ? (serverError as Error).message
-      : serverError instanceof ApiError && serverError.code !== 'VALIDATION_ERROR'
+    serverError && !enrichedServerError
+      ? serverError instanceof ApiError
         ? serverError.message
-        : undefined;
+        : (serverError as Error).message
+      : null;
+  const aliasFieldFromServer =
+    enrichedServerError &&
+    (enrichedServerError as ApiError & { _field?: string })._field === 'alias'
+      ? 'Alias already exists'
+      : '';
 
   return (
     <form onSubmit={handleSubmit} className="space-y-4">
@@ -75,15 +102,16 @@ export function InstanceForm({
         <select
           value={values.templateId}
           onChange={(e) => set('templateId', e.target.value)}
+          disabled={templatesLoading}
           className="w-full px-3 py-1.5 text-sm rounded border border-input bg-background"
         >
-          {HARDCODED_TEMPLATES.map((t) => (
-            <option key={t.id} value={t.id}>{t.name}</option>
+          {templates?.map((t) => (
+            <option key={t.id} value={t.id}>{t.displayName}</option>
           ))}
         </select>
       </Field>
 
-      <Field label="Alias" error={errors.alias || serverFieldError === 'alias' ? 'Alias already exists' : ''}>
+      <Field label="Alias" error={errors.alias || aliasFieldFromServer}>
         <input
           value={values.alias}
           onChange={(e) => set('alias', e.target.value)}
@@ -93,12 +121,24 @@ export function InstanceForm({
       </Field>
 
       <Field label="Model" error={errors.modelId}>
-        <input
-          value={values.modelId}
-          onChange={(e) => set('modelId', e.target.value)}
-          placeholder="MiniMax-M3"
-          className="w-full px-3 py-1.5 text-sm rounded border border-input bg-background font-mono"
-        />
+        {currentTemplate && currentTemplate.availableModels.length > 0 ? (
+          <select
+            value={values.modelId}
+            onChange={(e) => set('modelId', e.target.value)}
+            className="w-full px-3 py-1.5 text-sm rounded border border-input bg-background font-mono"
+          >
+            {currentTemplate.availableModels.map((m) => (
+              <option key={m} value={m}>{m}</option>
+            ))}
+          </select>
+        ) : (
+          <input
+            value={values.modelId}
+            onChange={(e) => set('modelId', e.target.value)}
+            placeholder="MiniMax-M3"
+            className="w-full px-3 py-1.5 text-sm rounded border border-input bg-background font-mono"
+          />
+        )}
       </Field>
 
       <Field label="API Key" error={errors.apiKey}>
