@@ -9,7 +9,11 @@ URL = "https://models.dev/api.json"
 
 
 def fetch():
-    with urllib.request.urlopen(URL, timeout=30) as resp:
+    req = urllib.request.Request(
+        URL,
+        headers={"User-Agent": "Mozilla/5.0 (cc-switch-tui script)"},
+    )
+    with urllib.request.urlopen(req, timeout=30) as resp:
         return json.loads(resp.read().decode())
 
 
