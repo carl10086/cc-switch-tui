@@ -48,14 +48,29 @@ export function InstanceForm({
     () => templates?.find((t) => t.id === values.templateId),
     [templates, values.templateId],
   );
+  const currentModel = useMemo(
+    () => currentTemplate?.models.find((m) => m.id === values.modelId),
+    [currentTemplate, values.modelId],
+  );
+
   useEffect(() => {
     if (!currentTemplate) return;
-    if (currentTemplate.availableModels.includes(values.modelId)) return;
+    if (currentTemplate.models.some((m) => m.id === values.modelId)) return;
     setValues((v) => ({
       ...v,
-      modelId: currentTemplate.availableModels[0] ?? '',
+      modelId: currentTemplate.models[0]?.id ?? '',
     }));
   }, [currentTemplate, values.modelId]);
+
+  // 切换 model 时同步重置 opencodeModelId 为该 model 的 opencode_model_id
+  // （仅当 opencodeModelId 与上一个 model 的 opencode id 一致，或为空时才自动重置 — 避免覆盖用户手动改过的值）
+  useEffect(() => {
+    if (!currentModel) return;
+    setValues((v) => {
+      if (v.opencodeModelId && v.opencodeModelId !== '') return v;
+      return { ...v, opencodeModelId: currentModel.opencodeModelId };
+    });
+  }, [currentModel]);
 
   function set<K extends keyof InstanceFormValues>(key: K, value: InstanceFormValues[K]) {
     setValues((v) => ({ ...v, [key]: value }));
@@ -121,14 +136,14 @@ export function InstanceForm({
       </Field>
 
       <Field label="Model" error={errors.modelId}>
-        {currentTemplate && currentTemplate.availableModels.length > 0 ? (
+        {currentTemplate && currentTemplate.models.length > 0 ? (
           <select
             value={values.modelId}
             onChange={(e) => set('modelId', e.target.value)}
             className="w-full px-3 py-1.5 text-sm rounded border border-input bg-background font-mono"
           >
-            {currentTemplate.availableModels.map((m) => (
-              <option key={m} value={m}>{m}</option>
+            {currentTemplate.models.map((m) => (
+              <option key={m.id} value={m.id}>{m.name} ({m.id})</option>
             ))}
           </select>
         ) : (
@@ -149,13 +164,28 @@ export function InstanceForm({
         />
       </Field>
 
-      <Field label="OpenCode Model ID (optional)" error={errors.opencodeModelId}>
-        <input
-          value={values.opencodeModelId ?? ''}
-          onChange={(e) => set('opencodeModelId', e.target.value)}
-          placeholder="defaults to model"
-          className="w-full px-3 py-1.5 text-sm rounded border border-input bg-background font-mono"
-        />
+      <Field label="OpenCode Model ID" error={errors.opencodeModelId}>
+        {currentTemplate && currentTemplate.models.length > 0 ? (
+          <select
+            value={values.opencodeModelId ?? ''}
+            onChange={(e) => set('opencodeModelId', e.target.value)}
+            className="w-full px-3 py-1.5 text-sm rounded border border-input bg-background font-mono"
+          >
+            <option value="">— default (use model id) —</option>
+            {currentTemplate.models.map((m) => (
+              <option key={m.id} value={m.opencodeModelId}>
+                {m.name} → {m.opencodeModelId}
+              </option>
+            ))}
+          </select>
+        ) : (
+          <input
+            value={values.opencodeModelId ?? ''}
+            onChange={(e) => set('opencodeModelId', e.target.value)}
+            placeholder="defaults to model"
+            className="w-full px-3 py-1.5 text-sm rounded border border-input bg-background font-mono"
+          />
+        )}
       </Field>
 
       <label className="flex items-center gap-2 text-sm">

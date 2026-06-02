@@ -16,11 +16,20 @@ export interface Instance {
   kvCacheEnabled: boolean;
 }
 
+// 与 Rust src/api/templates.rs::TemplateModelSummary 对齐
+export interface TemplateModel {
+  id: string;
+  name: string;
+  opencodeModelId: string;
+}
+
 // 与 Rust src/api/templates.rs::TemplateSummary 对齐
 export interface Template {
   id: string;
   displayName: string;
   opencodeProviderId: string;
   opencodeBaseUrl: string;
+  /** @deprecated 旧字段，保留兼容；新代码用 models[].id */
   availableModels: string[];
+  models: TemplateModel[];
 }

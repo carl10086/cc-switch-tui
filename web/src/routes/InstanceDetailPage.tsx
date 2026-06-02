@@ -4,6 +4,7 @@ import {
   useDeleteInstance,
   useDuplicateInstance,
   useInstance,
+  useTemplates,
   useUpdateInstance,
   type InstanceDetail,
 } from '../api/hooks';
@@ -16,6 +17,7 @@ export function InstanceDetailPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const { data: instance, isLoading, isError, error } = useInstance(id);
+  const { data: templates } = useTemplates();
   const update = useUpdateInstance(id ?? '');
   const deleteInst = useDeleteInstance();
   const duplicate = useDuplicateInstance();
@@ -146,12 +148,33 @@ export function InstanceDetailPage() {
           />
         </Field>
 
-        <Field label="OpenCode Model ID (optional)">
-          <input
-            value={draft.opencodeModelId ?? ''}
-            onChange={(e) => set('opencodeModelId', e.target.value)}
-            className="w-full px-3 py-1.5 text-sm rounded border border-input bg-background font-mono"
-          />
+        <Field label="OpenCode Model ID">
+          {(() => {
+            const tpl = templates?.find((t) => t.id === instance.templateId);
+            if (!tpl || tpl.models.length === 0) {
+              return (
+                <input
+                  value={draft.opencodeModelId ?? ''}
+                  onChange={(e) => set('opencodeModelId', e.target.value)}
+                  className="w-full px-3 py-1.5 text-sm rounded border border-input bg-background font-mono"
+                />
+              );
+            }
+            return (
+              <select
+                value={draft.opencodeModelId ?? ''}
+                onChange={(e) => set('opencodeModelId', e.target.value)}
+                className="w-full px-3 py-1.5 text-sm rounded border border-input bg-background font-mono"
+              >
+                <option value="">— default (use model id) —</option>
+                {tpl.models.map((m) => (
+                  <option key={m.id} value={m.opencodeModelId}>
+                    {m.name} → {m.opencodeModelId}
+                  </option>
+                ))}
+              </select>
+            );
+          })()}
         </Field>
 
         <label className="flex items-center gap-2 text-sm">

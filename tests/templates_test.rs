@@ -30,4 +30,10 @@ async fn test_templates_returns_built_in_list() {
     assert!(body.contains("\"availableModels\""), "expected availableModels field, got:\n{body}");
     // minimax template 至少有一个 model
     assert!(body.contains("MiniMax-M3") || body.contains("M2.7"), "expected at least one model, got:\n{body}");
+    // B2 fix: models 数组 + 每项含 opencodeModelId
+    assert!(body.contains("\"models\""), "expected models array field (B2), got:\n{body}");
+    assert!(
+        body.contains("\"opencodeModelId\""),
+        "expected opencodeModelId field per model (B2), got:\n{body}"
+    );
 }
