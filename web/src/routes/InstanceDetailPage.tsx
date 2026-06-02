@@ -28,6 +28,7 @@ export function InstanceDetailPage() {
   const [dirty, setDirty] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [serverError, setServerError] = useState<unknown>(null);
+  const [saveSuccess, setSaveSuccess] = useState(false);
 
   // 同步远端 → 本地草稿
   useEffect(() => {
@@ -70,6 +71,9 @@ export function InstanceDetailPage() {
     try {
       await update.mutateAsync(draft);
       setDirty(false);
+      setSaveSuccess(true);
+      setTimeout(() => setSaveSuccess(false), 2000);
+      navigate('/');
     } catch (e) {
       setServerError(e);
     }
@@ -128,6 +132,11 @@ export function InstanceDetailPage() {
       {serverError ? (
         <div className="mb-4"><ApiErrorBanner error={serverError} /></div>
       ) : null}
+      {saveSuccess && (
+        <div className="mb-4 text-sm text-green-600 bg-green-50 dark:bg-green-950 px-3 py-2 rounded">
+          Saved successfully.
+        </div>
+      )}
 
       <form onSubmit={handleSave} className="space-y-4">
         <Field label="Template">
