@@ -10,3 +10,7 @@
 /web/.vite
 /web/*.tsbuildinfo
 /node_modules
+
+# Local development data
+web/.cc-switch-tui/
+web/app.log
