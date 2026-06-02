@@ -108,6 +108,15 @@ impl Dao for MemoryDaoImpl {
         Ok(())
     }
 
+    fn set_context_window_enabled(&mut self, id: &str, enabled: bool) -> Result<(), AppError> {
+        let instance = self
+            .instances
+            .get_mut(id)
+            .ok_or_else(|| AppError::InstanceNotFound(id.to_string()))?;
+        instance.context_window_enabled = enabled;
+        Ok(())
+    }
+
     fn rename_instance(
         &mut self,
         old_id: &str,
