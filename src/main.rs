@@ -1,4 +1,7 @@
 use cc_switch_tui::api;
+use cc_switch_tui::api::state::AppState;
+use cc_switch_tui::app::templates::register_templates;
+use cc_switch_tui::dao::SqliteDaoImpl;
 use std::io;
 use std::net::SocketAddr;
 use tokio::net::TcpListener;
@@ -23,20 +26,26 @@ async fn main() -> io::Result<()> {
         .init();
     tracing::info!("cc-switch-tui starting (web mode)");
 
+    // 初始化 DAO + AppState
+    let templates = register_templates();
+    let db_path = ".cc-switch-tui/db.sqlite";
+    let dao = SqliteDaoImpl::new(db_path, templates).expect("无法初始化数据库");
+    let state = AppState::new(dao);
+
     // 绑定 127.0.0.1:7480（端口策略留到 S10 实现，目前硬编码）
     let addr: SocketAddr = "127.0.0.1:7480".parse().unwrap();
     let listener = TcpListener::bind(addr).await?;
     let actual_addr = listener.local_addr()?;
     tracing::info!("listening on http://{}", actual_addr);
 
-    // 自动开浏览器（S0-T3 + S10-T2：等 SPA fallback + 端口策略就位后端到端生效）
+    // 自动开浏览器
     let url = format!("http://{}", actual_addr);
     if let Err(e) = webbrowser::open(&url) {
         tracing::warn!("无法自动打开浏览器: {}。请手动访问 {}", e, url);
     }
 
     // 启动 axum server
-    let app = api::router();
+    let app = api::router(state);
     tracing::info!("server ready, open {} in your browser", url);
     axum::serve(listener, app)
         .with_graceful_shutdown(shutdown_signal())
