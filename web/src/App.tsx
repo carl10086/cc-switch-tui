@@ -2,6 +2,7 @@ import { Link, NavLink, Route, Routes } from 'react-router-dom';
 import { useHealth } from './api/hooks';
 import { ThemeToggle } from './components/ThemeToggle';
 import { AliasesPage } from './routes/AliasesPage';
+import { ApplyPage } from './routes/ApplyPage';
 import { ConfigPage } from './routes/ConfigPage';
 import { InstanceDetailPage } from './routes/InstanceDetailPage';
 import { InstancesPage } from './routes/InstancesPage';
@@ -38,6 +39,9 @@ export default function App() {
           <StyledNavLink to="/">Instances</StyledNavLink>
           <StyledNavLink to="/aliases">Aliases</StyledNavLink>
           <StyledNavLink to="/opencode">OpenCode</StyledNavLink>
+          <span className="border-l border-border" />
+          <StyledNavLink to="/apply">Apply</StyledNavLink>
+          <span className="border-l border-border" />
           <StyledNavLink to="/config">Config</StyledNavLink>
           <StyledNavLink to="/settings">Settings</StyledNavLink>
         </div>
@@ -49,6 +53,7 @@ export default function App() {
           <Route path="/instances/:id" element={<InstanceDetailPage />} />
           <Route path="/aliases" element={<AliasesPage />} />
           <Route path="/opencode" element={<OpencodePage />} />
+          <Route path="/apply" element={<ApplyPage />} />
           <Route path="/config" element={<ConfigPage />} />
           <Route path="/settings" element={<SettingsPage />} />
         </Routes>
