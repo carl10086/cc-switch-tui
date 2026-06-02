@@ -14,7 +14,7 @@ use state::AppState;
 pub fn router(state: AppState) -> Router {
     Router::new()
         .route("/api/health", get(health::health))
-        .route("/api/instances", get(instances::list))
+        .route("/api/instances", get(instances::list).post(instances::create))
         .with_state(state)
         .fallback(static_fallback::spa_fallback)
 }

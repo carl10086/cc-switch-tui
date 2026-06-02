@@ -1,11 +1,14 @@
+import { useState } from 'react';
 import { useInstances } from '../api/hooks';
 import { InstancesTable } from '../components/InstancesTable';
 import { ApiErrorBanner } from '../components/ApiErrorBanner';
+import { InstanceFormDialog } from '../components/InstanceFormDialog';
 import { useInstanceFilter } from '../hooks/useInstanceFilter';
 
 export function InstancesPage() {
   const { data, isLoading, isError, error } = useInstances();
   const { query, setQuery, filtered } = useInstanceFilter(data ?? []);
+  const [createOpen, setCreateOpen] = useState(false);
 
   return (
     <section>
@@ -13,7 +16,7 @@ export function InstancesPage() {
         <h2 className="text-2xl font-bold">Instances</h2>
         <button
           type="button"
-          onClick={() => alert('TODO: open create dialog (S2)')}
+          onClick={() => setCreateOpen(true)}
           className="px-3 py-1.5 text-sm rounded bg-primary text-primary-foreground hover:opacity-90"
         >
           + New
@@ -39,6 +42,8 @@ export function InstancesPage() {
       ) : (
         <InstancesTable instances={filtered} />
       )}
+
+      <InstanceFormDialog open={createOpen} onClose={() => setCreateOpen(false)} />
     </section>
   );
 }
