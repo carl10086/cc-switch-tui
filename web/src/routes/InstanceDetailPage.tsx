@@ -37,6 +37,7 @@ export function InstanceDetailPage() {
         apiKey: instance.apiKey,
         opencodeModelId: instance.opencodeModelId,
         kvCacheEnabled: instance.kvCacheEnabled,
+        contextWindowEnabled: instance.contextWindowEnabled,
       });
       setDirty(false);
     }
