@@ -34,4 +34,6 @@ pub struct ModelTemplate {
     pub env_overrides: HashMap<String, String>,
     /// OpenCode model ID，如 "MiniMax-M2.7-highspeed"
     pub opencode_model_id: String,
+    /// 上下文窗口大小（tokens）。None 表示不暴露 context window 配置。
+    pub context_window: Option<u64>,
 }

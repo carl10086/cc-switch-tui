@@ -14,6 +14,7 @@ fn create_test_template() -> ProviderTemplate {
             name: "Model 1".to_string(),
             env_overrides: HashMap::new(),
             opencode_model_id: String::new(),
+            context_window: None,
         }],
         opencode_provider_id: String::new(),
         opencode_npm: String::new(),
@@ -33,6 +34,7 @@ fn create_test_instance() -> ProviderInstance {
         alias: "cl-mini".to_string(),
         opencode_model_id: String::new(),
         kv_cache_enabled: false,
+        context_window_enabled: false,
     }
 }
 

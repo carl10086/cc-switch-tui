@@ -13,6 +13,7 @@ pub struct TemplateModelSummary {
     pub id: String,
     pub name: String,
     pub opencode_model_id: String,
+    pub context_window: Option<u64>,
 }
 
 /// Template summary for the Web UI.
@@ -51,6 +52,7 @@ impl From<&ProviderTemplate> for TemplateSummary {
                     id: m.id.clone(),
                     name: m.name.clone(),
                     opencode_model_id: m.opencode_model_id.clone(),
+                    context_window: m.context_window,
                 })
                 .collect(),
             opencode_models: t.opencode_models.clone(),

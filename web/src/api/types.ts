@@ -14,6 +14,7 @@ export interface Instance {
   modelId: string;
   opencodeModelId: string;
   kvCacheEnabled: boolean;
+  contextWindowEnabled: boolean;
 }
 
 // 与 Rust src/api/templates.rs::TemplateModelSummary 对齐
@@ -21,6 +22,7 @@ export interface TemplateModel {
   id: string;
   name: string;
   opencodeModelId: string;
+  contextWindow?: number;
 }
 
 // 与 Rust src/api/templates.rs::TemplateSummary 对齐
