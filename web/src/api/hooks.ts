@@ -2,7 +2,7 @@
 /// 每个 hook 暴露 query（GET）或 mutation（POST/PATCH/DELETE）。
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { apiDelete, apiGet, apiPatch, apiPost } from './client';
+import { apiDelete, apiGet, apiGetText, apiPatch, apiPost } from './client';
 import type { HealthResponse, Instance, Template } from './types';
 
 // ===== Queries (GET) =====
@@ -29,6 +29,23 @@ export function useTemplates() {
     queryKey: ['templates'],
     queryFn: () => apiGet<Template[]>('/api/templates'),
     staleTime: 60_000, // 模板列表不变，缓存 1 分钟
+  });
+}
+
+export function useAliasesContent() {
+  return useQuery({
+    queryKey: ['aliases', 'content'],
+    queryFn: () => apiGetText('/api/aliases'),
+  });
+}
+
+export function useApplyAliases() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: () => apiPost<{ path: string }>('/api/aliases/apply', {}),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['aliases', 'content'] });
+    },
   });
 }
 

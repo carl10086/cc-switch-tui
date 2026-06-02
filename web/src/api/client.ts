@@ -39,6 +39,17 @@ export async function apiDelete(path: string): Promise<void> {
   }
 }
 
+/// 拿 text/plain 响应（非 JSON）
+export async function apiGetText(path: string): Promise<string> {
+  const resp = await fetch(path, {
+    headers: { Accept: 'text/plain' },
+  });
+  if (!resp.ok) {
+    throw await toApiError(resp, 'GET', path);
+  }
+  return resp.text();
+}
+
 async function apiFetch<T>(method: string, path: string, body?: unknown): Promise<T> {
   const init: RequestInit = {
     method,

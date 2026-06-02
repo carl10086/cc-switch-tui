@@ -1,5 +1,6 @@
 use axum::{Router, routing::{get, post}};
 
+pub mod aliases;
 pub mod error;
 pub mod health;
 pub mod instances;
@@ -30,6 +31,8 @@ pub fn router(state: AppState) -> Router {
             post(instances::duplicate),
         )
         .route("/api/templates", get(templates::list))
+        .route("/api/aliases", get(aliases::get))
+        .route("/api/aliases/apply", post(aliases::apply))
         .with_state(state)
         .fallback(static_fallback::spa_fallback)
 }

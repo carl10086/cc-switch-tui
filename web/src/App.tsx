@@ -1,6 +1,7 @@
-import { Link, Route, Routes } from 'react-router-dom';
+import { Link, NavLink, Route, Routes } from 'react-router-dom';
 import { useHealth } from './api/hooks';
 import { ThemeToggle } from './components/ThemeToggle';
+import { AliasesPage } from './routes/AliasesPage';
 import { InstanceDetailPage } from './routes/InstanceDetailPage';
 import { InstancesPage } from './routes/InstancesPage';
 
@@ -31,7 +32,8 @@ export default function App() {
 
       <nav className="border-b border-border">
         <div className="max-w-6xl mx-auto px-6 flex gap-6 text-sm">
-          <NavLink to="/">Instances</NavLink>
+          <StyledNavLink to="/">Instances</StyledNavLink>
+          <StyledNavLink to="/aliases">Aliases</StyledNavLink>
         </div>
       </nav>
 
@@ -39,19 +41,27 @@ export default function App() {
         <Routes>
           <Route path="/" element={<InstancesPage />} />
           <Route path="/instances/:id" element={<InstanceDetailPage />} />
+          <Route path="/aliases" element={<AliasesPage />} />
         </Routes>
       </main>
     </div>
   );
 }
 
-function NavLink({ to, children }: { to: string; children: React.ReactNode }) {
+function StyledNavLink({ to, children }: { to: string; children: React.ReactNode }) {
   return (
-    <Link
+    <NavLink
       to={to}
-      className="py-2 border-b-2 border-transparent hover:border-primary text-muted-foreground hover:text-foreground"
+      end
+      className={({ isActive }) =>
+        `py-2 border-b-2 ${
+          isActive
+            ? 'border-primary text-foreground'
+            : 'border-transparent text-muted-foreground hover:text-foreground hover:border-primary'
+        }`
+      }
     >
       {children}
-    </Link>
+    </NavLink>
   );
 }
