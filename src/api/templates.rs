@@ -60,7 +60,6 @@ pub async fn list(
     State(state): State<AppState>,
 ) -> Result<Json<Vec<TemplateSummary>>, crate::api::error::ApiError> {
     let dao = state.dao.lock().await;
-    let templates: Vec<TemplateSummary> =
-        dao.get_templates().into_iter().map(Into::into).collect();
+    let templates: Vec<TemplateSummary> = dao.get_templates().into_iter().map(Into::into).collect();
     Ok(Json(templates))
 }
