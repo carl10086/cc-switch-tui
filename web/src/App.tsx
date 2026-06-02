@@ -1,12 +1,10 @@
 import { Link, NavLink, Route, Routes } from 'react-router-dom';
 import { useHealth } from './api/hooks';
 import { ThemeToggle } from './components/ThemeToggle';
-import { AliasesPage } from './routes/AliasesPage';
 import { ApplyPage } from './routes/ApplyPage';
 import { ConfigPage } from './routes/ConfigPage';
 import { InstanceDetailPage } from './routes/InstanceDetailPage';
 import { InstancesPage } from './routes/InstancesPage';
-import { OpencodePage } from './routes/OpencodePage';
 import { SettingsPage } from './routes/SettingsPage';
 
 export default function App() {
@@ -37,8 +35,6 @@ export default function App() {
       <nav className="border-b border-border">
         <div className="max-w-6xl mx-auto px-6 flex gap-6 text-sm">
           <StyledNavLink to="/">Instances</StyledNavLink>
-          <StyledNavLink to="/aliases">Aliases</StyledNavLink>
-          <StyledNavLink to="/opencode">OpenCode</StyledNavLink>
           <span className="border-l border-border" />
           <StyledNavLink to="/apply">Apply</StyledNavLink>
           <span className="border-l border-border" />
@@ -51,8 +47,6 @@ export default function App() {
         <Routes>
           <Route path="/" element={<InstancesPage />} />
           <Route path="/instances/:id" element={<InstanceDetailPage />} />
-          <Route path="/aliases" element={<AliasesPage />} />
-          <Route path="/opencode" element={<OpencodePage />} />
           <Route path="/apply" element={<ApplyPage />} />
           <Route path="/config" element={<ConfigPage />} />
           <Route path="/settings" element={<SettingsPage />} />
