@@ -22,6 +22,7 @@ pub struct InstanceSummary {
     pub model_id: String,
     pub opencode_model_id: String,
     pub kv_cache_enabled: bool,
+    pub context_window_enabled: bool,
 }
 
 impl From<&ProviderInstance> for InstanceSummary {
@@ -33,6 +34,7 @@ impl From<&ProviderInstance> for InstanceSummary {
             model_id: i.model_id.clone(),
             opencode_model_id: i.opencode_model_id.clone(),
             kv_cache_enabled: i.kv_cache_enabled,
+            context_window_enabled: i.context_window_enabled,
         }
     }
 }
@@ -48,6 +50,7 @@ pub struct InstanceDetail {
     pub model_id: String,
     pub opencode_model_id: String,
     pub kv_cache_enabled: bool,
+    pub context_window_enabled: bool,
     pub created_at: String,
 }
 
@@ -61,6 +64,7 @@ impl From<&ProviderInstance> for InstanceDetail {
             model_id: i.model_id.clone(),
             opencode_model_id: i.opencode_model_id.clone(),
             kv_cache_enabled: i.kv_cache_enabled,
+            context_window_enabled: i.context_window_enabled,
             created_at: i.created_at.to_rfc3339(),
         }
     }
@@ -90,6 +94,7 @@ pub struct CreateInstanceRequest {
     pub api_key: String,
     pub opencode_model_id: Option<String>,
     pub kv_cache_enabled: Option<bool>,
+    pub context_window_enabled: Option<bool>,
 }
 
 /// POST /api/instances
@@ -111,7 +116,7 @@ pub async fn create(
         alias: req.alias,
         opencode_model_id: req.opencode_model_id.unwrap_or_default(),
         kv_cache_enabled: req.kv_cache_enabled.unwrap_or(false),
-        context_window_enabled: false,
+        context_window_enabled: req.context_window_enabled.unwrap_or(false),
     };
 
     let mut dao = state.dao.lock().await;
@@ -148,7 +153,7 @@ pub async fn detail(
 // ===== Patch =====
 
 /// PATCH /api/instances/:id
-/// 支持修改 modelId, apiKey, opencodeModelId, kvCacheEnabled。
+/// 支持修改 modelId, apiKey, opencodeModelId, kvCacheEnabled, contextWindowEnabled。
 /// alias 通过 PATCH 修改暂不支持（id 与 alias 绑定，需要 rename_instance；M1 留作 TODO）。
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -159,6 +164,7 @@ pub struct PatchInstanceRequest {
     pub api_key: Option<String>,
     pub opencode_model_id: Option<String>,
     pub kv_cache_enabled: Option<bool>,
+    pub context_window_enabled: Option<bool>,
 }
 
 pub async fn patch(
@@ -196,6 +202,10 @@ pub async fn patch(
     }
     if let Some(kv) = req.kv_cache_enabled {
         dao.set_kv_cache_enabled(&id, kv)
+            .map_err(|e| ApiError::internal(e.to_string()))?;
+    }
+    if let Some(cw) = req.context_window_enabled {
+        dao.set_context_window_enabled(&id, cw)
             .map_err(|e| ApiError::internal(e.to_string()))?;
     }
 
