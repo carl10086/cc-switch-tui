@@ -1,6 +1,7 @@
 import { Link, Route, Routes } from 'react-router-dom';
 import { useHealth } from './api/hooks';
 import { ThemeToggle } from './components/ThemeToggle';
+import { InstanceDetailPage } from './routes/InstanceDetailPage';
 import { InstancesPage } from './routes/InstancesPage';
 
 export default function App() {
@@ -37,6 +38,7 @@ export default function App() {
       <main className="max-w-6xl mx-auto px-6 py-6">
         <Routes>
           <Route path="/" element={<InstancesPage />} />
+          <Route path="/instances/:id" element={<InstanceDetailPage />} />
         </Routes>
       </main>
     </div>

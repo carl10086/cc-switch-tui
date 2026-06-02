@@ -58,6 +58,12 @@ export function InstancesTable({
                   KV
                 </span>
               )}
+              <span
+                className="ml-3 text-xs text-muted-foreground hover:text-foreground opacity-0 group-hover:opacity-100"
+                title="Open in detail page"
+              >
+                →
+              </span>
             </TableCell>
           </TableRow>
         ))}

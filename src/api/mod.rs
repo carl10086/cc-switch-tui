@@ -1,4 +1,4 @@
-use axum::{Router, routing::get};
+use axum::{Router, routing::{get, post}};
 
 pub mod error;
 pub mod health;
@@ -14,7 +14,20 @@ use state::AppState;
 pub fn router(state: AppState) -> Router {
     Router::new()
         .route("/api/health", get(health::health))
-        .route("/api/instances", get(instances::list).post(instances::create))
+        .route(
+            "/api/instances",
+            get(instances::list).post(instances::create),
+        )
+        .route(
+            "/api/instances/:id",
+            get(instances::detail)
+                .patch(instances::patch)
+                .delete(instances::delete),
+        )
+        .route(
+            "/api/instances/:id/duplicate",
+            post(instances::duplicate),
+        )
         .with_state(state)
         .fallback(static_fallback::spa_fallback)
 }

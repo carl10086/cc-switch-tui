@@ -1,6 +1,6 @@
 use axum::{
     Json,
-    extract::State,
+    extract::{Path, State},
     http::StatusCode,
 };
 use chrono::Utc;
@@ -37,7 +37,7 @@ impl From<&ProviderInstance> for InstanceSummary {
     }
 }
 
-/// 详情响应：包含 apiKey（仅在 GET /:id 和 POST 响应里返回）。
+/// 详情响应：包含 apiKey（仅在 GET /:id 和 POST/PATCH 响应里返回）。
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct InstanceDetail {
@@ -66,6 +66,8 @@ impl From<&ProviderInstance> for InstanceDetail {
     }
 }
 
+// ===== List =====
+
 /// GET /api/instances
 pub async fn list(
     State(state): State<AppState>,
@@ -75,6 +77,8 @@ pub async fn list(
         dao.list_instances().into_iter().map(Into::into).collect();
     Ok(Json(summaries))
 }
+
+// ===== Create =====
 
 /// POST /api/instances request body
 #[derive(Deserialize)]
@@ -89,7 +93,6 @@ pub struct CreateInstanceRequest {
 }
 
 /// POST /api/instances
-/// 201 + 完整 instance；409 if alias 冲突；400 if 校验失败
 pub async fn create(
     State(state): State<AppState>,
     Json(req): Json<CreateInstanceRequest>,
@@ -120,14 +123,140 @@ pub async fn create(
         }
         Err(AppError::InstanceAlreadyExists(_)) => Err(ApiError::conflict(
             "alias",
-            format!("alias '{}' already exists", instance_alias_from_id(&id)),
+            format!("alias already exists"),
         )),
         Err(AppError::InvalidAlias(msg)) => Err(ApiError::validation("alias", msg)),
         Err(e) => Err(ApiError::internal(e.to_string())),
     }
 }
 
-fn instance_alias_from_id(id: &str) -> &str {
-    // id 格式：{template_id}-{alias}，找第一个 '-' 之后的部分
-    id.find('-').map(|i| &id[i + 1..]).unwrap_or(id)
+// ===== Get detail =====
+
+/// GET /api/instances/:id
+pub async fn detail(
+    State(state): State<AppState>,
+    Path(id): Path<String>,
+) -> Result<Json<InstanceDetail>, ApiError> {
+    let dao = state.dao.lock().await;
+    let instance = dao
+        .get_instance(&id)
+        .ok_or_else(|| ApiError::not_found(format!("instance {id} not found")))?;
+    Ok(Json(InstanceDetail::from(instance)))
+}
+
+// ===== Patch =====
+
+/// PATCH /api/instances/:id
+/// 支持修改 modelId, apiKey, opencodeModelId, kvCacheEnabled。
+/// alias 通过 PATCH 修改暂不支持（id 与 alias 绑定，需要 rename_instance；M1 留作 TODO）。
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PatchInstanceRequest {
+    #[serde(default)]
+    pub alias: Option<String>,
+    pub model_id: Option<String>,
+    pub api_key: Option<String>,
+    pub opencode_model_id: Option<String>,
+    pub kv_cache_enabled: Option<bool>,
+}
+
+pub async fn patch(
+    State(state): State<AppState>,
+    Path(id): Path<String>,
+    Json(req): Json<PatchInstanceRequest>,
+) -> Result<Json<InstanceDetail>, ApiError> {
+    if req.alias.is_some() {
+        return Err(ApiError::validation(
+            "alias",
+            "alias cannot be changed via PATCH (delete + recreate to change alias)",
+        ));
+    }
+
+    let mut dao = state.dao.lock().await;
+    let existing = dao
+        .get_instance(&id)
+        .ok_or_else(|| ApiError::not_found(format!("instance {id} not found")))?
+        .clone();
+
+    let new_model_id = req.model_id.unwrap_or_else(|| existing.model_id.clone());
+    let new_api_key = req.api_key.unwrap_or_else(|| existing.api_key.clone());
+
+    dao.update_instance(&id, new_model_id, existing.alias.clone(), new_api_key)
+        .map_err(|e| match e {
+            AppError::InstanceNotFound(_) => ApiError::not_found("instance not found"),
+            AppError::AliasAlreadyExists(_) => ApiError::conflict("alias", "alias conflict"),
+            AppError::InvalidAlias(msg) => ApiError::validation("alias", msg),
+            other => ApiError::internal(other.to_string()),
+        })?;
+
+    if let Some(ocm) = req.opencode_model_id {
+        dao.set_opencode_model_id(&id, ocm)
+            .map_err(|e| ApiError::internal(e.to_string()))?;
+    }
+    if let Some(kv) = req.kv_cache_enabled {
+        dao.set_kv_cache_enabled(&id, kv)
+            .map_err(|e| ApiError::internal(e.to_string()))?;
+    }
+
+    let updated = dao
+        .get_instance(&id)
+        .ok_or_else(|| ApiError::internal("updated instance not found"))?;
+    Ok(Json(InstanceDetail::from(updated)))
+}
+
+// ===== Delete =====
+
+/// DELETE /api/instances/:id
+pub async fn delete(
+    State(state): State<AppState>,
+    Path(id): Path<String>,
+) -> Result<StatusCode, ApiError> {
+    let mut dao = state.dao.lock().await;
+    match dao.delete_instance(&id) {
+        Ok(()) => Ok(StatusCode::NO_CONTENT),
+        Err(AppError::InstanceNotFound(_)) => {
+            Err(ApiError::not_found(format!("instance {id} not found")))
+        }
+        Err(e) => Err(ApiError::internal(e.to_string())),
+    }
+}
+
+// ===== Duplicate =====
+
+/// POST /api/instances/:id/duplicate
+/// 复制 instance，alias 加 "-copy" 后缀；冲突返 409
+pub async fn duplicate(
+    State(state): State<AppState>,
+    Path(id): Path<String>,
+) -> Result<(StatusCode, Json<InstanceDetail>), ApiError> {
+    let mut dao = state.dao.lock().await;
+    let original = dao
+        .get_instance(&id)
+        .ok_or_else(|| ApiError::not_found(format!("instance {id} not found")))?
+        .clone();
+
+    let new_alias = format!("{}-copy", original.alias);
+    let new_id = format!("{}-{}", original.template_id, new_alias);
+
+    let new_instance = ProviderInstance {
+        id: new_id.clone(),
+        template_id: original.template_id,
+        model_id: original.model_id,
+        api_key: original.api_key,
+        created_at: Utc::now(),
+        alias: new_alias,
+        opencode_model_id: original.opencode_model_id,
+        kv_cache_enabled: original.kv_cache_enabled,
+    };
+
+    dao.create_instance(new_instance).map_err(|e| match e {
+        AppError::InstanceAlreadyExists(_) => ApiError::conflict("alias", "copy alias already exists"),
+        AppError::InvalidAlias(msg) => ApiError::validation("alias", msg),
+        other => ApiError::internal(other.to_string()),
+    })?;
+
+    let created = dao
+        .get_instance(&new_id)
+        .ok_or_else(|| ApiError::internal("just-created instance not found"))?;
+    Ok((StatusCode::CREATED, Json(InstanceDetail::from(created))))
 }
