@@ -31,7 +31,10 @@ async fn main() -> io::Result<()> {
     let templates = register_templates();
     let db_path = ".cc-switch-tui/db.sqlite";
     let dao = SqliteDaoImpl::new(db_path, templates).expect("无法初始化数据库");
-    let state = AppState::new(dao);
+    let trace_store =
+        cc_switch_tui::trace::store::TraceStore::new(".cc-switch-tui/traces.sqlite")
+            .expect("无法初始化 trace 数据库");
+    let state = AppState::new(dao, trace_store);
 
     // 端口策略：先读 cached port，失败就 fallback 到 7480，再 +N 扫描
     let cc_dir = cc_switch_tui_home();
