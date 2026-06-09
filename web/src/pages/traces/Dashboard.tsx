@@ -61,12 +61,11 @@ export function TraceDashboard() {
 }
 
 function StatusBadge({ status }: { status: string }) {
-  const color =
-    status === 'complete'
-      ? 'bg-green-100 text-green-700'
-      : status === 'error'
-        ? 'bg-red-100 text-red-700'
-        : 'bg-yellow-100 text-yellow-700';
+  const STATUS_COLORS: Record<string, string> = {
+    complete: 'bg-green-100 text-green-700',
+    error: 'bg-red-100 text-red-700',
+  };
+  const color = STATUS_COLORS[status] ?? 'bg-yellow-100 text-yellow-700';
 
   return (
     <span className={`inline-block px-2 py-0.5 rounded-full text-xs ${color}`}>
