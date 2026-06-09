@@ -5,6 +5,7 @@ import { useHealth } from './api/hooks';
 import { apiGet } from './api/client';
 import type { Template } from './api/types';
 import { ThemeToggle } from './components/ThemeToggle';
+import { TraceDashboard } from './pages/traces/Dashboard';
 import { ApplyPage } from './routes/ApplyPage';
 import { ConfigPage } from './routes/ConfigPage';
 import { InstanceDetailPage } from './routes/InstanceDetailPage';
@@ -53,6 +54,7 @@ export default function App() {
           <StyledNavLink to="/apply">Apply</StyledNavLink>
           <span className="border-l border-border" />
           <StyledNavLink to="/config">Config</StyledNavLink>
+          <StyledNavLink to="/traces">Traces</StyledNavLink>
           <StyledNavLink to="/settings">Settings</StyledNavLink>
         </div>
       </nav>
@@ -63,6 +65,7 @@ export default function App() {
           <Route path="/instances/:id" element={<InstanceDetailPage />} />
           <Route path="/apply" element={<ApplyPage />} />
           <Route path="/config" element={<ConfigPage />} />
+          <Route path="/traces" element={<TraceDashboard />} />
           <Route path="/settings" element={<SettingsPage />} />
         </Routes>
       </main>
