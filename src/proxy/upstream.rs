@@ -54,11 +54,7 @@ impl UpstreamClient {
             .map_err(|e| AppError::Database(format!("upstream request failed: {}", e)))?;
 
         let status = response.status();
-        let headers = response
-            .headers()
-            .iter()
-            .map(|(k, v)| (k.clone(), v.clone()))
-            .collect();
+        let headers = response.headers().clone();
         let body = response
             .bytes()
             .await
