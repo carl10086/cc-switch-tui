@@ -123,7 +123,7 @@ impl TraceStore {
     pub fn append_record(
         &self,
         session_id: &str,
-        _turn: Option<i64>,
+        turn: Option<i64>,
         direction: TraceDirection,
         payload_json: &str,
     ) -> Result<(), AppError> {
@@ -145,7 +145,7 @@ impl TraceStore {
                 rusqlite::params![
                     session_id,
                     next_index,
-                    _turn,
+                    turn,
                     timestamp.clone(),
                     direction.as_str(),
                     payload_json,
