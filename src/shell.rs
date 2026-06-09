@@ -46,6 +46,12 @@ pub fn render_aliases(instances: &[ProviderInstance], templates: &[ProviderTempl
         opencode_config::build_opencode_aliases(instances, templates, &dummy_paths);
     lines.extend(opencode_lines);
 
+    // ys-proxy wrapper — 通过本地代理转发 Claude Code 请求
+    lines.push(
+        "function ys-proxy {\n  local alias_name=$1\n  shift\n  export ANTHROPIC_BASE_URL=\"http://localhost:7480/ys-proxy/${alias_name}\"\n  $alias_name \"$@\"\n}"
+            .to_string(),
+    );
+
     lines.join("\n") + "\n"
 }
 
