@@ -15,6 +15,12 @@ serde_json = { version = "1.0.149", features = ["preserve_order"] }
 ureq = { version = "3.3.0", features = ["platform-verifier"] }
 serde = { version = "1.0.228", features = ["derive"] }
 
+# ys-proxy 引入
+reqwest = { version = "0.12", features = ["json", "stream"] }
+futures = "0.3"
+bytes = "1"
+uuid = { version = "1", features = ["v4"] }
+
 # S0 引入
 axum = "0.7"
 tokio = { version = "1", features = ["rt-multi-thread", "macros", "signal", "net", "time"] }
