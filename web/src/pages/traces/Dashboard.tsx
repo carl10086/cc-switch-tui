@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useSessions, parseSummary, useDeleteSession } from '../../api/traces';
 
@@ -19,6 +20,7 @@ function getTokens(s: { summary_json?: string }): string {
 export function TraceDashboard() {
   const { data: sessions, isLoading, error } = useSessions();
   const deleteMutation = useDeleteSession();
+  const [deletingId, setDeletingId] = useState<string | null>(null);
 
   if (isLoading) {
     return <div className="text-muted-foreground">Loading sessions...</div>;
@@ -78,11 +80,16 @@ export function TraceDashboard() {
                       View
                     </Link>
                     <button
-                      onClick={() => deleteMutation.mutate(s.id)}
-                      disabled={deleteMutation.isPending}
+                      onClick={() => {
+                        setDeletingId(s.id);
+                        deleteMutation.mutate(s.id, {
+                          onSettled: () => setDeletingId(null),
+                        });
+                      }}
+                      disabled={deletingId === s.id}
                       className="text-xs text-red-500 hover:text-red-700 disabled:opacity-50"
                     >
-                      {deleteMutation.isPending ? '...' : 'Delete'}
+                      {deletingId === s.id ? '...' : 'Delete'}
                     </button>
                   </div>
                 </td>
