@@ -135,20 +135,13 @@ pub async fn proxy_handler(
             let mut accumulator = StreamingAccumulator::default();
             let anthropic_parser = AnthropicParser::new();
 
+            let mut events = Vec::new();
             while let Some(chunk) = trace_rx.recv().await {
-                for event in parser.feed(&chunk) {
-                    anthropic_parser.apply_streaming_event(&mut accumulator, &event);
-                    let payload = into_payload(event);
-                    let store = trace_store.lock().await;
-                    let _ = store.append_record(
-                        &session_id_clone,
-                        Some(1),
-                        TraceDirection::Response,
-                        &payload,
-                    );
-                }
+                events.extend(parser.feed(&chunk));
             }
-            for event in parser.flush() {
+            events.extend(parser.flush());
+
+            for event in events {
                 anthropic_parser.apply_streaming_event(&mut accumulator, &event);
                 let payload = into_payload(event);
                 let store = trace_store.lock().await;
