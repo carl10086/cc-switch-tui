@@ -1,5 +1,5 @@
-import { useQuery } from '@tanstack/react-query';
-import { apiGet } from './client';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { apiGet, apiDelete } from './client';
 
 export interface TraceSession {
   id: string;
@@ -68,5 +68,15 @@ export function useRecords(id: string) {
     queryKey: ['trace-records', id],
     queryFn: () => apiGet<TraceRecord[]>(`/api/traces/sessions/${id}/records`),
     enabled: !!id,
+  });
+}
+
+export function useDeleteSession() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => apiDelete(`/api/traces/sessions/${id}`),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['trace-sessions'] });
+    },
   });
 }
