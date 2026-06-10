@@ -13,6 +13,15 @@ pub struct ForwardedResponse {
     pub body: Bytes,
 }
 
+/// Streaming response from an upstream provider.
+///
+/// The caller must consume `response.bytes_stream()` to read the body.
+pub struct ForwardedStream {
+    pub status: StatusCode,
+    pub headers: HeaderMap,
+    pub response: reqwest::Response,
+}
+
 /// Client for forwarding requests to upstream providers.
 pub struct UpstreamClient {
     client: Client,
@@ -66,12 +75,49 @@ impl UpstreamClient {
             body,
         })
     }
+
+    /// Forward a request and return a streaming response without buffering the body.
+    pub async fn forward_streaming(
+        &self,
+        method: Method,
+        url: &str,
+        headers: HeaderMap,
+        body: Bytes,
+        api_key: &str,
+    ) -> Result<ForwardedStream, AppError> {
+        let mut request = self
+            .client
+            .request(method, url)
+            .header("Authorization", format!("Bearer {}", api_key))
+            .body(body);
+
+        for (key, value) in headers {
+            if let Some(key) = key {
+                request = request.header(key.as_str(), value.as_bytes());
+            }
+        }
+
+        let response = request
+            .send()
+            .await
+            .map_err(|e| AppError::Database(format!("upstream request failed: {}", e)))?;
+
+        let status = response.status();
+        let headers = response.headers().clone();
+
+        Ok(ForwardedStream {
+            status,
+            headers,
+            response,
+        })
+    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
     use axum::{body::Body, routing::post, Router};
+    use futures::StreamExt;
 
     async fn mock_handler(body: Body) -> axum::response::Response <String> {
         let bytes = axum::body::to_bytes(body, usize::MAX).await.unwrap();
@@ -79,6 +125,19 @@ mod tests {
             .status(200)
             .header("x-custom", "test")
             .body(format!("echo: {}", String::from_utf8_lossy(&bytes)))
+            .unwrap()
+    }
+
+    async fn mock_streaming_handler() -> axum::response::Response<Body> {
+        let stream = futures::stream::iter(vec![
+            Ok::<_, std::convert::Infallible>(Bytes::from("chunk1")),
+            Ok(Bytes::from("chunk2")),
+        ]);
+
+        axum::response::Response::builder()
+            .status(200)
+            .header("x-custom", "stream")
+            .body(Body::from_stream(stream))
             .unwrap()
     }
 
@@ -115,5 +174,44 @@ mod tests {
         let body_str = String::from_utf8_lossy(&resp.body);
         assert!(body_str.contains("echo:"));
         assert!(body_str.contains("test"));
+    }
+
+    #[tokio::test]
+    async fn test_forward_streaming() {
+        let app = Router::new().route("/v1/messages", post(mock_streaming_handler));
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let port = listener.local_addr().unwrap().port();
+
+        tokio::spawn(async move {
+            axum::serve(listener, app).await.unwrap();
+        });
+
+        tokio::time::sleep(tokio::time::Duration::from_millis(50)).await;
+
+        let client = UpstreamClient::new();
+        let stream_resp = client
+            .forward_streaming(
+                Method::POST,
+                &format!("http://127.0.0.1:{}/v1/messages", port),
+                HeaderMap::new(),
+                Bytes::from(r#"{"model":"test"}"#),
+                "test-key",
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(stream_resp.status, 200);
+        assert!(stream_resp.headers.contains_key("x-custom"));
+
+        let mut chunks = Vec::new();
+        let mut body_stream = stream_resp.response.bytes_stream();
+        while let Some(chunk) = body_stream.next().await {
+            chunks.push(chunk.unwrap());
+        }
+
+        let all_bytes = chunks.concat();
+        let body = String::from_utf8_lossy(&all_bytes);
+        assert!(body.contains("chunk1"));
+        assert!(body.contains("chunk2"));
     }
 }
