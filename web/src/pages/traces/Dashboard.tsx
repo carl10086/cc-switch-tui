@@ -70,7 +70,7 @@ export function TraceDashboard() {
   );
 }
 
-function StatusBadge({ status }: { status: string }) {
+export function StatusBadge({ status }: { status: string }) {
   const STATUS_COLORS: Record<string, string> = {
     complete: 'bg-green-100 text-green-700',
     error: 'bg-red-100 text-red-700',

@@ -1,5 +1,6 @@
 import { useParams, Link } from 'react-router-dom';
 import { useSession, useRecords } from '../../api/traces';
+import { StatusBadge } from './Dashboard';
 
 export function TraceViewer() {
   const { id } = useParams<{ id: string }>();
@@ -63,20 +64,6 @@ export function TraceViewer() {
         </div>
       )}
     </div>
-  );
-}
-
-function StatusBadge({ status }: { status: string }) {
-  const STATUS_COLORS: Record<string, string> = {
-    complete: 'bg-green-100 text-green-700',
-    error: 'bg-red-100 text-red-700',
-  };
-  const color = STATUS_COLORS[status] ?? 'bg-yellow-100 text-yellow-700';
-
-  return (
-    <span className={`inline-block px-2 py-0.5 rounded-full text-xs ${color}`}>
-      {status}
-    </span>
   );
 }
 
