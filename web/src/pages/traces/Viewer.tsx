@@ -1,32 +1,7 @@
 import { useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
-import { useSession, useRecords } from '../../api/traces';
+import { useSession, useRecords, parseSummary } from '../../api/traces';
 import { StatusBadge } from './Dashboard';
-
-interface SummaryJson {
-  request?: {
-    model?: string;
-    messages?: Array<{ role: string; content: string }>;
-    max_tokens?: number;
-    system?: string;
-  };
-  response?: {
-    content?: string;
-    stop_reason?: string;
-    input_tokens?: number;
-    output_tokens?: number;
-    model?: string;
-  };
-}
-
-function parseSummary(json?: string): SummaryJson | null {
-  if (!json) return null;
-  try {
-    return JSON.parse(json) as SummaryJson;
-  } catch {
-    return null;
-  }
-}
 
 export function TraceViewer() {
   const { id } = useParams<{ id: string }>();

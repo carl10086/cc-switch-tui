@@ -23,6 +23,31 @@ export interface TraceRecord {
   payload_json: string;
 }
 
+export interface SessionSummary {
+  request?: {
+    model?: string;
+    messages?: Array<{ role: string; content: string }>;
+    max_tokens?: number;
+    system?: string;
+  };
+  response?: {
+    content?: string;
+    stop_reason?: string;
+    input_tokens?: number;
+    output_tokens?: number;
+    model?: string;
+  };
+}
+
+export function parseSummary(json?: string): SessionSummary | null {
+  if (!json) return null;
+  try {
+    return JSON.parse(json) as SessionSummary;
+  } catch {
+    return null;
+  }
+}
+
 export function useSessions() {
   return useQuery({
     queryKey: ['trace-sessions'],

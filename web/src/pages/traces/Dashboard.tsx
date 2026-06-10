@@ -1,23 +1,5 @@
 import { Link } from 'react-router-dom';
-import { useSessions } from '../../api/traces';
-
-interface SessionSummary {
-  request?: { model?: string };
-  response?: {
-    model?: string;
-    input_tokens?: number;
-    output_tokens?: number;
-  };
-}
-
-function parseSummary(json?: string): SessionSummary | null {
-  if (!json) return null;
-  try {
-    return JSON.parse(json) as SessionSummary;
-  } catch {
-    return null;
-  }
-}
+import { useSessions, parseSummary } from '../../api/traces';
 
 function getModel(s: { model: string; summary_json?: string }): string {
   const summary = parseSummary(s.summary_json);
