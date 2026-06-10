@@ -6,11 +6,13 @@ use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
 use bytes::Bytes;
 use futures::StreamExt;
+use serde_json::json;
 
 use crate::api::error::ApiError;
 use crate::api::state::AppState;
 use crate::dao::Dao;
 use crate::proxy::filter::filter_headers;
+use crate::proxy::parser::{AnthropicParser, StreamingAccumulator};
 use crate::proxy::sse::{SseEvent, SseParser};
 use crate::proxy::upstream::UpstreamClient;
 use crate::trace::models::TraceDirection;
@@ -95,7 +97,9 @@ pub async fn proxy_handler(
             .map_err(|e| ApiError::internal(e.to_string()))?
     };
 
-    // 记录 request
+    // 记录 request 并解析摘要
+    let body_str = String::from_utf8_lossy(&body_bytes);
+    let request_summary = AnthropicParser::new().parse_request(&body_str);
     {
         let store = state.trace_store.lock().await;
         store
@@ -103,7 +107,7 @@ pub async fn proxy_handler(
                 &session_id,
                 Some(1),
                 TraceDirection::Request,
-                &String::from_utf8_lossy(&body_bytes),
+                &body_str,
             )
             .map_err(|e| ApiError::internal(e.to_string()))?;
     }
@@ -124,11 +128,16 @@ pub async fn proxy_handler(
         let (trace_tx, mut trace_rx) = tokio::sync::mpsc::unbounded_channel::<Bytes>();
         let trace_store = state.trace_store.clone();
         let session_id_clone = session_id.clone();
+        let request_summary_clone = request_summary.clone();
 
         tokio::spawn(async move {
             let mut parser = SseParser::new();
+            let mut accumulator = StreamingAccumulator::default();
+            let anthropic_parser = AnthropicParser::new();
+
             while let Some(chunk) = trace_rx.recv().await {
                 for event in parser.feed(&chunk) {
+                    anthropic_parser.apply_streaming_event(&mut accumulator, &event);
                     let payload = into_payload(event);
                     let store = trace_store.lock().await;
                     let _ = store.append_record(
@@ -140,6 +149,7 @@ pub async fn proxy_handler(
                 }
             }
             for event in parser.flush() {
+                anthropic_parser.apply_streaming_event(&mut accumulator, &event);
                 let payload = into_payload(event);
                 let store = trace_store.lock().await;
                 let _ = store.append_record(
@@ -149,8 +159,15 @@ pub async fn proxy_handler(
                     &payload,
                 );
             }
+
+            let response_summary = accumulator.into_response();
+            let summary = serde_json::to_string(&json!({
+                "request": request_summary_clone,
+                "response": response_summary,
+            })).unwrap_or_default();
+
             let store = trace_store.lock().await;
-            let _ = store.finalize_session(&session_id_clone, "complete", None);
+            let _ = store.finalize_session(&session_id_clone, "complete", Some(&summary));
         });
 
         // 构建客户端流：转发同时克隆到 trace 通道
@@ -179,6 +196,13 @@ pub async fn proxy_handler(
             .await
             .map_err(|e| ApiError::internal(e.to_string()))?;
 
+        let response_body = String::from_utf8_lossy(&upstream_resp.body);
+        let response_summary = AnthropicParser::new().parse_response(&response_body);
+        let summary = serde_json::to_string(&json!({
+            "request": request_summary,
+            "response": response_summary,
+        })).unwrap_or_default();
+
         {
             let store = state.trace_store.lock().await;
             store
@@ -186,11 +210,11 @@ pub async fn proxy_handler(
                     &session_id,
                     Some(1),
                     TraceDirection::Response,
-                    &String::from_utf8_lossy(&upstream_resp.body),
+                    &response_body,
                 )
                 .map_err(|e| ApiError::internal(e.to_string()))?;
             store
-                .finalize_session(&session_id, "complete", None)
+                .finalize_session(&session_id, "complete", Some(&summary))
                 .map_err(|e| ApiError::internal(e.to_string()))?;
         }
 
