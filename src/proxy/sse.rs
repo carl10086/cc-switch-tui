@@ -55,22 +55,8 @@ impl SseParser {
 
     /// Flush any remaining buffered data as final events.
     pub fn flush(&mut self) -> Vec<SseEvent> {
-        let mut events = Vec::new();
-
-        if !self.buffer.trim().is_empty() {
-            let line = self.buffer.trim_end_matches('\r').to_string();
-            self.buffer.clear();
-            if !line.is_empty() {
-                self.current_lines.push(line);
-            }
-        }
-
-        if let Some(event) = Self::parse_lines(&self.current_lines) {
-            events.push(event);
-        }
-        self.current_lines.clear();
-
-        events
+        // An empty line terminates the current event; inject two to ensure closure.
+        self.feed(b"\n\n")
     }
 
     fn parse_lines(lines: &[String]) -> Option<SseEvent> {
