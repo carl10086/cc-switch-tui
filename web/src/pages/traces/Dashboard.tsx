@@ -1,3 +1,4 @@
+import { Link } from 'react-router-dom';
 import { useSessions } from '../../api/traces';
 
 export function TraceDashboard() {
@@ -36,6 +37,7 @@ export function TraceDashboard() {
               <th className="text-left py-2 px-4">Status</th>
               <th className="text-left py-2 px-4">Records</th>
               <th className="text-left py-2 px-4">Time</th>
+              <th className="text-left py-2 px-4"></th>
             </tr>
           </thead>
           <tbody>
@@ -50,6 +52,14 @@ export function TraceDashboard() {
                 <td className="py-2 px-4">{s.record_count}</td>
                 <td className="py-2 px-4 text-muted-foreground">
                   {new Date(s.started_at).toLocaleString()}
+                </td>
+                <td className="py-2 px-4">
+                  <Link
+                    to={`/traces/${s.id}`}
+                    className="text-xs text-primary hover:underline"
+                  >
+                    View
+                  </Link>
                 </td>
               </tr>
             ))}

@@ -6,6 +6,7 @@ import { apiGet } from './api/client';
 import type { Template } from './api/types';
 import { ThemeToggle } from './components/ThemeToggle';
 import { TraceDashboard } from './pages/traces/Dashboard';
+import { TraceViewer } from './pages/traces/Viewer';
 import { ApplyPage } from './routes/ApplyPage';
 import { ConfigPage } from './routes/ConfigPage';
 import { InstanceDetailPage } from './routes/InstanceDetailPage';
@@ -66,6 +67,7 @@ export default function App() {
           <Route path="/apply" element={<ApplyPage />} />
           <Route path="/config" element={<ConfigPage />} />
           <Route path="/traces" element={<TraceDashboard />} />
+          <Route path="/traces/:id" element={<TraceViewer />} />
           <Route path="/settings" element={<SettingsPage />} />
         </Routes>
       </main>
