@@ -1,6 +1,39 @@
 import { Link } from 'react-router-dom';
 import { useSessions } from '../../api/traces';
 
+interface SessionSummary {
+  request?: { model?: string };
+  response?: {
+    model?: string;
+    input_tokens?: number;
+    output_tokens?: number;
+  };
+}
+
+function parseSummary(json?: string): SessionSummary | null {
+  if (!json) return null;
+  try {
+    return JSON.parse(json) as SessionSummary;
+  } catch {
+    return null;
+  }
+}
+
+function getModel(s: { model: string; summary_json?: string }): string {
+  const summary = parseSummary(s.summary_json);
+  return summary?.response?.model || summary?.request?.model || s.model;
+}
+
+function getTokens(s: { summary_json?: string }): string {
+  const summary = parseSummary(s.summary_json);
+  const input = summary?.response?.input_tokens;
+  const output = summary?.response?.output_tokens;
+  if (input !== undefined && output !== undefined) {
+    return `${input}/${output}`;
+  }
+  return '—';
+}
+
 export function TraceDashboard() {
   const { data: sessions, isLoading, error } = useSessions();
 
@@ -34,8 +67,8 @@ export function TraceDashboard() {
               <th className="text-left py-2 px-4">Alias</th>
               <th className="text-left py-2 px-4">Provider</th>
               <th className="text-left py-2 px-4">Model</th>
+              <th className="text-left py-2 px-4">Tokens</th>
               <th className="text-left py-2 px-4">Status</th>
-              <th className="text-left py-2 px-4">Records</th>
               <th className="text-left py-2 px-4">Time</th>
               <th className="text-left py-2 px-4"></th>
             </tr>
@@ -45,11 +78,11 @@ export function TraceDashboard() {
               <tr key={s.id} className="border-b last:border-b-0 hover:bg-muted/50">
                 <td className="py-2 px-4 font-medium">{s.alias}</td>
                 <td className="py-2 px-4">{s.provider}</td>
-                <td className="py-2 px-4">{s.model}</td>
+                <td className="py-2 px-4">{getModel(s)}</td>
+                <td className="py-2 px-4 text-muted-foreground">{getTokens(s)}</td>
                 <td className="py-2 px-4">
                   <StatusBadge status={s.status} />
                 </td>
-                <td className="py-2 px-4">{s.record_count}</td>
                 <td className="py-2 px-4 text-muted-foreground">
                   {new Date(s.started_at).toLocaleString()}
                 </td>
