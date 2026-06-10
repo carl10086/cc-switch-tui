@@ -21,6 +21,7 @@ export interface TraceRecord {
   timestamp: string | null;
   direction: string;
   payload_json: string;
+  claude_session_id?: string;
 }
 
 export interface SessionSummary {
