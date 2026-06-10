@@ -35,8 +35,6 @@ impl UpstreamClient {
     }
 
     /// Forward a request to the upstream provider and buffer the full response.
-    ///
-    /// The `api_key` is injected as the `Authorization` header.
     pub async fn forward(
         &self,
         method: Method,
@@ -45,22 +43,7 @@ impl UpstreamClient {
         body: Bytes,
         api_key: &str,
     ) -> Result<ForwardedResponse, AppError> {
-        let mut request = self
-            .client
-            .request(method, url)
-            .header("Authorization", format!("Bearer {}", api_key))
-            .body(body);
-
-        for (key, value) in headers {
-            if let Some(key) = key {
-                request = request.header(key.as_str(), value.as_bytes());
-            }
-        }
-
-        let response = request
-            .send()
-            .await
-            .map_err(|e| AppError::Database(format!("upstream request failed: {}", e)))?;
+        let response = self.send_request(method, url, headers, body, api_key).await?;
 
         let status = response.status();
         let headers = response.headers().clone();
@@ -85,6 +68,26 @@ impl UpstreamClient {
         body: Bytes,
         api_key: &str,
     ) -> Result<ForwardedStream, AppError> {
+        let response = self.send_request(method, url, headers, body, api_key).await?;
+
+        let status = response.status();
+        let headers = response.headers().clone();
+
+        Ok(ForwardedStream {
+            status,
+            headers,
+            response,
+        })
+    }
+
+    async fn send_request(
+        &self,
+        method: Method,
+        url: &str,
+        headers: HeaderMap,
+        body: Bytes,
+        api_key: &str,
+    ) -> Result<reqwest::Response, AppError> {
         let mut request = self
             .client
             .request(method, url)
@@ -97,19 +100,10 @@ impl UpstreamClient {
             }
         }
 
-        let response = request
+        request
             .send()
             .await
-            .map_err(|e| AppError::Database(format!("upstream request failed: {}", e)))?;
-
-        let status = response.status();
-        let headers = response.headers().clone();
-
-        Ok(ForwardedStream {
-            status,
-            headers,
-            response,
-        })
+            .map_err(|e| AppError::Database(format!("upstream request failed: {}", e)))
     }
 }
 
