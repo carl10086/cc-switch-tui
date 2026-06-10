@@ -48,10 +48,18 @@ export function parseSummary(json?: string): SessionSummary | null {
   }
 }
 
+interface ListSessionsResponse {
+  sessions: TraceSession[];
+  total: number;
+}
+
 export function useSessions() {
   return useQuery({
     queryKey: ['trace-sessions'],
-    queryFn: () => apiGet<TraceSession[]>('/api/traces/sessions'),
+    queryFn: async () => {
+      const resp = await apiGet<ListSessionsResponse>('/api/traces/sessions');
+      return resp.sessions;
+    },
     refetchInterval: 5_000,
   });
 }
@@ -64,10 +72,17 @@ export function useSession(id: string) {
   });
 }
 
+interface GetRecordsResponse {
+  records: TraceRecord[];
+}
+
 export function useRecords(id: string) {
   return useQuery({
     queryKey: ['trace-records', id],
-    queryFn: () => apiGet<TraceRecord[]>(`/api/traces/sessions/${id}/records`),
+    queryFn: async () => {
+      const resp = await apiGet<GetRecordsResponse>(`/api/traces/sessions/${id}/records`);
+      return resp.records;
+    },
     enabled: !!id,
   });
 }
@@ -76,6 +91,16 @@ export function useDeleteSession() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (id: string) => apiDelete(`/api/traces/sessions/${id}`),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['trace-sessions'] });
+    },
+  });
+}
+
+export function useClearAllSessions() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: () => apiDelete('/api/traces/sessions'),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['trace-sessions'] });
     },

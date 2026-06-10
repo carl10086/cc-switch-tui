@@ -50,7 +50,7 @@ pub fn router(state: AppState) -> Router {
         .route("/api/diagnostics", get(diagnostics::get))
         .route(
             "/api/traces/sessions",
-            get(traces::list_sessions),
+            get(traces::list_sessions).delete(traces::clear_all_sessions),
         )
         .route(
             "/api/traces/sessions/:id",
@@ -59,6 +59,10 @@ pub fn router(state: AppState) -> Router {
         .route(
             "/api/traces/sessions/:id/records",
             get(traces::get_records),
+        )
+        .route(
+            "/api/traces/sessions/:id/export/jsonl",
+            get(traces::export_session),
         )
         .route(
             "/ys-proxy/:alias/*path",

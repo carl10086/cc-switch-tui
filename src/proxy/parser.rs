@@ -41,6 +41,19 @@ pub struct StreamingAccumulator {
     pub model: String,
 }
 
+impl StreamingAccumulator {
+    /// Convert accumulated streaming data into a ParsedResponse.
+    pub fn into_response(self) -> ParsedResponse {
+        ParsedResponse {
+            content: self.content.join(""),
+            stop_reason: self.stop_reason,
+            input_tokens: self.input_tokens,
+            output_tokens: self.output_tokens,
+            model: self.model,
+        }
+    }
+}
+
 /// Extract a string field from JSON, defaulting to empty string.
 fn get_str(value: &Value, key: &str) -> String {
     value.get(key).and_then(Value::as_str).unwrap_or("").to_string()

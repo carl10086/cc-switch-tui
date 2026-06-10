@@ -51,4 +51,5 @@ pub struct TraceRecord {
     pub timestamp: Option<String>,
     pub direction: String,
     pub payload_json: String,
+    pub claude_session_id: Option<String>,
 }

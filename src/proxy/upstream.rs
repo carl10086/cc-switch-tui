@@ -88,14 +88,15 @@ impl UpstreamClient {
         body: Bytes,
         api_key: &str,
     ) -> Result<reqwest::Response, AppError> {
-        let mut request = self
-            .client
-            .request(method, url)
-            .header("Authorization", format!("Bearer {}", api_key))
-            .body(body);
+        let mut request = self.client.request(method, url).body(body);
 
+        // 先注入 api_key 的 Authorization，再添加其他 headers（跳过原始 Authorization 避免重复）
+        request = request.header("Authorization", format!("Bearer {}", api_key));
         for (key, value) in headers {
             if let Some(key) = key {
+                if key.as_str().eq_ignore_ascii_case("authorization") {
+                    continue;
+                }
                 request = request.header(key.as_str(), value.as_bytes());
             }
         }

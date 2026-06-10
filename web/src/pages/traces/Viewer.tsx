@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { useSession, useRecords, parseSummary } from '../../api/traces';
 import { StatusBadge } from './Dashboard';
+import { TokenBadge } from './TokenBadge';
 
 export function TraceViewer() {
   const { id } = useParams<{ id: string }>();
@@ -36,14 +37,33 @@ export function TraceViewer() {
       <div className="border rounded-lg p-4 mb-6">
         <div className="flex items-center justify-between mb-2">
           <h1 className="text-lg font-semibold">{session.alias}</h1>
-          <StatusBadge status={session.status} />
+          <div className="flex items-center gap-2">
+            <button
+              onClick={async () => {
+                const resp = await fetch(`/api/traces/sessions/${id}/export/jsonl`);
+                const blob = await resp.blob();
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `trace-${id}.jsonl`;
+                a.click();
+                URL.revokeObjectURL(url);
+              }}
+              className="text-xs text-primary hover:underline"
+            >
+              Export JSONL
+            </button>
+            <StatusBadge status={session.status} />
+          </div>
         </div>
         <div className="text-sm text-muted-foreground space-y-1">
           <p>Provider: {session.provider}</p>
           <p>Model: {response?.model || request?.model || session.model}</p>
           <p>Records: {session.record_count}</p>
           {response?.input_tokens !== undefined && (
-            <p>Tokens: {response.input_tokens} in / {response.output_tokens ?? 0} out</p>
+            <p className="flex items-center gap-2">
+              Tokens: <TokenBadge input={response.input_tokens} output={response.output_tokens ?? 0} />
+            </p>
           )}
           <p>Started: {new Date(session.started_at).toLocaleString()}</p>
         </div>

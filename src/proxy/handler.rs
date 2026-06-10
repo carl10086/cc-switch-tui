@@ -13,7 +13,7 @@ use crate::api::state::AppState;
 use crate::dao::Dao;
 use crate::proxy::filter::filter_headers;
 use crate::proxy::parser::{AnthropicParser, StreamingAccumulator};
-use crate::proxy::sse::{SseEvent, SseParser};
+use crate::proxy::sse::SseParser;
 use crate::proxy::upstream::UpstreamClient;
 use crate::trace::models::TraceDirection;
 
@@ -25,20 +25,19 @@ fn is_streaming_request(body: &[u8]) -> bool {
     text.contains("\"stream\":true") || text.contains("\"stream\": true")
 }
 
-/// Convert a parsed SSE event into the payload string stored in the trace.
-fn into_payload(event: SseEvent) -> String {
-    match event.event_type {
-        Some(ty) => format!("{{\"event_type\":\"{}\",\"data\":{}}}", ty, event.data),
-        None => event.data,
-    }
-}
-
 /// Handle all proxied requests.
 pub async fn proxy_handler(
     Path((alias, path)): Path<(String, String)>,
     State(state): State<AppState>,
     req: Request,
 ) -> Result<Response, ApiError> {
+    // axum 的 *path 提取不带前导斜杠，补回来
+    let path = if path.starts_with('/') {
+        path
+    } else {
+        format!("/{}", path)
+    };
+
     // 路径白名单检查
     if !ALLOWED_PATHS.iter().any(|p| path.starts_with(p)) {
         return Ok((StatusCode::NOT_FOUND, "Not Found").into_response());
@@ -52,6 +51,10 @@ pub async fn proxy_handler(
     let body_bytes = axum::body::to_bytes(body, usize::MAX)
         .await
         .map_err(|e| ApiError::internal(format!("body read failed: {}", e)))?;
+
+    // 提前解析 request body（后续 trace 需要）
+    let body_str = String::from_utf8_lossy(&body_bytes.clone()).to_string();
+    let request_summary = AnthropicParser::new().parse_request(&body_str);
 
     // 获取 instance 配置
     let (upstream_url, api_key, provider, model) = {
@@ -89,36 +92,13 @@ pub async fn proxy_handler(
         )
     };
 
-    // 创建 trace session
-    let session_id = {
-        let store = state.trace_store.lock().await;
-        store
-            .create_session(&alias, &provider, &model)
-            .map_err(|e| ApiError::internal(e.to_string()))?
-    };
-
-    // 记录 request 并解析摘要
-    let body_str = String::from_utf8_lossy(&body_bytes);
-    let request_summary = AnthropicParser::new().parse_request(&body_str);
-    {
-        let store = state.trace_store.lock().await;
-        store
-            .append_record(
-                &session_id,
-                Some(1),
-                TraceDirection::Request,
-                &body_str,
-            )
-            .map_err(|e| ApiError::internal(e.to_string()))?;
-    }
-
-    // 过滤 headers 并转发
-    let filtered_headers = filter_headers(&headers, true);
+    // 过滤 headers 并转发（redact=false：upstream 需要完整的 Authorization）
+    let filtered_headers = filter_headers(&headers, false);
     let client = UpstreamClient::new();
     let upstream_url = format!("{}{}", upstream_url, path);
 
     if is_streaming_request(&body_bytes) {
-        // --- 流式路径 ---
+        // --- 流式路径：延迟到 message_start 创建 session ---
         let stream_resp = client
             .forward_streaming(method, &upstream_url, filtered_headers, body_bytes, &api_key)
             .await
@@ -127,40 +107,69 @@ pub async fn proxy_handler(
         // 启动 trace 记录后台任务
         let (trace_tx, mut trace_rx) = tokio::sync::mpsc::unbounded_channel::<Bytes>();
         let trace_store = state.trace_store.clone();
-        let session_id_clone = session_id.clone();
         let request_summary_clone = request_summary.clone();
+        let body_str_clone = body_str.to_string();
+        let alias_clone = alias.clone();
+        let provider_clone = provider.clone();
+        let model_clone = model.clone();
 
         tokio::spawn(async move {
             let mut parser = SseParser::new();
             let mut accumulator = StreamingAccumulator::default();
             let anthropic_parser = AnthropicParser::new();
+            let mut session_id: Option<String> = None;
 
-            let mut events = Vec::new();
             while let Some(chunk) = trace_rx.recv().await {
-                events.extend(parser.feed(&chunk));
+                let events = parser.feed(&chunk);
+                for event in events {
+                    // 第一个 message_start 时创建 session 并记录 request
+                    if event.event_type.as_deref() == Some("message_start") && session_id.is_none() {
+                        let store = trace_store.lock().await;
+                        if let Ok(sid) = store.create_session(&alias_clone, &provider_clone, &model_clone) {
+                            let _ = store.append_record(
+                                &sid,
+                                Some(1),
+                                TraceDirection::Request,
+                                &body_str_clone,
+                                None,
+                            );
+                            session_id = Some(sid);
+                        }
+                    }
+                    if session_id.is_some() {
+                        anthropic_parser.apply_streaming_event(&mut accumulator, &event);
+                    }
+                }
             }
-            events.extend(parser.flush());
+            // 处理最后残留的 bytes
+            let last_events = parser.flush();
+            for event in last_events {
+                if session_id.is_some() {
+                    anthropic_parser.apply_streaming_event(&mut accumulator, &event);
+                }
+            }
 
-            for event in events {
-                anthropic_parser.apply_streaming_event(&mut accumulator, &event);
-                let payload = into_payload(event);
+            // 保存 response
+            if let Some(ref sid) = session_id {
+                let response_summary = accumulator.into_response();
+                let response_json = serde_json::to_string(&response_summary)
+                    .unwrap_or_else(|_| "{}".to_string());
+                let summary = serde_json::to_string(&json!({
+                    "request": request_summary_clone,
+                    "response": &response_summary,
+                })).unwrap_or_default();
+
                 let store = trace_store.lock().await;
                 let _ = store.append_record(
-                    &session_id_clone,
+                    sid,
                     Some(1),
                     TraceDirection::Response,
-                    &payload,
+                    &response_json,
+                    None,
                 );
+                let _ = store.update_summary(sid, &summary);
+                let _ = store.finalize_session(sid, "complete", Some(&summary));
             }
-
-            let response_summary = accumulator.into_response();
-            let summary = serde_json::to_string(&json!({
-                "request": request_summary_clone,
-                "response": response_summary,
-            })).unwrap_or_default();
-
-            let store = trace_store.lock().await;
-            let _ = store.finalize_session(&session_id_clone, "complete", Some(&summary));
         });
 
         // 构建客户端流：转发同时克隆到 trace 通道
@@ -183,33 +192,11 @@ pub async fn proxy_handler(
             (StatusCode::INTERNAL_SERVER_ERROR, "build response failed").into_response()
         }))
     } else {
-        // --- 非流式路径（保持原有逻辑） ---
+        // --- 非流式路径：MVP 仅流式，不记录 trace ---
         let upstream_resp = client
             .forward(method, &upstream_url, filtered_headers, body_bytes, &api_key)
             .await
             .map_err(|e| ApiError::internal(e.to_string()))?;
-
-        let response_body = String::from_utf8_lossy(&upstream_resp.body);
-        let response_summary = AnthropicParser::new().parse_response(&response_body);
-        let summary = serde_json::to_string(&json!({
-            "request": request_summary,
-            "response": response_summary,
-        })).unwrap_or_default();
-
-        {
-            let store = state.trace_store.lock().await;
-            store
-                .append_record(
-                    &session_id,
-                    Some(1),
-                    TraceDirection::Response,
-                    &response_body,
-                )
-                .map_err(|e| ApiError::internal(e.to_string()))?;
-            store
-                .finalize_session(&session_id, "complete", Some(&summary))
-                .map_err(|e| ApiError::internal(e.to_string()))?;
-        }
 
         let mut builder = Response::builder().status(upstream_resp.status);
         for (key, value) in upstream_resp.headers {

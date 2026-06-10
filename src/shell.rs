@@ -47,8 +47,10 @@ pub fn render_aliases(instances: &[ProviderInstance], templates: &[ProviderTempl
     lines.extend(opencode_lines);
 
     // ys-proxy wrapper — 通过本地代理转发 Claude Code 请求
+    // 在子 shell 中设置 proxy BASE_URL，然后调用 alias 函数
+    // alias 函数内部使用 ${ANTHROPIC_BASE_URL:-默认值} 保留外部传入的值
     lines.push(
-        "function ys-proxy {\n  local alias_name=$1\n  shift\n  export ANTHROPIC_BASE_URL=\"http://localhost:7480/ys-proxy/${alias_name}\"\n  $alias_name \"$@\"\n}"
+        "function ys-proxy {\n  local alias_name=$1\n  shift\n  (\n    export ANTHROPIC_BASE_URL=\"http://localhost:7480/ys-proxy/${alias_name}\"\n    $alias_name \"$@\"\n  )\n}"
             .to_string(),
     );
 
@@ -141,13 +143,33 @@ fn format_function(
     let mut pairs: Vec<_> = env.iter().collect();
     pairs.sort_by(|a, b| a.0.cmp(b.0));
 
-    let unset_line = format!("  unset {}", unset_vars.join(" "));
+    // ANTHROPIC_BASE_URL 由外部（如 ys-proxy）传入时保留，否则使用默认值
+    let unset_vars_filtered: Vec<&str> = unset_vars
+        .iter()
+        .map(|s| s.as_str())
+        .filter(|&s| s != "ANTHROPIC_BASE_URL")
+        .collect();
+    let unset_line = format!("  unset {}", unset_vars_filtered.join(" "));
 
-    let export_lines: String = pairs
+    let base_url_value = env.get("ANTHROPIC_BASE_URL").cloned();
+    let other_pairs: Vec<_> = pairs
+        .into_iter()
+        .filter(|(k, _)| *k != "ANTHROPIC_BASE_URL")
+        .collect();
+
+    let mut export_lines: Vec<String> = other_pairs
         .iter()
         .map(|(k, v)| format!("  export {}={}", k, shell_escape(v)))
-        .collect::<Vec<_>>()
-        .join("\n");
+        .collect();
+
+    if let Some(base_url) = base_url_value {
+        export_lines.push(format!(
+            "  export ANTHROPIC_BASE_URL=\"${{ANTHROPIC_BASE_URL:-{}}}\"",
+            shell_escape(&base_url)
+        ));
+    }
+    export_lines.sort();
+    let export_block = export_lines.join("\n");
 
     let claude_cmd = if kv_cache_enabled {
         "command claude --exclude-dynamic-system-prompt-sections --settings '{\"includeGitInstructions\":false}' \"$@\""
@@ -157,7 +179,7 @@ fn format_function(
 
     format!(
         "function {} {{\n{}\n{}\n  {}\n}}",
-        name, unset_line, export_lines, claude_cmd
+        name, unset_line, export_block, claude_cmd
     )
 }
 

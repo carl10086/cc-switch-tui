@@ -5,6 +5,7 @@ use axum::http::{HeaderMap, HeaderValue};
 /// Headers that should not be forwarded (hop-by-hop).
 const HOP_BY_HOP: &[&str] = &[
     "connection",
+    "host",
     "keep-alive",
     "proxy-authenticate",
     "proxy-authorization",
