@@ -11,7 +11,7 @@ use crate::api::error::ApiError;
 use crate::api::state::AppState;
 use crate::dao::Dao;
 use crate::proxy::filter::filter_headers;
-use crate::proxy::sse::SseParser;
+use crate::proxy::sse::{SseEvent, SseParser};
 use crate::proxy::upstream::UpstreamClient;
 use crate::trace::models::TraceDirection;
 
@@ -21,6 +21,14 @@ const ALLOWED_PATHS: &[&str] = &["/v1/messages", "/v1/complete", "/v1/models"];
 fn is_streaming_request(body: &[u8]) -> bool {
     let text = String::from_utf8_lossy(body);
     text.contains("\"stream\":true") || text.contains("\"stream\": true")
+}
+
+/// Convert a parsed SSE event into the payload string stored in the trace.
+fn into_payload(event: SseEvent) -> String {
+    match event.event_type {
+        Some(ty) => format!("{{\"event_type\":\"{}\",\"data\":{}}}", ty, event.data),
+        None => event.data,
+    }
 }
 
 /// Handle all proxied requests.
@@ -120,13 +128,8 @@ pub async fn proxy_handler(
         tokio::spawn(async move {
             let mut parser = SseParser::new();
             while let Some(chunk) = trace_rx.recv().await {
-                let events = parser.feed(&chunk);
-                for event in events {
-                    let payload = if let Some(ref ty) = event.event_type {
-                        format!("{{\"event_type\":\"{}\",\"data\":{}}}", ty, event.data)
-                    } else {
-                        event.data
-                    };
+                for event in parser.feed(&chunk) {
+                    let payload = into_payload(event);
                     let store = trace_store.lock().await;
                     let _ = store.append_record(
                         &session_id_clone,
@@ -136,13 +139,8 @@ pub async fn proxy_handler(
                     );
                 }
             }
-            let final_events = parser.flush();
-            for event in final_events {
-                let payload = if let Some(ref ty) = event.event_type {
-                    format!("{{\"event_type\":\"{}\",\"data\":{}}}", ty, event.data)
-                } else {
-                    event.data
-                };
+            for event in parser.flush() {
+                let payload = into_payload(event);
                 let store = trace_store.lock().await;
                 let _ = store.append_record(
                     &session_id_clone,
