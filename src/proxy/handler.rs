@@ -13,6 +13,7 @@ use crate::api::state::AppState;
 use crate::dao::Dao;
 use crate::proxy::filter::filter_headers;
 use crate::proxy::parser::{AnthropicParser, StreamingAccumulator};
+use crate::proxy::session_extractor::{extract_claude_session_id, redact_user_id_pii};
 use crate::proxy::sse::SseParser;
 use crate::proxy::upstream::UpstreamClient;
 use crate::trace::models::TraceDirection;
@@ -55,6 +56,23 @@ pub async fn proxy_handler(
     // 提前解析 request body（后续 trace 需要）
     let body_str = String::from_utf8_lossy(&body_bytes.clone()).to_string();
     let request_summary = AnthropicParser::new().parse_request(&body_str);
+
+    // 提取 claude_session_id 并脱敏 PII（仅 POST /v1/messages）
+    let (claude_session_id, body_str_for_trace) = if method == axum::http::Method::POST
+        && path.starts_with("/v1/messages")
+    {
+        if let Ok(mut body_json) = serde_json::from_str::<serde_json::Value>(&body_str) {
+            let sid = extract_claude_session_id(&body_json);
+            let _ = redact_user_id_pii(&mut body_json);
+            let redacted = serde_json::to_string(&body_json)
+                .unwrap_or_else(|_| body_str.clone());
+            (sid, redacted)
+        } else {
+            (None, body_str.clone())
+        }
+    } else {
+        (None, body_str.clone())
+    };
 
     // 获取 instance 配置
     let (upstream_url, api_key, provider, model) = {
@@ -108,7 +126,8 @@ pub async fn proxy_handler(
         let (trace_tx, mut trace_rx) = tokio::sync::mpsc::unbounded_channel::<Bytes>();
         let trace_store = state.trace_store.clone();
         let request_summary_clone = request_summary.clone();
-        let body_str_clone = body_str.to_string();
+        let body_str_clone = body_str_for_trace;
+        let claude_session_id_clone = claude_session_id.clone();
         let alias_clone = alias.clone();
         let provider_clone = provider.clone();
         let model_clone = model.clone();
@@ -131,7 +150,7 @@ pub async fn proxy_handler(
                                 Some(1),
                                 TraceDirection::Request,
                                 &body_str_clone,
-                                None,
+                                claude_session_id_clone.as_deref(),
                             );
                             session_id = Some(sid);
                         }
@@ -165,7 +184,7 @@ pub async fn proxy_handler(
                     Some(1),
                     TraceDirection::Response,
                     &response_json,
-                    None,
+                    claude_session_id_clone.as_deref(),
                 );
                 let _ = store.update_summary(sid, &summary);
                 let _ = store.finalize_session(sid, "complete", Some(&summary));
