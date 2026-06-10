@@ -1,17 +1,27 @@
 //! Proxy handler for `/ys-proxy/{alias}/**` routes.
 
+use axum::body::Body;
 use axum::extract::{Path, Request, State};
 use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
+use bytes::Bytes;
+use futures::StreamExt;
 
 use crate::api::error::ApiError;
 use crate::api::state::AppState;
 use crate::dao::Dao;
 use crate::proxy::filter::filter_headers;
+use crate::proxy::sse::SseParser;
 use crate::proxy::upstream::UpstreamClient;
 use crate::trace::models::TraceDirection;
 
 const ALLOWED_PATHS: &[&str] = &["/v1/messages", "/v1/complete", "/v1/models"];
+
+/// Detect whether a request body asks for SSE streaming.
+fn is_streaming_request(body: &[u8]) -> bool {
+    let text = String::from_utf8_lossy(body);
+    text.contains("\"stream\":true") || text.contains("\"stream\": true")
+}
 
 /// Handle all proxied requests.
 pub async fn proxy_handler(
@@ -93,42 +103,127 @@ pub async fn proxy_handler(
     // 过滤 headers 并转发
     let filtered_headers = filter_headers(&headers, true);
     let client = UpstreamClient::new();
-    let upstream_resp = client
-        .forward(
-            method,
-            &format!("{}{}", upstream_url, path),
-            filtered_headers,
-            body_bytes,
-            &api_key,
-        )
-        .await
-        .map_err(|e| ApiError::internal(e.to_string()))?;
+    let upstream_url = format!("{}{}", upstream_url, path);
 
-    // 记录 response
-    {
-        let store = state.trace_store.lock().await;
-        store
-            .append_record(
-                &session_id,
-                Some(1),
-                TraceDirection::Response,
-                &String::from_utf8_lossy(&upstream_resp.body),
-            )
+    if is_streaming_request(&body_bytes) {
+        // --- 流式路径 ---
+        let stream_resp = client
+            .forward_streaming(method, &upstream_url, filtered_headers, body_bytes, &api_key)
+            .await
             .map_err(|e| ApiError::internal(e.to_string()))?;
-        store
-            .finalize_session(&session_id, "complete", None)
-            .map_err(|e| ApiError::internal(e.to_string()))?;
-    }
 
-    // 构建 axum response
-    let mut builder = Response::builder().status(upstream_resp.status);
-    for (key, value) in upstream_resp.headers {
-        if let Some(key) = key {
-            builder = builder.header(key, value);
+        // 启动 trace 记录后台任务
+        let (trace_tx, mut trace_rx) = tokio::sync::mpsc::unbounded_channel::<Bytes>();
+        let trace_store = state.trace_store.clone();
+        let session_id_clone = session_id.clone();
+
+        tokio::spawn(async move {
+            let mut parser = SseParser::new();
+            while let Some(chunk) = trace_rx.recv().await {
+                let events = parser.feed(&chunk);
+                for event in events {
+                    let payload = if let Some(ref ty) = event.event_type {
+                        format!("{{\"event_type\":\"{}\",\"data\":{}}}", ty, event.data)
+                    } else {
+                        event.data
+                    };
+                    let store = trace_store.lock().await;
+                    let _ = store.append_record(
+                        &session_id_clone,
+                        Some(1),
+                        TraceDirection::Response,
+                        &payload,
+                    );
+                }
+            }
+            let final_events = parser.flush();
+            for event in final_events {
+                let payload = if let Some(ref ty) = event.event_type {
+                    format!("{{\"event_type\":\"{}\",\"data\":{}}}", ty, event.data)
+                } else {
+                    event.data
+                };
+                let store = trace_store.lock().await;
+                let _ = store.append_record(
+                    &session_id_clone,
+                    Some(1),
+                    TraceDirection::Response,
+                    &payload,
+                );
+            }
+            let store = trace_store.lock().await;
+            let _ = store.finalize_session(&session_id_clone, "complete", None);
+        });
+
+        // 构建客户端流：转发同时克隆到 trace 通道
+        let client_stream = stream_resp.response.bytes_stream().map(move |result| {
+            if let Ok(ref bytes) = result {
+                let _ = trace_tx.send(bytes.clone());
+            }
+            result.map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e))
+        });
+
+        let body = Body::from_stream(client_stream);
+        let mut builder = Response::builder().status(stream_resp.status);
+        for (key, value) in stream_resp.headers {
+            if let Some(key) = key {
+                builder = builder.header(key, value);
+            }
         }
+
+        Ok(builder.body(body).unwrap_or_else(|_| {
+            (StatusCode::INTERNAL_SERVER_ERROR, "build response failed").into_response()
+        }))
+    } else {
+        // --- 非流式路径（保持原有逻辑） ---
+        let upstream_resp = client
+            .forward(method, &upstream_url, filtered_headers, body_bytes, &api_key)
+            .await
+            .map_err(|e| ApiError::internal(e.to_string()))?;
+
+        {
+            let store = state.trace_store.lock().await;
+            store
+                .append_record(
+                    &session_id,
+                    Some(1),
+                    TraceDirection::Response,
+                    &String::from_utf8_lossy(&upstream_resp.body),
+                )
+                .map_err(|e| ApiError::internal(e.to_string()))?;
+            store
+                .finalize_session(&session_id, "complete", None)
+                .map_err(|e| ApiError::internal(e.to_string()))?;
+        }
+
+        let mut builder = Response::builder().status(upstream_resp.status);
+        for (key, value) in upstream_resp.headers {
+            if let Some(key) = key {
+                builder = builder.header(key, value);
+            }
+        }
+
+        Ok(builder
+            .body(upstream_resp.body.into())
+            .unwrap_or_else(|_| (StatusCode::INTERNAL_SERVER_ERROR, "build response failed").into_response()))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_streaming_detection_true() {
+        assert!(is_streaming_request(b"{\"stream\":true}"));
+        assert!(is_streaming_request(b"{\"stream\": true, \"model\":\"test\"}"));
     }
 
-    Ok(builder
-        .body(upstream_resp.body.into())
-        .unwrap_or_else(|_| (StatusCode::INTERNAL_SERVER_ERROR, "build response failed").into_response()))
+    #[test]
+    fn test_streaming_detection_false() {
+        assert!(!is_streaming_request(b"{\"stream\":false}"));
+        assert!(!is_streaming_request(b"{\"stream\": false}"));
+        assert!(!is_streaming_request(b"{}"));
+        assert!(!is_streaming_request(b"{\"model\":\"test\"}"));
+    }
 }
