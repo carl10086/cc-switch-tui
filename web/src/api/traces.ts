@@ -52,6 +52,7 @@ export function useSessions() {
   return useQuery({
     queryKey: ['trace-sessions'],
     queryFn: () => apiGet<TraceSession[]>('/api/traces/sessions'),
+    refetchInterval: 5_000,
   });
 }
 

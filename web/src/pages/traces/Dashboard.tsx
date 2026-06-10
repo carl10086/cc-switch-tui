@@ -21,6 +21,11 @@ export function TraceDashboard() {
   const { data: sessions, isLoading, error } = useSessions();
   const deleteMutation = useDeleteSession();
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [query, setQuery] = useState('');
+
+  const filtered = sessions?.filter((s) =>
+    s.alias.toLowerCase().includes(query.toLowerCase())
+  );
 
   if (isLoading) {
     return <div className="text-muted-foreground">Loading sessions...</div>;
@@ -34,18 +39,25 @@ export function TraceDashboard() {
     );
   }
 
-  if (!sessions?.length) {
-    return (
-      <div className="text-muted-foreground">
-        No trace sessions found. Use <code>ys-proxy cl-{'<alias>'}</code> to create one.
-      </div>
-    );
-  }
-
   return (
     <div>
-      <h1 className="text-xl font-semibold mb-4">Trace Sessions</h1>
-      <div className="border rounded-lg overflow-hidden">
+      <div className="flex items-center justify-between mb-4">
+        <h1 className="text-xl font-semibold">Trace Sessions</h1>
+        <input
+          type="text"
+          placeholder="Search alias..."
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          className="text-sm border rounded px-3 py-1.5 w-48 bg-background"
+        />
+      </div>
+
+      {!filtered?.length ? (
+        <div className="text-muted-foreground">
+          {query ? 'No matching sessions.' : 'No trace sessions found. Use <code>ys-proxy cl-<alias></code> to create one.'}
+        </div>
+      ) : (
+        <div className="border rounded-lg overflow-hidden">
         <table className="w-full text-sm">
           <thead>
             <tr className="border-b bg-muted">
@@ -59,7 +71,7 @@ export function TraceDashboard() {
             </tr>
           </thead>
           <tbody>
-            {sessions.map((s) => (
+            {filtered?.map((s) => (
               <tr key={s.id} className="border-b last:border-b-0 hover:bg-muted/50">
                 <td className="py-2 px-4 font-medium">{s.alias}</td>
                 <td className="py-2 px-4">{s.provider}</td>
@@ -98,6 +110,7 @@ export function TraceDashboard() {
           </tbody>
         </table>
       </div>
+    )}
     </div>
   );
 }
