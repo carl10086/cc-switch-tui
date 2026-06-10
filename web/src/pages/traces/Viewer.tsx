@@ -1,11 +1,38 @@
+import { useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { useSession, useRecords } from '../../api/traces';
 import { StatusBadge } from './Dashboard';
+
+interface SummaryJson {
+  request?: {
+    model?: string;
+    messages?: Array<{ role: string; content: string }>;
+    max_tokens?: number;
+    system?: string;
+  };
+  response?: {
+    content?: string;
+    stop_reason?: string;
+    input_tokens?: number;
+    output_tokens?: number;
+    model?: string;
+  };
+}
+
+function parseSummary(json?: string): SummaryJson | null {
+  if (!json) return null;
+  try {
+    return JSON.parse(json) as SummaryJson;
+  } catch {
+    return null;
+  }
+}
 
 export function TraceViewer() {
   const { id } = useParams<{ id: string }>();
   const { data: session, isLoading: sessionLoading, error: sessionError } = useSession(id ?? '');
   const { data: records, isLoading: recordsLoading } = useRecords(id ?? '');
+  const [showRaw, setShowRaw] = useState(false);
 
   if (sessionLoading) {
     return <div className="text-muted-foreground">Loading session...</div>;
@@ -18,6 +45,10 @@ export function TraceViewer() {
       </div>
     );
   }
+
+  const summary = parseSummary(session.summary_json);
+  const request = summary?.request;
+  const response = summary?.response;
 
   return (
     <div>
@@ -34,33 +65,85 @@ export function TraceViewer() {
         </div>
         <div className="text-sm text-muted-foreground space-y-1">
           <p>Provider: {session.provider}</p>
-          <p>Model: {session.model}</p>
+          <p>Model: {response?.model || request?.model || session.model}</p>
           <p>Records: {session.record_count}</p>
+          {response?.input_tokens !== undefined && (
+            <p>Tokens: {response.input_tokens} in / {response.output_tokens ?? 0} out</p>
+          )}
           <p>Started: {new Date(session.started_at).toLocaleString()}</p>
         </div>
       </div>
 
-      <h2 className="text-md font-semibold mb-3">Records</h2>
+      {request?.system && (
+        <div className="mb-4">
+          <h2 className="text-sm font-semibold text-muted-foreground mb-1">System</h2>
+          <div className="bg-muted p-3 rounded text-sm">{request.system}</div>
+        </div>
+      )}
 
-      {recordsLoading ? (
-        <div className="text-muted-foreground">Loading records...</div>
-      ) : !records?.length ? (
-        <div className="text-muted-foreground">No records found.</div>
-      ) : (
-        <div className="space-y-3">
-          {records.map((r) => (
-            <div key={r.record_index} className="border rounded-lg p-3">
-              <div className="flex items-center gap-2 mb-2">
-                <DirectionBadge direction={r.direction} />
-                <span className="text-xs text-muted-foreground">
-                  {r.timestamp ? new Date(r.timestamp).toLocaleString() : '—'}
-                </span>
+      {request?.messages && request.messages.length > 0 && (
+        <div className="mb-6">
+          <h2 className="text-md font-semibold mb-3">Messages</h2>
+          <div className="space-y-3">
+            {request.messages.map((msg, idx) => (
+              <div key={idx} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
+                <div
+                  className={`max-w-[80%] rounded-lg px-4 py-2 text-sm ${
+                    msg.role === 'user'
+                      ? 'bg-primary text-primary-foreground'
+                      : 'bg-muted'
+                  }`}
+                >
+                  <div className="text-xs opacity-70 mb-1 capitalize">{msg.role}</div>
+                  <div className="whitespace-pre-wrap">{msg.content}</div>
+                </div>
               </div>
-              <pre className="text-xs bg-muted p-2 rounded overflow-auto max-h-96">
-                {formatPayload(r.payload_json)}
-              </pre>
-            </div>
-          ))}
+            ))}
+            {response?.content && (
+              <div className="flex justify-start">
+                <div className="max-w-[80%] rounded-lg px-4 py-2 text-sm bg-muted">
+                  <div className="text-xs opacity-70 mb-1">Assistant</div>
+                  <div className="whitespace-pre-wrap">{response.content}</div>
+                  {response.stop_reason && (
+                    <div className="text-xs opacity-50 mt-1">stop: {response.stop_reason}</div>
+                  )}
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      <div className="mb-2">
+        <button
+          onClick={() => setShowRaw(!showRaw)}
+          className="text-sm text-muted-foreground hover:text-foreground"
+        >
+          {showRaw ? '▼' : '▶'} Raw Records ({session.record_count})
+        </button>
+      </div>
+
+      {showRaw && (
+        <div className="space-y-3">
+          {recordsLoading ? (
+            <div className="text-muted-foreground">Loading records...</div>
+          ) : !records?.length ? (
+            <div className="text-muted-foreground">No records found.</div>
+          ) : (
+            records.map((r) => (
+              <div key={r.record_index} className="border rounded-lg p-3">
+                <div className="flex items-center gap-2 mb-2">
+                  <DirectionBadge direction={r.direction} />
+                  <span className="text-xs text-muted-foreground">
+                    {r.timestamp ? new Date(r.timestamp).toLocaleString() : '—'}
+                  </span>
+                </div>
+                <pre className="text-xs bg-muted p-2 rounded overflow-auto max-h-96">
+                  {formatPayload(r.payload_json)}
+                </pre>
+              </div>
+            ))
+          )}
         </div>
       )}
     </div>
