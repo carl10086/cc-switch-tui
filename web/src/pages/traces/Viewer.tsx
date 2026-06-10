@@ -86,29 +86,10 @@ export function TraceViewer() {
           <h2 className="text-md font-semibold mb-3">Messages</h2>
           <div className="space-y-3">
             {request.messages.map((msg, idx) => (
-              <div key={idx} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
-                <div
-                  className={`max-w-[80%] rounded-lg px-4 py-2 text-sm ${
-                    msg.role === 'user'
-                      ? 'bg-primary text-primary-foreground'
-                      : 'bg-muted'
-                  }`}
-                >
-                  <div className="text-xs opacity-70 mb-1 capitalize">{msg.role}</div>
-                  <div className="whitespace-pre-wrap">{msg.content}</div>
-                </div>
-              </div>
+              <MessageBubble key={idx} role={msg.role} content={msg.content} />
             ))}
             {response?.content && (
-              <div className="flex justify-start">
-                <div className="max-w-[80%] rounded-lg px-4 py-2 text-sm bg-muted">
-                  <div className="text-xs opacity-70 mb-1">Assistant</div>
-                  <div className="whitespace-pre-wrap">{response.content}</div>
-                  {response.stop_reason && (
-                    <div className="text-xs opacity-50 mt-1">stop: {response.stop_reason}</div>
-                  )}
-                </div>
-              </div>
+              <MessageBubble role="assistant" content={response.content} stopReason={response.stop_reason} />
             )}
           </div>
         </div>
@@ -146,6 +127,23 @@ export function TraceViewer() {
           )}
         </div>
       )}
+    </div>
+  );
+}
+
+function MessageBubble({ role, content, stopReason }: { role: string; content: string; stopReason?: string }) {
+  const isUser = role === 'user';
+  return (
+    <div className={`flex ${isUser ? 'justify-end' : 'justify-start'}`}>
+      <div
+        className={`max-w-[80%] rounded-lg px-4 py-2 text-sm ${
+          isUser ? 'bg-primary text-primary-foreground' : 'bg-muted'
+        }`}
+      >
+        <div className="text-xs opacity-70 mb-1 capitalize">{role}</div>
+        <div className="whitespace-pre-wrap">{content}</div>
+        {stopReason && <div className="text-xs opacity-50 mt-1">stop: {stopReason}</div>}
+      </div>
     </div>
   );
 }
