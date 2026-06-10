@@ -41,6 +41,11 @@ pub struct StreamingAccumulator {
     pub model: String,
 }
 
+/// Extract a string field from JSON, defaulting to empty string.
+fn get_str(value: &Value, key: &str) -> String {
+    value.get(key).and_then(Value::as_str).unwrap_or("").to_string()
+}
+
 /// Parser for Anthropic request/response payloads.
 pub struct AnthropicParser;
 
@@ -56,11 +61,7 @@ impl AnthropicParser {
             return result;
         };
 
-        result.model = json
-            .get("model")
-            .and_then(Value::as_str)
-            .unwrap_or("")
-            .to_string();
+        result.model = get_str(&json, "model");
         result.max_tokens = json.get("max_tokens").and_then(Value::as_u64).map(|v| v as u32);
         result.system = json
             .get("system")
@@ -100,11 +101,7 @@ impl AnthropicParser {
             .get("stop_reason")
             .and_then(Value::as_str)
             .map(|s| s.to_string());
-        result.model = json
-            .get("model")
-            .and_then(Value::as_str)
-            .unwrap_or("")
-            .to_string();
+        result.model = get_str(&json, "model");
 
         if let Some(usage) = json.get("usage") {
             result.input_tokens = usage
