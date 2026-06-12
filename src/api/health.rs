@@ -21,7 +21,7 @@ pub async fn health() -> Json<HealthResponse> {
 }
 
 fn db_path_default() -> String {
-    // 与 main.rs v0.3.0 旧版保持一致：相对工作目录的 .cc-switch-tui/db.sqlite
-    // TODO(S1+): 改为注入 AppState 读取实际配置路径
-    ".cc-switch-tui/db.sqlite".to_string()
+    dirs::home_dir()
+        .map(|h| h.join(".cc-switch-tui/db.sqlite").to_string_lossy().into_owned())
+        .unwrap_or_else(|| ".cc-switch-tui/db.sqlite".to_string())
 }
