@@ -47,10 +47,9 @@ pub fn render_aliases(instances: &[ProviderInstance], templates: &[ProviderTempl
     lines.extend(opencode_lines);
 
     // ys-proxy wrapper — 通过本地代理转发 Claude Code 请求
-    // 在子 shell 中设置 proxy BASE_URL，然后调用 alias 函数
-    // alias 函数内部使用 ${ANTHROPIC_BASE_URL:-默认值} 保留外部传入的值
+    // 从 ~/.cc-switch-tui/port 读取 server 实际端口，避免硬编码
     lines.push(
-        "function ys-proxy {\n  local alias_name=$1\n  shift\n  (\n    export ANTHROPIC_BASE_URL=\"http://localhost:7480/ys-proxy/${alias_name}\"\n    $alias_name \"$@\"\n  )\n}"
+        "function ys-proxy {\n  local alias_name=$1\n  shift\n  (\n    local cached_port=\"$(cat ~/.cc-switch-tui/port 2>/dev/null || echo 7480)\"\n    export ANTHROPIC_BASE_URL=\"http://127.0.0.1:${cached_port}/ys-proxy/${alias_name}\"\n    $alias_name \"$@\"\n  )\n}"
             .to_string(),
     );
 
