@@ -2,6 +2,10 @@
 
 这个使用类似 cc-switch 的 tui 项目， 来切换 多个 claude code 的模型提供商.
 
+<IMPORTANT>
+`docs/codebase/ARCHITECTURE.md` 是理解本项目架构的核心文档。它定义了代码库的分层结构、数据流、关键抽象、入口点、错误处理策略以及新代码的放置规范。任何涉及新增模块、重构或理解现有代码的决策，都必须先参考该文档。保持 ARCHITECTURE.md 与代码同步是维护项目可维护性的前提。
+</IMPORTANT>
+
 # currentDate
 Today's date is 2026/06/01.
 

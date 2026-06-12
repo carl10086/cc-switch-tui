@@ -8,7 +8,9 @@ pub async fn spawn_app() -> SocketAddr {
     let templates = cc_switch_tui::templates::register_templates();
     let dao = cc_switch_tui::dao::SqliteDaoImpl::new(":memory:", templates)
         .expect("failed to create in-memory DB");
-    let state = cc_switch_tui::api::state::AppState::new(dao);
+    let trace_store = cc_switch_tui::trace::store::TraceStore::new(":memory:")
+        .expect("failed to create in-memory trace DB");
+    let state = cc_switch_tui::api::state::AppState::new(dao, trace_store);
 
     let listener = TcpListener::bind("127.0.0.1:0")
         .await

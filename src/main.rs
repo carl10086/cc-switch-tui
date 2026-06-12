@@ -1,10 +1,10 @@
 use cc_switch_tui::api;
 use cc_switch_tui::api::state::AppState;
 use cc_switch_tui::dao::SqliteDaoImpl;
+use cc_switch_tui::data_migration::{default_cc_dir, ensure_data_migrated};
 use cc_switch_tui::port;
 use cc_switch_tui::templates::register_templates;
 use std::io;
-use std::path::PathBuf;
 
 const DEFAULT_PORT: u16 = 7480;
 
@@ -27,20 +27,31 @@ async fn main() -> io::Result<()> {
         .init();
     tracing::info!("cc-switch-tui starting (web mode)");
 
+    // 统一数据目录：~/.cc-switch-tui
+    let cc_dir = default_cc_dir();
+    let project_dir = std::env::current_dir()?;
+    ensure_data_migrated(&cc_dir, &project_dir)?;
+
+    let db_path = cc_dir.join("db.sqlite");
+    let trace_path = cc_dir.join("traces.sqlite");
+    let db_path_str = db_path
+        .to_str()
+        .ok_or_else(|| io::Error::new(io::ErrorKind::InvalidData, "invalid db path"))?;
+    let trace_path_str = trace_path
+        .to_str()
+        .ok_or_else(|| io::Error::new(io::ErrorKind::InvalidData, "invalid trace path"))?;
+
     // 初始化 DAO + AppState
     let templates = register_templates();
-    let db_path = ".cc-switch-tui/db.sqlite";
-    let dao = SqliteDaoImpl::new(db_path, templates).expect("无法初始化数据库");
-    let state = AppState::new(dao);
+    let dao = SqliteDaoImpl::new(db_path_str, templates).expect("无法初始化数据库");
+    let trace_store =
+        cc_switch_tui::trace::store::TraceStore::new(trace_path_str)
+            .expect("无法初始化 trace 数据库");
+    let state = AppState::new(dao, trace_store);
 
-    // 端口策略：先读 cached port，失败就 fallback 到 7480，再 +N 扫描
-    let cc_dir = cc_switch_tui_home();
+    // 固定端口 7480，失败直接报错（与 ys-proxy 硬编码保持一致）
     let port_file = cc_dir.join("port");
-    let cached = port::read_cached_port(&port_file);
-    let start_port = cached.unwrap_or(DEFAULT_PORT);
-    tracing::info!("trying port {} (cached: {:?})", start_port, cached);
-
-    let (listener, actual_port) = port::try_bind(start_port, 100)
+    let (listener, actual_port) = port::try_bind(DEFAULT_PORT, 1)
         .await
         .map_err(|e| io::Error::new(io::ErrorKind::AddrInUse, e))?;
     let actual_addr = listener.local_addr()?;
@@ -77,10 +88,4 @@ async fn main() -> io::Result<()> {
 
     tracing::info!("cc-switch-tui exiting");
     Ok(())
-}
-
-fn cc_switch_tui_home() -> PathBuf {
-    dirs::home_dir()
-        .unwrap_or_else(|| std::path::PathBuf::from("."))
-        .join(".cc-switch-tui")
 }
