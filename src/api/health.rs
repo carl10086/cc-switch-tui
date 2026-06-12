@@ -1,4 +1,5 @@
 use axum::Json;
+use crate::data_migration::default_cc_dir;
 use serde::Serialize;
 
 #[derive(Serialize)]
@@ -21,7 +22,8 @@ pub async fn health() -> Json<HealthResponse> {
 }
 
 fn db_path_default() -> String {
-    dirs::home_dir()
-        .map(|h| h.join(".cc-switch-tui/db.sqlite").to_string_lossy().into_owned())
-        .unwrap_or_else(|| ".cc-switch-tui/db.sqlite".to_string())
+    default_cc_dir()
+        .join("db.sqlite")
+        .to_string_lossy()
+        .into_owned()
 }

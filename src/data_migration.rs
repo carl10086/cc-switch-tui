@@ -33,8 +33,14 @@ impl std::error::Error for DataMigrationError {
     }
 }
 
+impl From<DataMigrationError> for io::Error {
+    fn from(e: DataMigrationError) -> Self {
+        io::Error::new(io::ErrorKind::Other, e)
+    }
+}
+
 /// 需要迁移的 SQLite 相关文件名。
-const SQLITE_FILES: &[&str] = &[
+const MIGRATED_SQLITE_FILES: &[&str] = &[
     "db.sqlite",
     "traces.sqlite",
     "traces.sqlite-wal",
@@ -67,7 +73,7 @@ pub fn ensure_data_migrated(
 
     fs::create_dir_all(home_cc_dir)?;
 
-    for file in SQLITE_FILES {
+    for file in MIGRATED_SQLITE_FILES {
         let source = source_dir.join(file);
         let target = home_cc_dir.join(file);
         if source.exists() {
@@ -84,9 +90,12 @@ pub fn ensure_data_migrated(
     Ok(())
 }
 
-/// 获取默认的 home 数据目录 `~/.cc-switch-tui`。
-pub fn default_home_cc_dir() -> Option<PathBuf> {
-    dirs::home_dir().map(|h| h.join(".cc-switch-tui"))
+/// 获取默认的数据目录 `~/.cc-switch-tui`。
+/// 若无法获取 home 目录，则回退到当前工作目录下的 `.cc-switch-tui`。
+pub fn default_cc_dir() -> PathBuf {
+    dirs::home_dir()
+        .unwrap_or_else(|| PathBuf::from("."))
+        .join(".cc-switch-tui")
 }
 
 #[cfg(test)]

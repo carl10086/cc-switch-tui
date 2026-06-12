@@ -1,11 +1,10 @@
 use cc_switch_tui::api;
 use cc_switch_tui::api::state::AppState;
 use cc_switch_tui::dao::SqliteDaoImpl;
-use cc_switch_tui::data_migration::ensure_data_migrated;
+use cc_switch_tui::data_migration::{default_cc_dir, ensure_data_migrated};
 use cc_switch_tui::port;
 use cc_switch_tui::templates::register_templates;
 use std::io;
-use std::path::PathBuf;
 
 const DEFAULT_PORT: u16 = 7480;
 
@@ -29,11 +28,9 @@ async fn main() -> io::Result<()> {
     tracing::info!("cc-switch-tui starting (web mode)");
 
     // 统一数据目录：~/.cc-switch-tui
-    let cc_dir = cc_switch_tui_home();
-    let project_dir = std::env::current_dir()
-        .map_err(|e| io::Error::new(io::ErrorKind::Other, e))?;
-    ensure_data_migrated(&cc_dir, &project_dir)
-        .map_err(|e| io::Error::new(io::ErrorKind::Other, e.to_string()))?;
+    let cc_dir = default_cc_dir();
+    let project_dir = std::env::current_dir()?;
+    ensure_data_migrated(&cc_dir, &project_dir)?;
 
     let db_path = cc_dir.join("db.sqlite");
     let trace_path = cc_dir.join("traces.sqlite");
@@ -91,10 +88,4 @@ async fn main() -> io::Result<()> {
 
     tracing::info!("cc-switch-tui exiting");
     Ok(())
-}
-
-fn cc_switch_tui_home() -> PathBuf {
-    dirs::home_dir()
-        .unwrap_or_else(|| std::path::PathBuf::from("."))
-        .join(".cc-switch-tui")
 }
