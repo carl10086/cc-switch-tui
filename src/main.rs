@@ -36,14 +36,10 @@ async fn main() -> io::Result<()> {
             .expect("无法初始化 trace 数据库");
     let state = AppState::new(dao, trace_store);
 
-    // 端口策略：先读 cached port，失败就 fallback 到 7480，再 +N 扫描
+    // 固定端口 7480，失败直接报错（与 ys-proxy 硬编码保持一致）
     let cc_dir = cc_switch_tui_home();
     let port_file = cc_dir.join("port");
-    let cached = port::read_cached_port(&port_file);
-    let start_port = cached.unwrap_or(DEFAULT_PORT);
-    tracing::info!("trying port {} (cached: {:?})", start_port, cached);
-
-    let (listener, actual_port) = port::try_bind(start_port, 100)
+    let (listener, actual_port) = port::try_bind(DEFAULT_PORT, 1)
         .await
         .map_err(|e| io::Error::new(io::ErrorKind::AddrInUse, e))?;
     let actual_addr = listener.local_addr()?;
