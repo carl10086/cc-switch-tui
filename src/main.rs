@@ -1,6 +1,7 @@
 use cc_switch_tui::api;
 use cc_switch_tui::api::state::AppState;
 use cc_switch_tui::dao::SqliteDaoImpl;
+use cc_switch_tui::data_migration::ensure_data_migrated;
 use cc_switch_tui::port;
 use cc_switch_tui::templates::register_templates;
 use std::io;
@@ -27,17 +28,31 @@ async fn main() -> io::Result<()> {
         .init();
     tracing::info!("cc-switch-tui starting (web mode)");
 
+    // 统一数据目录：~/.cc-switch-tui
+    let cc_dir = cc_switch_tui_home();
+    let project_dir = std::env::current_dir()
+        .map_err(|e| io::Error::new(io::ErrorKind::Other, e))?;
+    ensure_data_migrated(&cc_dir, &project_dir)
+        .map_err(|e| io::Error::new(io::ErrorKind::Other, e.to_string()))?;
+
+    let db_path = cc_dir.join("db.sqlite");
+    let trace_path = cc_dir.join("traces.sqlite");
+    let db_path_str = db_path
+        .to_str()
+        .ok_or_else(|| io::Error::new(io::ErrorKind::InvalidData, "invalid db path"))?;
+    let trace_path_str = trace_path
+        .to_str()
+        .ok_or_else(|| io::Error::new(io::ErrorKind::InvalidData, "invalid trace path"))?;
+
     // 初始化 DAO + AppState
     let templates = register_templates();
-    let db_path = ".cc-switch-tui/db.sqlite";
-    let dao = SqliteDaoImpl::new(db_path, templates).expect("无法初始化数据库");
+    let dao = SqliteDaoImpl::new(db_path_str, templates).expect("无法初始化数据库");
     let trace_store =
-        cc_switch_tui::trace::store::TraceStore::new(".cc-switch-tui/traces.sqlite")
+        cc_switch_tui::trace::store::TraceStore::new(trace_path_str)
             .expect("无法初始化 trace 数据库");
     let state = AppState::new(dao, trace_store);
 
     // 固定端口 7480，失败直接报错（与 ys-proxy 硬编码保持一致）
-    let cc_dir = cc_switch_tui_home();
     let port_file = cc_dir.join("port");
     let (listener, actual_port) = port::try_bind(DEFAULT_PORT, 1)
         .await
