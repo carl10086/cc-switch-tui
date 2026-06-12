@@ -1,5 +1,6 @@
 pub mod api;
 pub mod dao;
+pub mod data_migration;
 pub mod domain;
 pub mod opencode_config;
 pub mod opencode_fetch;
