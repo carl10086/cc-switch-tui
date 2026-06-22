@@ -14,6 +14,7 @@ pub fn render_aliases(instances: &[ProviderInstance], templates: &[ProviderTempl
     ];
 
     let all_env_vars = get_all_env_vars(templates);
+    lines.push(format_print_env_helper(&all_env_vars));
 
     for instance in instances {
         if instance.alias.is_empty() {
@@ -132,6 +133,57 @@ fn get_all_env_vars(templates: &[ProviderTemplate]) -> Vec<String> {
     let mut vars: Vec<String> = set.into_iter().collect();
     vars.sort();
     vars
+}
+
+/// 生成 __cc_switch_print_env helper 函数定义，用于在 cl-* alias 中打印实际生效的 env
+fn format_print_env_helper(all_env_vars: &[String]) -> String {
+    let keys_list = all_env_vars
+        .iter()
+        .map(|k| format!("    {}", k))
+        .collect::<Vec<_>>()
+        .join("\n");
+
+    format!(
+        "function __cc_switch_print_env {{\n\
+         \
+  local alias_name=$1\n\
+         \
+  [[ -n $CC_SWITCH_QUIET ]] && return 0\n\
+         \
+\n\
+         \
+  local -a keys=(\n{}\n  )\n\
+         \
+\n\
+         \
+  local parts=()\n\
+         \
+  for k in $keys; do\n\
+         \
+    local v=${{(P)k}}\n\
+         \
+    if [[ -z $v ]]; then\n\
+         \
+      parts+=(\"$k=<unset>\")\n\
+         \
+    elif [[ $k =~ '(_TOKEN|_API_KEY|_SECRET|_PASSWORD)$' ]]; then\n\
+         \
+      parts+=(\"$k=<redacted>\")\n\
+         \
+    else\n\
+         \
+      parts+=(\"$k=$v\")\n\
+         \
+    fi\n\
+         \
+  done\n\
+         \
+\n\
+         \
+  echo \"[cc-switch-tui] $alias_name: ${{(j: :)parts}}\" >&2\n\
+         }}",
+        keys_list
+    )
 }
 
 fn format_function(
@@ -449,6 +501,32 @@ mod tests {
         assert!(!content.contains("export DISABLE_COMPACT=1"));
         assert!(!content.contains("export CLAUDE_CODE_MAX_CONTEXT_TOKENS"));
         assert!(!content.contains("export CLAUDE_CODE_AUTO_COMPACT_WINDOW"));
+    }
+
+    #[test]
+    fn test_generate_aliases_contains_print_env_helper() {
+        let temp = TempDir::new().unwrap();
+        let instances: Vec<ProviderInstance> = vec![];
+        let templates: Vec<ProviderTemplate> = vec![];
+        generate_aliases(temp.path(), &instances, &templates).unwrap();
+
+        let content = std::fs::read_to_string(temp.path().join("aliases.zsh")).unwrap();
+        assert!(
+            content.contains("function __cc_switch_print_env {"),
+            "aliases.zsh 应包含 __cc_switch_print_env helper 函数定义"
+        );
+        assert!(
+            content.contains("[[ -n $CC_SWITCH_QUIET ]]") && content.contains("return 0"),
+            "helper 应支持 CC_SWITCH_QUIET=1 关闭"
+        );
+        assert!(
+            content.contains("<redacted>"),
+            "helper 应将 credential 类变量值替换为 <redacted>"
+        );
+        assert!(
+            content.contains("<unset>"),
+            "helper 应将未设置变量标记为 <unset>"
+        );
     }
 
     #[test]
