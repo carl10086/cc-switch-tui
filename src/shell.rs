@@ -593,6 +593,119 @@ mod tests {
     }
 
     #[test]
+    fn test_print_env_helper_runtime_output() {
+        // 在真实的 zsh 中执行 helper，验证 redaction、<unset>、CC_SWITCH_QUIET 行为。
+        // 如果系统没有 zsh，则跳过。
+        if std::process::Command::new("zsh").arg("--version").output().is_err() {
+            return;
+        }
+
+        let temp = TempDir::new().unwrap();
+        let mut env = HashMap::new();
+        env.insert(
+            "ANTHROPIC_BASE_URL".to_string(),
+            "https://api.minimaxi.com/anthropic".to_string(),
+        );
+        let template = ProviderTemplate {
+            id: "minimax".to_string(),
+            name: "MiniMax".to_string(),
+            default_env: env,
+            models: vec![ModelTemplate {
+                id: "MiniMax-M2.7-highspeed".to_string(),
+                name: "MiniMax M2.7 Highspeed".to_string(),
+                env_overrides: HashMap::new(),
+                opencode_model_id: "MiniMax-M2.7-highspeed".to_string(),
+                context_window: None,
+            }],
+            opencode_provider_id: "minimax-cn".to_string(),
+            opencode_npm: "@ai-sdk/anthropic".to_string(),
+            opencode_base_url: "https://api.minimaxi.com/anthropic/v1".to_string(),
+            opencode_env_var: "MINIMAX_API_KEY".to_string(),
+            opencode_models: vec!["MiniMax-M2.7-highspeed".to_string()],
+        };
+        let instance = ProviderInstance {
+            id: "minimax-MiniMax-M2.7-highspeed-cl-mini".to_string(),
+            template_id: "minimax".to_string(),
+            model_id: "MiniMax-M2.7-highspeed".to_string(),
+            api_key: "sk-real-secret-token".to_string(),
+            created_at: chrono::Utc::now(),
+            alias: "cl-mini".to_string(),
+            opencode_model_id: "MiniMax-M2.7-highspeed".to_string(),
+            kv_cache_enabled: false,
+            context_window_enabled: false,
+        };
+        generate_aliases(temp.path(), &[instance], &[template]).unwrap();
+
+        let aliases_path = temp.path().join("aliases.zsh");
+        let output_path = temp.path().join("output.txt");
+        let quiet_path = temp.path().join("quiet.txt");
+
+        let script = format!(
+            "emulate zsh\n\
+             source {}\n\
+             export ANTHROPIC_AUTH_TOKEN='sk-real-secret-token'\n\
+             export CC_SWITCH_ALIAS='cl-mini'\n\
+             __cc_switch_print_env cl-mini 2>{}\n\
+             cat {}\n",
+            aliases_path.display(),
+            output_path.display(),
+            output_path.display(),
+        );
+        std::fs::write(temp.path().join("run.zsh"), script).unwrap();
+        let out = std::process::Command::new("zsh")
+            .arg(temp.path().join("run.zsh"))
+            .output()
+            .expect("zsh should be available");
+        assert!(out.status.success(), "zsh 执行失败: {}", String::from_utf8_lossy(&out.stderr));
+        let line = String::from_utf8(out.stdout).unwrap();
+
+        assert!(
+            line.contains("[cc-switch-tui] cl-mini:"),
+            "输出应包含前缀: {}", line
+        );
+        assert!(
+            line.contains("ANTHROPIC_AUTH_TOKEN=<redacted>"),
+            "token 应被 redacted: {}", line
+        );
+        assert!(
+            !line.contains("sk-real-secret-token"),
+            "真实 token 不应泄露: {}", line
+        );
+        assert!(
+            line.contains("DISABLE_COMPACT=<unset>"),
+            "未设置变量应显示 <unset>: {}", line
+        );
+        assert!(
+            line.contains("ANTHROPIC_BASE_URL="),
+            "BASE_URL 应被打印: {}", line
+        );
+
+        // 验证 CC_SWITCH_QUIET=1 时不输出
+        let quiet_script = format!(
+            "emulate zsh\n\
+             source {}\n\
+             export ANTHROPIC_AUTH_TOKEN='sk-real-secret-token'\n\
+             CC_SWITCH_QUIET=1 __cc_switch_print_env cl-mini 2>{}\n\
+             cat {}\n",
+            aliases_path.display(),
+            quiet_path.display(),
+            quiet_path.display(),
+        );
+        std::fs::write(temp.path().join("run_quiet.zsh"), quiet_script).unwrap();
+        let quiet_out = std::process::Command::new("zsh")
+            .arg(temp.path().join("run_quiet.zsh"))
+            .output()
+            .expect("zsh should be available");
+        assert!(quiet_out.status.success());
+        let quiet_line = String::from_utf8(quiet_out.stdout).unwrap().trim().to_string();
+        assert!(
+            quiet_line.is_empty(),
+            "CC_SWITCH_QUIET=1 时不应有输出，实际: {:?}",
+            quiet_line
+        );
+    }
+
+    #[test]
     fn test_ensure_zshrc_source_adds_line() {
         let temp = TempDir::new().unwrap();
         let zshrc = temp.path().join(".zshrc");
