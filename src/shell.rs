@@ -230,8 +230,8 @@ fn format_function(
     };
 
     format!(
-        "function {} {{\n{}\n{}\n  {}\n}}",
-        name, unset_line, export_block, claude_cmd
+        "function {} {{\n{}\n{}\n  __cc_switch_print_env {}\n  {}\n}}",
+        name, unset_line, export_block, name, claude_cmd
     )
 }
 
@@ -526,6 +526,69 @@ mod tests {
         assert!(
             content.contains("<unset>"),
             "helper 应将未设置变量标记为 <unset>"
+        );
+    }
+
+    #[test]
+    fn test_generate_aliases_calls_print_env_helper() {
+        let temp = TempDir::new().unwrap();
+        let mut env = HashMap::new();
+        env.insert(
+            "ANTHROPIC_BASE_URL".to_string(),
+            "https://api.minimaxi.com/anthropic".to_string(),
+        );
+        let template = ProviderTemplate {
+            id: "minimax".to_string(),
+            name: "MiniMax".to_string(),
+            default_env: env,
+            models: vec![ModelTemplate {
+                id: "MiniMax-M2.7-highspeed".to_string(),
+                name: "MiniMax M2.7 Highspeed".to_string(),
+                env_overrides: HashMap::new(),
+                opencode_model_id: "MiniMax-M2.7-highspeed".to_string(),
+                context_window: None,
+            }],
+            opencode_provider_id: "minimax-cn".to_string(),
+            opencode_npm: "@ai-sdk/anthropic".to_string(),
+            opencode_base_url: "https://api.minimaxi.com/anthropic/v1".to_string(),
+            opencode_env_var: "MINIMAX_API_KEY".to_string(),
+            opencode_models: vec!["MiniMax-M2.7-highspeed".to_string()],
+        };
+        let instance = ProviderInstance {
+            id: "minimax-MiniMax-M2.7-highspeed-cl-mini".to_string(),
+            template_id: "minimax".to_string(),
+            model_id: "MiniMax-M2.7-highspeed".to_string(),
+            api_key: "sk-test".to_string(),
+            created_at: chrono::Utc::now(),
+            alias: "cl-mini".to_string(),
+            opencode_model_id: "MiniMax-M2.7-highspeed".to_string(),
+            kv_cache_enabled: false,
+            context_window_enabled: false,
+        };
+        generate_aliases(temp.path(), &[instance], &[template]).unwrap();
+
+        let content = std::fs::read_to_string(temp.path().join("aliases.zsh")).unwrap();
+        // helper 定义必须在 cl-* 函数之前
+        let helper_pos = content
+            .find("function __cc_switch_print_env {")
+            .expect("应存在 helper 定义");
+        let cl_mini_pos = content.find("function cl-mini {").expect("应存在 cl-mini 函数");
+        assert!(
+            helper_pos < cl_mini_pos,
+            "helper 函数定义必须在 cl-mini 之前"
+        );
+
+        // cl-mini 函数体中必须在 command claude 之前调用 helper
+        let cl_mini_body = &content[cl_mini_pos..];
+        let cmd_pos = cl_mini_body
+            .find("command claude")
+            .expect("cl-mini 应包含 command claude");
+        let call_pos = cl_mini_body
+            .find("__cc_switch_print_env cl-mini")
+            .expect("cl-mini 应调用 __cc_switch_print_env");
+        assert!(
+            call_pos < cmd_pos,
+            "helper 调用必须在 command claude 之前"
         );
     }
 
