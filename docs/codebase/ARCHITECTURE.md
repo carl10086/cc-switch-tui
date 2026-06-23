@@ -165,7 +165,14 @@ POST /api/aliases/apply (src/api/aliases.rs::apply)
             → Return { path: ... }
 ```
 
-The `aliases.zsh` file contains: a `ys-proxy` wrapper that sets `ANTHROPIC_BASE_URL=http://127.0.0.1:7480/ys-proxy/${alias_name}` in a subshell before invoking the per-instance function, plus a `cl-{alias}` function per instance that unsets all provider env vars, exports the per-instance env (`ANTHROPIC_AUTH_TOKEN`, `ANTHROPIC_BASE_URL=${ANTHROPIC_BASE_URL:-default}`, optional `DISABLE_COMPACT` / `CLAUDE_CODE_MAX_CONTEXT_TOKENS` / `CLAUDE_CODE_AUTO_COMPACT_WINDOW` when `context_window_enabled` and the model has a `context_window`), then runs `command claude "$@"`. `oc-{alias}` functions set `OPENCODE_CONFIG` and the provider env var before `command opencode "$@"`.
+The `aliases.zsh` file contains:
+
+- `__cc_switch_print_env <alias>` helper — emits a single `[cc-switch-tui] <alias>: KEY=VALUE ...` line to stderr showing the actual env that will be passed to `claude` (credential-like keys redacted as `<redacted>`, missing keys shown as `<unset>`; suppressed when `CC_SWITCH_QUIET=1`).
+- Per-instance `cl-{alias}` function: **always** unsets the full provider env set (including `ANTHROPIC_BASE_URL`, so a stale export from a previous `cl-*` call in the same shell cannot leak into the next invocation), then exports its own values verbatim, then applies `CC_SWITCH_PROXY_URL` (if set via the zsh command-prefix form) to `ANTHROPIC_BASE_URL`, calls the diagnostic helper, and runs `command claude "$@"`. Optional `DISABLE_COMPACT` / `CLAUDE_CODE_MAX_CONTEXT_TOKENS` / `CLAUDE_CODE_AUTO_COMPACT_WINDOW` are added only when `context_window_enabled` and the model has a `context_window`.
+- `ys-proxy` wrapper: uses the zsh command-prefix form `CC_SWITCH_PROXY_URL="http://127.0.0.1:7480/ys-proxy/${alias_name}" $alias_name "$@"` so the sentinel is visible only for the duration of the call (never leaks back to the parent shell) and the underlying `cl-*` function applies it after exporting its own default.
+- `oc-{alias}` functions set `OPENCODE_CONFIG` and the provider env var before `command opencode "$@"`.
+
+> Why the sentinel form: a previous design used `${ANTHROPIC_BASE_URL:-default}` to let `ys-proxy` win when its subshell set the URL. That subshell never leaked, so the fall-through branch was unreachable from `ys-proxy` while a *previous* direct `cl-*` call could leak its `ANTHROPIC_BASE_URL` into the parent shell and be picked up incorrectly by the next call. Always exporting the function's own default and using a named sentinel for the proxy override eliminates the leak entirely while keeping the proxy path working. Regression coverage: `src/shell.rs::tests::test_function_body_isolates_previous_alias_export` (real-zsh repro) and `test_ys_proxy_sentinel_overrides_anthropic_base_url` (proxy path).
 
 ### Proxy + Trace Capture Flow (Streaming)
 

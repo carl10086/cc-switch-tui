@@ -14,6 +14,7 @@ pub fn render_aliases(instances: &[ProviderInstance], templates: &[ProviderTempl
     ];
 
     let all_env_vars = get_all_env_vars(templates);
+    lines.push(format_print_env_helper(&all_env_vars));
 
     for instance in instances {
         if instance.alias.is_empty() {
@@ -47,10 +48,10 @@ pub fn render_aliases(instances: &[ProviderInstance], templates: &[ProviderTempl
     lines.extend(opencode_lines);
 
     // ys-proxy wrapper — 通过本地代理转发 Claude Code 请求
-    // 在子 shell 中设置 proxy BASE_URL，然后调用 alias 函数
-    // alias 函数内部使用 ${ANTHROPIC_BASE_URL:-默认值} 保留外部传入的值
+    // 用 zsh 命令前缀方式临时注入 CC_SWITCH_PROXY_URL（仅本次调用可见，不污染父 shell）；
+    // cl-* 函数会在 export 自身 default 之后用该 sentinel 覆盖 ANTHROPIC_BASE_URL。
     lines.push(
-        "function ys-proxy {\n  local alias_name=$1\n  shift\n  (\n    export ANTHROPIC_BASE_URL=\"http://localhost:7480/ys-proxy/${alias_name}\"\n    $alias_name \"$@\"\n  )\n}"
+        "function ys-proxy {\n  local alias_name=$1\n  shift\n  CC_SWITCH_PROXY_URL=\"http://localhost:7480/ys-proxy/${alias_name}\" $alias_name \"$@\"\n}"
             .to_string(),
     );
 
@@ -117,6 +118,7 @@ fn build_env(
 fn get_all_env_vars(templates: &[ProviderTemplate]) -> Vec<String> {
     let mut set: HashSet<String> = HashSet::from([
         "ANTHROPIC_AUTH_TOKEN".to_string(),
+        "ANTHROPIC_BASE_URL".to_string(),
         "CMUX_PRESERVE_CLAUDE_AUTH_SELECTION_ENV".to_string(),
         "CC_SWITCH_ALIAS".to_string(),
         "DISABLE_COMPACT".to_string(),
@@ -134,42 +136,81 @@ fn get_all_env_vars(templates: &[ProviderTemplate]) -> Vec<String> {
     vars
 }
 
+/// 生成 __cc_switch_print_env helper 函数定义，用于在 cl-* alias 中打印实际生效的 env
+fn format_print_env_helper(all_env_vars: &[String]) -> String {
+    let keys_list = all_env_vars
+        .iter()
+        .map(|k| format!("    {}", k))
+        .collect::<Vec<_>>()
+        .join("\n");
+
+    format!(
+        "function __cc_switch_print_env {{\n\
+         \
+  local alias_name=$1\n\
+         \
+  [[ -n $CC_SWITCH_QUIET ]] && return 0\n\
+         \
+\n\
+         \
+  local -a keys=(\n{}\n  )\n\
+         \
+\n\
+         \
+  local parts=()\n\
+         \
+  for k in $keys; do\n\
+         \
+    local v=${{(P)k}}\n\
+         \
+    if [[ -z $v ]]; then\n\
+         \
+      parts+=(\"$k=<unset>\")\n\
+         \
+    elif [[ $k =~ '(_TOKEN|_API_KEY|_SECRET|_PASSWORD)$' ]]; then\n\
+         \
+      parts+=(\"$k=<redacted>\")\n\
+         \
+    else\n\
+         \
+      parts+=(\"$k=$v\")\n\
+         \
+    fi\n\
+         \
+  done\n\
+         \
+\n\
+         \
+  echo \"[cc-switch-tui] $alias_name: ${{(j: :)parts}}\" >&2\n\
+         }}",
+        keys_list
+    )
+}
+
 fn format_function(
     name: &str,
     env: &HashMap<String, String>,
     unset_vars: &[String],
     kv_cache_enabled: bool,
 ) -> String {
-    let mut pairs: Vec<_> = env.iter().collect();
-    pairs.sort_by(|a, b| a.0.cmp(b.0));
+    // 始终 unset 所有 provider 相关的 env，包括 ANTHROPIC_BASE_URL；
+    // 防止上次 cl-* 调用残留到父 shell 后污染本次调用。
+    let unset_line = format!("  unset {}", unset_vars.join(" "));
 
-    // ANTHROPIC_BASE_URL 由外部（如 ys-proxy）传入时保留，否则使用默认值
-    let unset_vars_filtered: Vec<&str> = unset_vars
-        .iter()
-        .map(|s| s.as_str())
-        .filter(|&s| s != "ANTHROPIC_BASE_URL")
-        .collect();
-    let unset_line = format!("  unset {}", unset_vars_filtered.join(" "));
-
-    let base_url_value = env.get("ANTHROPIC_BASE_URL").cloned();
-    let other_pairs: Vec<_> = pairs
-        .into_iter()
-        .filter(|(k, _)| *k != "ANTHROPIC_BASE_URL")
-        .collect();
-
-    let mut export_lines: Vec<String> = other_pairs
+    // 总是 export 自身 default —— 函数不读取父 shell 的值。
+    let mut export_lines: Vec<String> = env
         .iter()
         .map(|(k, v)| format!("  export {}={}", k, shell_escape(v)))
         .collect();
-
-    if let Some(base_url) = base_url_value {
-        export_lines.push(format!(
-            "  export ANTHROPIC_BASE_URL=\"${{ANTHROPIC_BASE_URL:-{}}}\"",
-            shell_escape(&base_url)
-        ));
-    }
     export_lines.sort();
     let export_block = export_lines.join("\n");
+
+    // ys-proxy 通过命令前缀方式把 CC_SWITCH_PROXY_URL 注入到本次调用；
+    // 若命令前缀设置了它，则覆盖 ANTHROPIC_BASE_URL。
+    // CC_SWITCH_PROXY_URL 不在 unset_vars 中，所以它在整个函数体内可见。
+    // 限制为 localhost / 127.0.0.1，避免父 shell 中误 export 的 sentinel
+    // 把请求路由到任意 host。
+    let proxy_override_line = PROXY_OVERRIDE_LINE;
 
     let claude_cmd = if kv_cache_enabled {
         "command claude --exclude-dynamic-system-prompt-sections --settings '{\"includeGitInstructions\":false}' \"$@\""
@@ -178,8 +219,8 @@ fn format_function(
     };
 
     format!(
-        "function {} {{\n{}\n{}\n  {}\n}}",
-        name, unset_line, export_block, claude_cmd
+        "function {} {{\n{}\n{}\n{}\n  __cc_switch_print_env {}\n  {}\n}}",
+        name, unset_line, export_block, proxy_override_line, name, claude_cmd
     )
 }
 
@@ -195,6 +236,14 @@ pub(crate) fn shell_escape(s: &str) -> String {
         format!("'{}'", s)
     }
 }
+
+/// 在 cl-* 函数 export 自身 default 之后，ys-proxy 通过命令前缀注入的
+/// `CC_SWITCH_PROXY_URL` 在此行覆盖 `ANTHROPIC_BASE_URL`。
+///
+/// 显式限制 sentinel 取值为 `http://localhost:*` / `http://127.0.0.1:*`：
+/// 父 shell 中如果误 export 了非本地 URL（例如调试脚本遗留），
+/// 不会被 cl-* 函数采用，请求仍走 provider 默认值。
+const PROXY_OVERRIDE_LINE: &str = "  [[ $CC_SWITCH_PROXY_URL == http://localhost:* || $CC_SWITCH_PROXY_URL == http://127.0.0.1:* ]] && export ANTHROPIC_BASE_URL=\"$CC_SWITCH_PROXY_URL\"";
 
 /// 检查 zshrc 文件是否包含 source ~/.cc-switch-tui/aliases.zsh
 pub fn ensure_zshrc_source(zshrc_path: &std::path::Path) -> std::io::Result<bool> {
@@ -452,6 +501,208 @@ mod tests {
     }
 
     #[test]
+    fn test_generate_aliases_contains_print_env_helper() {
+        let temp = TempDir::new().unwrap();
+        let instances: Vec<ProviderInstance> = vec![];
+        let templates: Vec<ProviderTemplate> = vec![];
+        generate_aliases(temp.path(), &instances, &templates).unwrap();
+
+        let content = std::fs::read_to_string(temp.path().join("aliases.zsh")).unwrap();
+        assert!(
+            content.contains("function __cc_switch_print_env {"),
+            "aliases.zsh 应包含 __cc_switch_print_env helper 函数定义"
+        );
+        assert!(
+            content.contains("[[ -n $CC_SWITCH_QUIET ]]") && content.contains("return 0"),
+            "helper 应支持 CC_SWITCH_QUIET=1 关闭"
+        );
+        assert!(
+            content.contains("<redacted>"),
+            "helper 应将 credential 类变量值替换为 <redacted>"
+        );
+        assert!(
+            content.contains("<unset>"),
+            "helper 应将未设置变量标记为 <unset>"
+        );
+    }
+
+    #[test]
+    fn test_generate_aliases_calls_print_env_helper() {
+        let temp = TempDir::new().unwrap();
+        let mut env = HashMap::new();
+        env.insert(
+            "ANTHROPIC_BASE_URL".to_string(),
+            "https://api.minimaxi.com/anthropic".to_string(),
+        );
+        let template = ProviderTemplate {
+            id: "minimax".to_string(),
+            name: "MiniMax".to_string(),
+            default_env: env,
+            models: vec![ModelTemplate {
+                id: "MiniMax-M2.7-highspeed".to_string(),
+                name: "MiniMax M2.7 Highspeed".to_string(),
+                env_overrides: HashMap::new(),
+                opencode_model_id: "MiniMax-M2.7-highspeed".to_string(),
+                context_window: None,
+            }],
+            opencode_provider_id: "minimax-cn".to_string(),
+            opencode_npm: "@ai-sdk/anthropic".to_string(),
+            opencode_base_url: "https://api.minimaxi.com/anthropic/v1".to_string(),
+            opencode_env_var: "MINIMAX_API_KEY".to_string(),
+            opencode_models: vec!["MiniMax-M2.7-highspeed".to_string()],
+        };
+        let instance = ProviderInstance {
+            id: "minimax-MiniMax-M2.7-highspeed-cl-mini".to_string(),
+            template_id: "minimax".to_string(),
+            model_id: "MiniMax-M2.7-highspeed".to_string(),
+            api_key: "sk-test".to_string(),
+            created_at: chrono::Utc::now(),
+            alias: "cl-mini".to_string(),
+            opencode_model_id: "MiniMax-M2.7-highspeed".to_string(),
+            kv_cache_enabled: false,
+            context_window_enabled: false,
+        };
+        generate_aliases(temp.path(), &[instance], &[template]).unwrap();
+
+        let content = std::fs::read_to_string(temp.path().join("aliases.zsh")).unwrap();
+        // helper 定义必须在 cl-* 函数之前
+        let helper_pos = content
+            .find("function __cc_switch_print_env {")
+            .expect("应存在 helper 定义");
+        let cl_mini_pos = content.find("function cl-mini {").expect("应存在 cl-mini 函数");
+        assert!(
+            helper_pos < cl_mini_pos,
+            "helper 函数定义必须在 cl-mini 之前"
+        );
+
+        // cl-mini 函数体中必须在 command claude 之前调用 helper
+        let cl_mini_body = &content[cl_mini_pos..];
+        let cmd_pos = cl_mini_body
+            .find("command claude")
+            .expect("cl-mini 应包含 command claude");
+        let call_pos = cl_mini_body
+            .find("__cc_switch_print_env cl-mini")
+            .expect("cl-mini 应调用 __cc_switch_print_env");
+        assert!(
+            call_pos < cmd_pos,
+            "helper 调用必须在 command claude 之前"
+        );
+    }
+
+    #[test]
+    fn test_print_env_helper_runtime_output() {
+        // 在真实的 zsh 中执行 helper，验证 redaction、<unset>、CC_SWITCH_QUIET 行为。
+        // 如果系统没有 zsh，则跳过。
+        if std::process::Command::new("zsh").arg("--version").output().is_err() {
+            return;
+        }
+
+        let temp = TempDir::new().unwrap();
+        let mut env = HashMap::new();
+        env.insert(
+            "ANTHROPIC_BASE_URL".to_string(),
+            "https://api.minimaxi.com/anthropic".to_string(),
+        );
+        let template = ProviderTemplate {
+            id: "minimax".to_string(),
+            name: "MiniMax".to_string(),
+            default_env: env,
+            models: vec![ModelTemplate {
+                id: "MiniMax-M2.7-highspeed".to_string(),
+                name: "MiniMax M2.7 Highspeed".to_string(),
+                env_overrides: HashMap::new(),
+                opencode_model_id: "MiniMax-M2.7-highspeed".to_string(),
+                context_window: None,
+            }],
+            opencode_provider_id: "minimax-cn".to_string(),
+            opencode_npm: "@ai-sdk/anthropic".to_string(),
+            opencode_base_url: "https://api.minimaxi.com/anthropic/v1".to_string(),
+            opencode_env_var: "MINIMAX_API_KEY".to_string(),
+            opencode_models: vec!["MiniMax-M2.7-highspeed".to_string()],
+        };
+        let instance = ProviderInstance {
+            id: "minimax-MiniMax-M2.7-highspeed-cl-mini".to_string(),
+            template_id: "minimax".to_string(),
+            model_id: "MiniMax-M2.7-highspeed".to_string(),
+            api_key: "sk-real-secret-token".to_string(),
+            created_at: chrono::Utc::now(),
+            alias: "cl-mini".to_string(),
+            opencode_model_id: "MiniMax-M2.7-highspeed".to_string(),
+            kv_cache_enabled: false,
+            context_window_enabled: false,
+        };
+        generate_aliases(temp.path(), &[instance], &[template]).unwrap();
+
+        let aliases_path = temp.path().join("aliases.zsh");
+        let output_path = temp.path().join("output.txt");
+        let quiet_path = temp.path().join("quiet.txt");
+
+        let script = format!(
+            "emulate zsh\n\
+             source {}\n\
+             export ANTHROPIC_AUTH_TOKEN='sk-real-secret-token'\n\
+             export CC_SWITCH_ALIAS='cl-mini'\n\
+             __cc_switch_print_env cl-mini 2>{}\n\
+             cat {}\n",
+            aliases_path.display(),
+            output_path.display(),
+            output_path.display(),
+        );
+        std::fs::write(temp.path().join("run.zsh"), script).unwrap();
+        let out = std::process::Command::new("zsh")
+            .arg(temp.path().join("run.zsh"))
+            .output()
+            .expect("zsh should be available");
+        assert!(out.status.success(), "zsh 执行失败: {}", String::from_utf8_lossy(&out.stderr));
+        let line = String::from_utf8(out.stdout).unwrap();
+
+        assert!(
+            line.contains("[cc-switch-tui] cl-mini:"),
+            "输出应包含前缀: {}", line
+        );
+        assert!(
+            line.contains("ANTHROPIC_AUTH_TOKEN=<redacted>"),
+            "token 应被 redacted: {}", line
+        );
+        assert!(
+            !line.contains("sk-real-secret-token"),
+            "真实 token 不应泄露: {}", line
+        );
+        assert!(
+            line.contains("DISABLE_COMPACT=<unset>"),
+            "未设置变量应显示 <unset>: {}", line
+        );
+        assert!(
+            line.contains("ANTHROPIC_BASE_URL="),
+            "BASE_URL 应被打印: {}", line
+        );
+
+        // 验证 CC_SWITCH_QUIET=1 时不输出
+        let quiet_script = format!(
+            "emulate zsh\n\
+             source {}\n\
+             export ANTHROPIC_AUTH_TOKEN='sk-real-secret-token'\n\
+             CC_SWITCH_QUIET=1 __cc_switch_print_env cl-mini 2>{}\n\
+             cat {}\n",
+            aliases_path.display(),
+            quiet_path.display(),
+            quiet_path.display(),
+        );
+        std::fs::write(temp.path().join("run_quiet.zsh"), quiet_script).unwrap();
+        let quiet_out = std::process::Command::new("zsh")
+            .arg(temp.path().join("run_quiet.zsh"))
+            .output()
+            .expect("zsh should be available");
+        assert!(quiet_out.status.success());
+        let quiet_line = String::from_utf8(quiet_out.stdout).unwrap().trim().to_string();
+        assert!(
+            quiet_line.is_empty(),
+            "CC_SWITCH_QUIET=1 时不应有输出，实际: {:?}",
+            quiet_line
+        );
+    }
+
+    #[test]
     fn test_ensure_zshrc_source_adds_line() {
         let temp = TempDir::new().unwrap();
         let zshrc = temp.path().join(".zshrc");
@@ -462,5 +713,390 @@ mod tests {
 
         let added2 = ensure_zshrc_source(&zshrc).unwrap();
         assert!(!added2);
+    }
+
+    // ---- 回归测试：cross-alias env 隔离 ----
+    // 详见 feat/alias-env-diagnostic 分支修复：
+    // 父 shell 中残留的 ANTHROPIC_BASE_URL 不应污染下一次 cl-* 调用。
+
+    fn fixture(
+        template_id: &str,
+        model_id: &str,
+        alias: &str,
+        base_url: &str,
+    ) -> (ProviderTemplate, ProviderInstance) {
+        let mut env = HashMap::new();
+        env.insert("ANTHROPIC_BASE_URL".to_string(), base_url.to_string());
+        let template = ProviderTemplate {
+            id: template_id.to_string(),
+            name: template_id.to_string(),
+            default_env: env,
+            models: vec![ModelTemplate {
+                id: model_id.to_string(),
+                name: model_id.to_string(),
+                env_overrides: HashMap::new(),
+                opencode_model_id: model_id.to_string(),
+                context_window: None,
+            }],
+            opencode_provider_id: String::new(),
+            opencode_npm: String::new(),
+            opencode_base_url: String::new(),
+            opencode_env_var: String::new(),
+            opencode_models: vec![model_id.to_string()],
+        };
+        let instance = ProviderInstance {
+            id: format!("{template_id}-{model_id}-{alias}"),
+            template_id: template_id.to_string(),
+            model_id: model_id.to_string(),
+            api_key: "sk-test".to_string(),
+            created_at: chrono::Utc::now(),
+            alias: alias.to_string(),
+            opencode_model_id: model_id.to_string(),
+            kv_cache_enabled: false,
+            context_window_enabled: false,
+        };
+        (template, instance)
+    }
+
+    #[test]
+    fn test_function_body_no_parent_url_leakage() {
+        // 静态断言：生成的 cl-* 函数体必须放弃旧的 ${VAR:-default} 回退模式。
+        let temp = TempDir::new().unwrap();
+        let (tmpl, inst) = fixture(
+            "minimax",
+            "MiniMax-M2.7-highspeed",
+            "cl-mini",
+            "https://api.minimaxi.com/anthropic",
+        );
+        generate_aliases(temp.path(), &[inst], &[tmpl]).unwrap();
+        let content = std::fs::read_to_string(temp.path().join("aliases.zsh")).unwrap();
+
+        assert!(
+            !content.contains("${ANTHROPIC_BASE_URL:-"),
+            "cl-* 函数体不应再用 ${{ANTHROPIC_BASE_URL:-...}} 回退模式（这是原 bug 的根因）"
+        );
+        // 检查 ANTHROPIC_BASE_URL 出现在 unset 行（作为独立 token）
+        let unset_line = content
+            .lines()
+            .find(|l| l.trim_start().starts_with("unset "))
+            .expect("unset 行应存在");
+        assert!(
+            unset_line.split_whitespace().any(|t| t == "ANTHROPIC_BASE_URL"),
+            "unset 行必须包含 ANTHROPIC_BASE_URL 作为独立 token 以清理父 shell 残留，实际行: {unset_line:?}"
+        );
+        assert!(
+            content.contains("export ANTHROPIC_BASE_URL=https://api.minimaxi.com/anthropic"),
+            "函数体应直接 export 自身 default（不回退父 shell）"
+        );
+        assert!(
+            content.contains(PROXY_OVERRIDE_LINE),
+            "cl-* 函数体应通过 CC_SWITCH_PROXY_URL sentinel 允许 ys-proxy 覆盖"
+        );
+    }
+
+    #[test]
+    fn test_ys_proxy_wrapper_uses_command_prefix_sentinel() {
+        // 静态断言：ys-proxy wrapper 必须用命令前缀形式（旧 subshell 形式是 bug 路径）。
+        let temp = TempDir::new().unwrap();
+        let (tmpl, inst) = fixture(
+            "minimax",
+            "MiniMax-M2.7-highspeed",
+            "cl-mini",
+            "https://api.minimaxi.com/anthropic",
+        );
+        generate_aliases(temp.path(), &[inst], &[tmpl]).unwrap();
+        let content = std::fs::read_to_string(temp.path().join("aliases.zsh")).unwrap();
+
+        assert!(
+            content.contains(
+                "CC_SWITCH_PROXY_URL=\"http://localhost:7480/ys-proxy/${alias_name}\" $alias_name \"$@\""
+            ),
+            "ys-proxy wrapper 必须用命令前缀方式注入 CC_SWITCH_PROXY_URL"
+        );
+        assert!(
+            !content.contains("(\n    export ANTHROPIC_BASE_URL=\"http://localhost:7480/ys-proxy"),
+            "ys-proxy wrapper 不应再使用 subshell 形式（旧 bug 路径）"
+        );
+    }
+
+    #[test]
+    fn test_function_body_isolates_previous_alias_export() {
+        // 真实 zsh 回归：先调用 cl-kimi 让父 shell 残留 kimi URL，
+        // 再调用 cl-mini，cl-mini 必须传给 claude minimaxi 的 URL。
+        if std::process::Command::new("zsh").arg("--version").output().is_err() {
+            return;
+        }
+
+        let temp = TempDir::new().unwrap();
+        let (mini_tmpl, mini_inst) = fixture(
+            "minimax",
+            "MiniMax-M2.7-highspeed",
+            "cl-mini",
+            "https://api.minimaxi.com/anthropic",
+        );
+        let (kimi_tmpl, kimi_inst) = fixture(
+            "kimi",
+            "kimi-coding",
+            "cl-kimi",
+            "https://api.kimi.com/coding/",
+        );
+        generate_aliases(
+            temp.path(),
+            &[mini_inst, kimi_inst],
+            &[mini_tmpl, kimi_tmpl],
+        )
+        .unwrap();
+
+        // 用 stub 替换 PATH 中的 claude，避免依赖真实二进制。
+        let bin_dir = temp.path().join("bin");
+        std::fs::create_dir_all(&bin_dir).unwrap();
+        let claude_stub = bin_dir.join("claude");
+        std::fs::write(
+            &claude_stub,
+            "#!/bin/zsh\necho \"CLAUDE_URL=$ANTHROPIC_BASE_URL\"\nexit 0\n",
+        )
+        .unwrap();
+        std::fs::set_permissions(
+            &claude_stub,
+            std::os::unix::fs::PermissionsExt::from_mode(0o755),
+        )
+        .unwrap();
+
+        let kimi_out = temp.path().join("kimi.txt");
+        let mini_out = temp.path().join("mini.txt");
+        let aliases_path = temp.path().join("aliases.zsh");
+        let script = format!(
+            "emulate zsh\n\
+             export PATH=\"{bin}:$PATH\"\n\
+             source {aliases}\n\
+             cl-kimi >{kimi} 2>&1\n\
+             cl-mini >{mini} 2>&1\n",
+            bin = bin_dir.display(),
+            aliases = aliases_path.display(),
+            kimi = kimi_out.display(),
+            mini = mini_out.display(),
+        );
+        std::fs::write(temp.path().join("run.zsh"), script).unwrap();
+        let out = std::process::Command::new("zsh")
+            .arg(temp.path().join("run.zsh"))
+            .output()
+            .expect("zsh should be available");
+        assert!(
+            out.status.success(),
+            "zsh 执行失败: {}",
+            String::from_utf8_lossy(&out.stderr)
+        );
+
+        let kimi_combined = std::fs::read_to_string(&kimi_out).unwrap();
+        let mini_combined = std::fs::read_to_string(&mini_out).unwrap();
+
+        // 健全性检查：cl-kimi 自身用 kimi URL
+        assert!(
+            kimi_combined.contains("CLAUDE_URL=https://api.kimi.com/coding/"),
+            "cl-kimi 应使用 kimi URL，实际:\n{kimi_combined}"
+        );
+
+        // 关键回归断言：父 shell 被 cl-kimi 残留污染后，cl-mini 必须仍用 minimaxi URL
+        assert!(
+            mini_combined.contains("CLAUDE_URL=https://api.minimaxi.com/anthropic"),
+            "cl-mini 在父 shell 被污染时应仍用 minimaxi URL，实际:\n{mini_combined}"
+        );
+        assert!(
+            !mini_combined.contains("kimi.com"),
+            "cl-mini 不应把 kimi URL 传给 claude，实际:\n{mini_combined}"
+        );
+    }
+
+    #[test]
+    fn test_ys_proxy_sentinel_overrides_anthropic_base_url() {
+        // 真实 zsh 回归：ys-proxy cl-mini 应把本地代理 URL 传给 claude，
+        // 且调用结束后父 shell 不残留 CC_SWITCH_PROXY_URL。
+        if std::process::Command::new("zsh").arg("--version").output().is_err() {
+            return;
+        }
+
+        let temp = TempDir::new().unwrap();
+        let (tmpl, inst) = fixture(
+            "minimax",
+            "MiniMax-M2.7-highspeed",
+            "cl-mini",
+            "https://api.minimaxi.com/anthropic",
+        );
+        generate_aliases(temp.path(), &[inst], &[tmpl]).unwrap();
+
+        let bin_dir = temp.path().join("bin");
+        std::fs::create_dir_all(&bin_dir).unwrap();
+        let claude_stub = bin_dir.join("claude");
+        std::fs::write(
+            &claude_stub,
+            "#!/bin/zsh\necho \"CLAUDE_URL=$ANTHROPIC_BASE_URL\"\nexit 0\n",
+        )
+        .unwrap();
+        std::fs::set_permissions(
+            &claude_stub,
+            std::os::unix::fs::PermissionsExt::from_mode(0o755),
+        )
+        .unwrap();
+
+        let out_file = temp.path().join("out.txt");
+        let aliases_path = temp.path().join("aliases.zsh");
+        let script = format!(
+            "emulate zsh\n\
+             export PATH=\"{bin}:$PATH\"\n\
+             source {aliases}\n\
+             ys-proxy cl-mini >{out} 2>&1\n",
+            bin = bin_dir.display(),
+            aliases = aliases_path.display(),
+            out = out_file.display(),
+        );
+        std::fs::write(temp.path().join("run.zsh"), script).unwrap();
+        let out = std::process::Command::new("zsh")
+            .arg(temp.path().join("run.zsh"))
+            .output()
+            .expect("zsh should be available");
+        assert!(
+            out.status.success(),
+            "zsh 执行失败: {}",
+            String::from_utf8_lossy(&out.stderr)
+        );
+
+        let combined = std::fs::read_to_string(&out_file).unwrap();
+        assert!(
+            combined.contains("CLAUDE_URL=http://localhost:7480/ys-proxy/cl-mini"),
+            "ys-proxy 应把本地代理 URL 传给 claude，实际:\n{combined}"
+        );
+
+        // ys-proxy 调用结束后父 shell 不应被 CC_SWITCH_PROXY_URL 污染
+        assert!(
+            std::env::var("CC_SWITCH_PROXY_URL").is_err(),
+            "ys-proxy 调用结束后父 shell 不应残留 CC_SWITCH_PROXY_URL"
+        );
+    }
+
+    #[test]
+    fn test_unset_includes_anthropic_base_url_even_when_template_omits_it() {
+        // 回归：即使模板 default_env 不声明 ANTHROPIC_BASE_URL，
+        // unset 行也必须包含它 —— 否则父 shell 残留值（旧 bug 路径）会回归。
+        let temp = TempDir::new().unwrap();
+        let template = ProviderTemplate {
+            id: "no-url".to_string(),
+            name: "NoUrl".to_string(),
+            default_env: HashMap::new(), // 故意不放 ANTHROPIC_BASE_URL
+            models: vec![ModelTemplate {
+                id: "m".to_string(),
+                name: "m".to_string(),
+                env_overrides: HashMap::new(),
+                opencode_model_id: "m".to_string(),
+                context_window: None,
+            }],
+            opencode_provider_id: String::new(),
+            opencode_npm: String::new(),
+            opencode_base_url: String::new(),
+            opencode_env_var: String::new(),
+            opencode_models: vec!["m".to_string()],
+        };
+        let instance = ProviderInstance {
+            id: "no-url-m-cl-x".to_string(),
+            template_id: "no-url".to_string(),
+            model_id: "m".to_string(),
+            api_key: "sk-test".to_string(),
+            created_at: chrono::Utc::now(),
+            alias: "cl-x".to_string(),
+            opencode_model_id: "m".to_string(),
+            kv_cache_enabled: false,
+            context_window_enabled: false,
+        };
+        generate_aliases(temp.path(), &[instance], &[template]).unwrap();
+        let content = std::fs::read_to_string(temp.path().join("aliases.zsh")).unwrap();
+
+        // 模板没声明 ANTHROPIC_BASE_URL，但 unset 行必须仍然包含它
+        let unset_line = content
+            .lines()
+            .find(|l| l.trim_start().starts_with("unset "))
+            .expect("unset 行应存在");
+        assert!(
+            unset_line.split_whitespace().any(|t| t == "ANTHROPIC_BASE_URL"),
+            "即使模板未声明 BASE_URL，unset 行也必须包含它以清理父 shell 残留，实际: {unset_line:?}"
+        );
+        // 模板没声明 → 函数体不应有 own export ANTHROPIC_BASE_URL=... 行
+        // （sentinel 检查中的 `&& export ...` 算作同一行的 [[ 测试，不算 own export）
+        let own_export_lines: Vec<_> = content
+            .lines()
+            .filter(|l| l.trim_start().starts_with("export ANTHROPIC_BASE_URL="))
+            .collect();
+        assert!(
+            own_export_lines.is_empty(),
+            "模板未声明 BASE_URL 时函数体不应 export 它（避免覆盖自身 default），找到: {own_export_lines:?}"
+        );
+        // sentinel 检查仍应在函数体中 —— ys-proxy 仍可工作
+        assert!(
+            content.contains(PROXY_OVERRIDE_LINE),
+            "sentinel 检查应在函数体中，ys-proxy 路径不应依赖模板是否声明 BASE_URL"
+        );
+    }
+
+    #[test]
+    fn test_ys_proxy_rejects_non_localhost_sentinel_value() {
+        // 安全收紧：父 shell 中预先 export 一个非 localhost 的 CC_SWITCH_PROXY_URL，
+        // 调用 cl-mini 验证它不会被采用（请求仍走 provider 默认值）。
+        if std::process::Command::new("zsh").arg("--version").output().is_err() {
+            return;
+        }
+
+        let temp = TempDir::new().unwrap();
+        let (tmpl, inst) = fixture(
+            "minimax",
+            "MiniMax-M2.7-highspeed",
+            "cl-mini",
+            "https://api.minimaxi.com/anthropic",
+        );
+        generate_aliases(temp.path(), &[inst], &[tmpl]).unwrap();
+
+        let bin_dir = temp.path().join("bin");
+        std::fs::create_dir_all(&bin_dir).unwrap();
+        let claude_stub = bin_dir.join("claude");
+        std::fs::write(
+            &claude_stub,
+            "#!/bin/zsh\necho \"CLAUDE_URL=$ANTHROPIC_BASE_URL\"\nexit 0\n",
+        )
+        .unwrap();
+        std::fs::set_permissions(
+            &claude_stub,
+            std::os::unix::fs::PermissionsExt::from_mode(0o755),
+        )
+        .unwrap();
+
+        let out_file = temp.path().join("out.txt");
+        let aliases_path = temp.path().join("aliases.zsh");
+        let script = format!(
+            "emulate zsh\n\
+             export PATH=\"{bin}:$PATH\"\n\
+             source {aliases}\n\
+             export CC_SWITCH_PROXY_URL=\"https://attacker.example.com/proxy\"\n\
+             cl-mini >{out} 2>&1\n",
+            bin = bin_dir.display(),
+            aliases = aliases_path.display(),
+            out = out_file.display(),
+        );
+        std::fs::write(temp.path().join("run.zsh"), script).unwrap();
+        let out = std::process::Command::new("zsh")
+            .arg(temp.path().join("run.zsh"))
+            .output()
+            .expect("zsh should be available");
+        assert!(
+            out.status.success(),
+            "zsh 执行失败: {}",
+            String::from_utf8_lossy(&out.stderr)
+        );
+
+        let combined = std::fs::read_to_string(&out_file).unwrap();
+        assert!(
+            combined.contains("CLAUDE_URL=https://api.minimaxi.com/anthropic"),
+            "非 localhost 的 CC_SWITCH_PROXY_URL 必须被拒绝，cl-mini 应走默认 URL，实际:\n{combined}"
+        );
+        assert!(
+            !combined.contains("attacker.example.com"),
+            "非 localhost 的 sentinel 不应被采用，实际:\n{combined}"
+        );
     }
 }
