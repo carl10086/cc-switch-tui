@@ -51,9 +51,35 @@ fn test_kimi_template_registered() {
         "https://api.kimi.com/coding/"
     );
     assert_eq!(kimi.models.len(), 1);
+    assert_eq!(kimi.opencode_models, vec!["kimi-for-coding".to_string()]);
 
     let model = &kimi.models[0];
     assert_eq!(model.id, "kimi-for-coding");
     assert_eq!(model.name, "Kimi for Coding");
-    assert!(model.env_overrides.is_empty());
+    assert_eq!(model.opencode_model_id, "kimi-for-coding");
+    assert_eq!(
+        model.env_overrides.get("ANTHROPIC_MODEL").unwrap(),
+        "kimi-for-coding"
+    );
+    assert_eq!(
+        model
+            .env_overrides
+            .get("ANTHROPIC_DEFAULT_HAIKU_MODEL")
+            .unwrap(),
+        "kimi-for-coding"
+    );
+    assert_eq!(
+        model
+            .env_overrides
+            .get("ANTHROPIC_DEFAULT_OPUS_MODEL")
+            .unwrap(),
+        "kimi-for-coding"
+    );
+    assert_eq!(
+        model
+            .env_overrides
+            .get("ANTHROPIC_DEFAULT_SONNET_MODEL")
+            .unwrap(),
+        "kimi-for-coding"
+    );
 }
