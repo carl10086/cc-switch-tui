@@ -94,6 +94,27 @@ fn kimi_template() -> ProviderTemplate {
         "https://api.kimi.com/coding/".to_string(),
     );
 
+    // Kimi 官方建议第三方工具统一使用 stable alias `kimi-for-coding` 作为请求体
+    // model 字段；后端会自动映射到最新发布的模型。与 MiniMax 模式对齐，显式注入
+    // 4 个 ANTHROPIC_MODEL*，避免 Claude Code 用默认 model 名发请求被 Kimi 后端拒识。
+    let mut env_overrides = HashMap::new();
+    env_overrides.insert(
+        "ANTHROPIC_MODEL".to_string(),
+        "kimi-for-coding".to_string(),
+    );
+    env_overrides.insert(
+        "ANTHROPIC_DEFAULT_HAIKU_MODEL".to_string(),
+        "kimi-for-coding".to_string(),
+    );
+    env_overrides.insert(
+        "ANTHROPIC_DEFAULT_OPUS_MODEL".to_string(),
+        "kimi-for-coding".to_string(),
+    );
+    env_overrides.insert(
+        "ANTHROPIC_DEFAULT_SONNET_MODEL".to_string(),
+        "kimi-for-coding".to_string(),
+    );
+
     ProviderTemplate {
         id: "kimi".to_string(),
         name: "Kimi".to_string(),
@@ -101,18 +122,14 @@ fn kimi_template() -> ProviderTemplate {
         models: vec![ModelTemplate {
             id: "kimi-for-coding".to_string(),
             name: "Kimi for Coding".to_string(),
-            env_overrides: HashMap::new(),
-            opencode_model_id: "k2p5".to_string(),
+            env_overrides,
+            opencode_model_id: "kimi-for-coding".to_string(),
             context_window: None,
         }],
         opencode_provider_id: "kimi-for-coding".to_string(),
         opencode_npm: "@ai-sdk/anthropic".to_string(),
         opencode_base_url: "https://api.kimi.com/coding/v1".to_string(),
         opencode_env_var: "KIMI_API_KEY".to_string(),
-        opencode_models: vec![
-            "k2p5".to_string(),
-            "k2p6".to_string(),
-            "kimi-k2-thinking".to_string(),
-        ],
+        opencode_models: vec!["kimi-for-coding".to_string()],
     }
 }
