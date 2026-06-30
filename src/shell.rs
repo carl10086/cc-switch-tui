@@ -1133,16 +1133,19 @@ mod tests {
         .unwrap();
 
         let out_file = temp.path().join("out.txt");
+        let proxy_after_out = temp.path().join("proxy_after.txt");
         let aliases_path = temp.path().join("aliases.zsh");
         let script = format!(
             "emulate zsh\n\
              export PATH=\"{bin}:$PATH\"\n\
              source {aliases}\n\
              export CC_SWITCH_PROXY_URL=http://localhost:7480/ys-proxy/cl-mini\n\
-             cl-mini >{out} 2>&1\n",
+             cl-mini >{out} 2>&1\n\
+             echo AFTER_PROXY=$CC_SWITCH_PROXY_URL >{after}\n",
             bin = bin_dir.display(),
             aliases = aliases_path.display(),
             out = out_file.display(),
+            after = proxy_after_out.display(),
         );
         std::fs::write(temp.path().join("run.zsh"), script).unwrap();
         let out = std::process::Command::new("zsh")
@@ -1160,11 +1163,13 @@ mod tests {
             combined.contains("CLAUDE_URL=http://localhost:7480/ys-proxy/cl-mini"),
             "subshell 内应读到 CC_SWITCH_PROXY_URL 并覆盖 ANTHROPIC_BASE_URL，实际:\n{combined}"
         );
-        // 同时父 shell 不应残留 CC_SWITCH_PROXY_URL（用户 export 的 sentinel 在
-        // cl-* 返回后仍在 —— 这是用户自己设的，不是泄漏。但 cl-* 不应把它再次写入）
+        // 脚本级 export 的 CC_SWITCH_PROXY_URL 在 cl-* 调用后应保持原值
+        // （这是用户在脚本里自己设的，cl-* 不应擦除）。注意不能用 std::env::var
+        // ——它看的是 Rust test runner 进程的环境，跟 zsh 子进程的父 shell 完全无关。
+        let proxy_after = std::fs::read_to_string(&proxy_after_out).unwrap();
         assert!(
-            std::env::var("CC_SWITCH_PROXY_URL").is_err(),
-            "cl-* 不应在父 shell 残留 CC_SWITCH_PROXY_URL（test runner 父进程也不应被污染）"
+            proxy_after.contains("AFTER_PROXY=http://localhost:7480/ys-proxy/cl-mini"),
+            "cl-* 不应擦除用户预先 export 的 CC_SWITCH_PROXY_URL，实际:\n{proxy_after}"
         );
     }
 
@@ -1204,15 +1209,18 @@ mod tests {
         .unwrap();
 
         let out_file = temp.path().join("out.txt");
+        let proxy_after_out = temp.path().join("proxy_after.txt");
         let aliases_path = temp.path().join("aliases.zsh");
         let script = format!(
             "emulate zsh\n\
              export PATH=\"{bin}:$PATH\"\n\
              source {aliases}\n\
-             ys-proxy cl-mini >{out} 2>&1\n",
+             ys-proxy cl-mini >{out} 2>&1\n\
+             echo AFTER_PROXY=$CC_SWITCH_PROXY_URL >{after}\n",
             bin = bin_dir.display(),
             aliases = aliases_path.display(),
             out = out_file.display(),
+            after = proxy_after_out.display(),
         );
         std::fs::write(temp.path().join("run.zsh"), script).unwrap();
         let out = std::process::Command::new("zsh")
@@ -1231,10 +1239,14 @@ mod tests {
             "ys-proxy 应把本地代理 URL 传给 claude，实际:\n{combined}"
         );
 
-        // ys-proxy 调用结束后父 shell 不应被 CC_SWITCH_PROXY_URL 污染
+        // ys-proxy 用命令前缀注入 CC_SWITCH_PROXY_URL（POSIX prefix-env），
+        // 退出后 sentinel 应随之销毁，zsh 脚本级 shell 不应残留它。
+        // 注意不能用 std::env::var ——它看的是 Rust test runner 进程，
+        // 跟 zsh 子进程的父 shell 完全无关。
+        let proxy_after = std::fs::read_to_string(&proxy_after_out).unwrap();
         assert!(
-            std::env::var("CC_SWITCH_PROXY_URL").is_err(),
-            "ys-proxy 调用结束后父 shell 不应残留 CC_SWITCH_PROXY_URL"
+            proxy_after.contains("AFTER_PROXY=") && !proxy_after.contains("localhost:7480"),
+            "ys-proxy 调用结束后脚本级 shell 不应残留 CC_SWITCH_PROXY_URL，实际:\n{proxy_after}"
         );
     }
 
