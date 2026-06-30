@@ -963,6 +963,74 @@ mod tests {
     }
 
     #[test]
+    fn test_function_body_no_parent_shell_pollution() {
+        // 专注验证 subshell 隔离：单次 cl-* 调用结束后，父 shell 不残留
+        // 任何 ANTHROPIC_* / API_TIMEOUT_MS / CC_SWITCH_* env。
+        if std::process::Command::new("zsh")
+            .arg("--version")
+            .output()
+            .is_err()
+        {
+            return;
+        }
+
+        let temp = TempDir::new().unwrap();
+        let (tmpl, inst) = fixture(
+            "minimax",
+            "MiniMax-M2.7-highspeed",
+            "cl-mini",
+            "https://api.minimaxi.com/anthropic",
+        );
+        generate_aliases(temp.path(), &[inst], &[tmpl]).unwrap();
+
+        // stub claude：仅打印一行 OK，避免依赖真实二进制
+        let bin_dir = temp.path().join("bin");
+        std::fs::create_dir_all(&bin_dir).unwrap();
+        let claude_stub = bin_dir.join("claude");
+        std::fs::write(&claude_stub, "#!/bin/zsh\necho \"OK\"\nexit 0\n").unwrap();
+        std::fs::set_permissions(
+            &claude_stub,
+            std::os::unix::fs::PermissionsExt::from_mode(0o755),
+        )
+        .unwrap();
+
+        let poll_out = temp.path().join("poll.txt");
+        let aliases_path = temp.path().join("aliases.zsh");
+        let script = format!(
+            "emulate zsh\n\
+             unset ANTHROPIC_AUTH_TOKEN ANTHROPIC_BASE_URL ANTHROPIC_DEFAULT_HAIKU_MODEL \\\n\
+                   ANTHROPIC_DEFAULT_OPUS_MODEL ANTHROPIC_DEFAULT_SONNET_MODEL \\\n\
+                   ANTHROPIC_MODEL API_TIMEOUT_MS CC_SWITCH_ALIAS \\\n\
+                   CLAUDE_CODE_MAX_CONTEXT_TOKENS CLAUDE_CODE_AUTO_COMPACT_WINDOW \\\n\
+                   DISABLE_COMPACT CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC \\\n\
+                   CMUX_PRESERVE_CLAUDE_AUTH_SELECTION_ENV\n\
+             export PATH=\"{bin}:$PATH\"\n\
+             source {aliases}\n\
+             cl-mini >/dev/null 2>&1\n\
+             env | grep -E '^(ANTHROPIC|API_TIMEOUT_MS|CC_SWITCH)' >{poll} 2>&1 || true\n",
+            bin = bin_dir.display(),
+            aliases = aliases_path.display(),
+            poll = poll_out.display(),
+        );
+        std::fs::write(temp.path().join("run.zsh"), script).unwrap();
+        let out = std::process::Command::new("zsh")
+            .arg(temp.path().join("run.zsh"))
+            .output()
+            .expect("zsh should be available");
+        assert!(
+            out.status.success(),
+            "zsh 执行失败: {}",
+            String::from_utf8_lossy(&out.stderr)
+        );
+
+        let poll = std::fs::read_to_string(&poll_out).unwrap();
+        assert!(
+            poll.is_empty(),
+            "cl-* 调用结束后父 shell 应无 ANTHROPIC_* / API_TIMEOUT_MS / CC_SWITCH_* 残留，实际:\n{poll}"
+        );
+    }
+
+    #[test]
     fn test_ys_proxy_sentinel_overrides_anthropic_base_url() {
         // 真实 zsh 回归：ys-proxy cl-mini 应把本地代理 URL 传给 claude，
         // 且调用结束后父 shell 不残留 CC_SWITCH_PROXY_URL。
