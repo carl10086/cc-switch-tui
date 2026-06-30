@@ -854,9 +854,10 @@ mod tests {
     }
 
     #[test]
-    fn test_function_body_isolates_previous_alias_export() {
-        // 真实 zsh 回归：先调用 cl-kimi 让父 shell 残留 kimi URL，
-        // 再调用 cl-mini，cl-mini 必须传给 claude minimaxi 的 URL。
+    fn test_function_body_subshell_isolates_claude_url() {
+        // 真实 zsh 回归：subshell 隔离 —— cl-* 调用结束后父 shell 不残留任何
+        // ANTHROPIC_* / API_TIMEOUT_MS / CC_SWITCH_ALIAS env；且即使先后调用
+        // cl-kimi 与 cl-mini，cl-mini 仍传给 claude minimaxi 的 URL。
         if std::process::Command::new("zsh")
             .arg("--version")
             .output()
@@ -902,17 +903,26 @@ mod tests {
 
         let kimi_out = temp.path().join("kimi.txt");
         let mini_out = temp.path().join("mini.txt");
+        let poll_out = temp.path().join("poll.txt");
         let aliases_path = temp.path().join("aliases.zsh");
         let script = format!(
             "emulate zsh\n\
+             unset ANTHROPIC_AUTH_TOKEN ANTHROPIC_BASE_URL ANTHROPIC_DEFAULT_HAIKU_MODEL \\\n\
+                   ANTHROPIC_DEFAULT_OPUS_MODEL ANTHROPIC_DEFAULT_SONNET_MODEL \\\n\
+                   ANTHROPIC_MODEL API_TIMEOUT_MS CC_SWITCH_ALIAS \\\n\
+                   CLAUDE_CODE_MAX_CONTEXT_TOKENS CLAUDE_CODE_AUTO_COMPACT_WINDOW \\\n\
+                   DISABLE_COMPACT CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC \\\n\
+                   CMUX_PRESERVE_CLAUDE_AUTH_SELECTION_ENV\n\
              export PATH=\"{bin}:$PATH\"\n\
              source {aliases}\n\
              cl-kimi >{kimi} 2>&1\n\
-             cl-mini >{mini} 2>&1\n",
+             cl-mini >{mini} 2>&1\n\
+             env | grep -E '^(ANTHROPIC|API_TIMEOUT_MS|CC_SWITCH_ALIAS)=' >{poll} 2>&1 || true\n",
             bin = bin_dir.display(),
             aliases = aliases_path.display(),
             kimi = kimi_out.display(),
             mini = mini_out.display(),
+            poll = poll_out.display(),
         );
         std::fs::write(temp.path().join("run.zsh"), script).unwrap();
         let out = std::process::Command::new("zsh")
@@ -934,7 +944,7 @@ mod tests {
             "cl-kimi 应使用 kimi URL，实际:\n{kimi_combined}"
         );
 
-        // 关键回归断言：父 shell 被 cl-kimi 残留污染后，cl-mini 必须仍用 minimaxi URL
+        // 关键回归断言：cl-mini 必须用 minimaxi URL（不受 cl-kimi 残留影响）
         assert!(
             mini_combined.contains("CLAUDE_URL=https://api.minimaxi.com/anthropic"),
             "cl-mini 在父 shell 被污染时应仍用 minimaxi URL，实际:\n{mini_combined}"
@@ -942,6 +952,13 @@ mod tests {
         assert!(
             !mini_combined.contains("kimi.com"),
             "cl-mini 不应把 kimi URL 传给 claude，实际:\n{mini_combined}"
+        );
+
+        // subshell 隔离的核心断言：两次调用结束后父 shell 不残留关键 env
+        let poll = std::fs::read_to_string(&poll_out).unwrap();
+        assert!(
+            poll.is_empty(),
+            "subshell 隔离后父 shell 应无 ANTHROPIC_* / API_TIMEOUT_MS / CC_SWITCH_ALIAS 残留，实际:\n{poll}"
         );
     }
 
