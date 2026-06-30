@@ -22,7 +22,6 @@ pub struct InstanceSummary {
     pub model_id: String,
     pub opencode_model_id: String,
     pub kv_cache_enabled: bool,
-    pub context_window_enabled: bool,
 }
 
 impl From<&ProviderInstance> for InstanceSummary {
@@ -34,7 +33,6 @@ impl From<&ProviderInstance> for InstanceSummary {
             model_id: i.model_id.clone(),
             opencode_model_id: i.opencode_model_id.clone(),
             kv_cache_enabled: i.kv_cache_enabled,
-            context_window_enabled: i.context_window_enabled,
         }
     }
 }
@@ -50,7 +48,6 @@ pub struct InstanceDetail {
     pub model_id: String,
     pub opencode_model_id: String,
     pub kv_cache_enabled: bool,
-    pub context_window_enabled: bool,
     pub created_at: String,
 }
 
@@ -64,7 +61,6 @@ impl From<&ProviderInstance> for InstanceDetail {
             model_id: i.model_id.clone(),
             opencode_model_id: i.opencode_model_id.clone(),
             kv_cache_enabled: i.kv_cache_enabled,
-            context_window_enabled: i.context_window_enabled,
             created_at: i.created_at.to_rfc3339(),
         }
     }
@@ -73,9 +69,7 @@ impl From<&ProviderInstance> for InstanceDetail {
 // ===== List =====
 
 /// GET /api/instances
-pub async fn list(
-    State(state): State<AppState>,
-) -> Result<Json<Vec<InstanceSummary>>, ApiError> {
+pub async fn list(State(state): State<AppState>) -> Result<Json<Vec<InstanceSummary>>, ApiError> {
     let dao = state.dao.lock().await;
     let summaries: Vec<InstanceSummary> =
         dao.list_instances().into_iter().map(Into::into).collect();
@@ -94,7 +88,6 @@ pub struct CreateInstanceRequest {
     pub api_key: String,
     pub opencode_model_id: Option<String>,
     pub kv_cache_enabled: Option<bool>,
-    pub context_window_enabled: Option<bool>,
 }
 
 /// POST /api/instances
@@ -116,7 +109,6 @@ pub async fn create(
         alias: req.alias,
         opencode_model_id: req.opencode_model_id.unwrap_or_default(),
         kv_cache_enabled: req.kv_cache_enabled.unwrap_or(false),
-        context_window_enabled: req.context_window_enabled.unwrap_or(false),
     };
 
     let mut dao = state.dao.lock().await;
@@ -127,10 +119,9 @@ pub async fn create(
                 .ok_or_else(|| ApiError::internal("just-created instance not found"))?;
             Ok((StatusCode::CREATED, Json(InstanceDetail::from(instance))))
         }
-        Err(AppError::InstanceAlreadyExists(_)) => Err(ApiError::conflict(
-            "alias",
-            format!("alias already exists"),
-        )),
+        Err(AppError::InstanceAlreadyExists(_)) => {
+            Err(ApiError::conflict("alias", format!("alias already exists")))
+        }
         Err(AppError::InvalidAlias(msg)) => Err(ApiError::validation("alias", msg)),
         Err(e) => Err(ApiError::internal(e.to_string())),
     }
@@ -153,7 +144,7 @@ pub async fn detail(
 // ===== Patch =====
 
 /// PATCH /api/instances/:id
-/// 支持修改 modelId, apiKey, opencodeModelId, kvCacheEnabled, contextWindowEnabled。
+/// 支持修改 modelId, apiKey, opencodeModelId, kvCacheEnabled。
 /// alias 通过 PATCH 修改暂不支持（id 与 alias 绑定，需要 rename_instance；M1 留作 TODO）。
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -164,7 +155,6 @@ pub struct PatchInstanceRequest {
     pub api_key: Option<String>,
     pub opencode_model_id: Option<String>,
     pub kv_cache_enabled: Option<bool>,
-    pub context_window_enabled: Option<bool>,
 }
 
 pub async fn patch(
@@ -202,10 +192,6 @@ pub async fn patch(
     }
     if let Some(kv) = req.kv_cache_enabled {
         dao.set_kv_cache_enabled(&id, kv)
-            .map_err(|e| ApiError::internal(e.to_string()))?;
-    }
-    if let Some(cw) = req.context_window_enabled {
-        dao.set_context_window_enabled(&id, cw)
             .map_err(|e| ApiError::internal(e.to_string()))?;
     }
 
@@ -258,11 +244,12 @@ pub async fn duplicate(
         alias: new_alias,
         opencode_model_id: original.opencode_model_id,
         kv_cache_enabled: original.kv_cache_enabled,
-        context_window_enabled: original.context_window_enabled,
     };
 
     dao.create_instance(new_instance).map_err(|e| match e {
-        AppError::InstanceAlreadyExists(_) => ApiError::conflict("alias", "copy alias already exists"),
+        AppError::InstanceAlreadyExists(_) => {
+            ApiError::conflict("alias", "copy alias already exists")
+        }
         AppError::InvalidAlias(msg) => ApiError::validation("alias", msg),
         other => ApiError::internal(other.to_string()),
     })?;

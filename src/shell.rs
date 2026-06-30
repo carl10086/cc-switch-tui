@@ -88,24 +88,6 @@ fn build_env(
             env.extend(model.env_overrides.clone());
         }
     }
-    // 若实例开启了 context window 且模型有预设值，注入相关环境变量
-    if instance.context_window_enabled {
-        if let Some(template) = templates.iter().find(|t| t.id == instance.template_id) {
-            if let Some(model) = template.models.iter().find(|m| m.id == instance.model_id) {
-                if let Some(window) = model.context_window {
-                    env.insert("DISABLE_COMPACT".to_string(), "1".to_string());
-                    env.insert(
-                        "CLAUDE_CODE_MAX_CONTEXT_TOKENS".to_string(),
-                        window.to_string(),
-                    );
-                    env.insert(
-                        "CLAUDE_CODE_AUTO_COMPACT_WINDOW".to_string(),
-                        window.to_string(),
-                    );
-                }
-            }
-        }
-    }
     env.insert("ANTHROPIC_AUTH_TOKEN".to_string(), instance.api_key.clone());
     env.insert(
         "CMUX_PRESERVE_CLAUDE_AUTH_SELECTION_ENV".to_string(),
@@ -289,7 +271,6 @@ mod tests {
                 name: "MiniMax M2.7 Highspeed".to_string(),
                 env_overrides: HashMap::new(),
                 opencode_model_id: "MiniMax-M2.7-highspeed".to_string(),
-                context_window: None,
             }],
             opencode_provider_id: "minimax-cn".to_string(),
             opencode_npm: "@ai-sdk/anthropic".to_string(),
@@ -306,7 +287,6 @@ mod tests {
             alias: "cl-mini".to_string(),
             opencode_model_id: "MiniMax-M2.7-highspeed".to_string(),
             kv_cache_enabled: false,
-            context_window_enabled: false,
         };
         generate_aliases(temp.path(), &[instance], &[template]).unwrap();
 
@@ -336,7 +316,6 @@ mod tests {
                 name: "MiniMax M2.7 Highspeed".to_string(),
                 env_overrides: HashMap::new(),
                 opencode_model_id: "MiniMax-M2.7-highspeed".to_string(),
-                context_window: None,
             }],
             opencode_provider_id: "minimax-cn".to_string(),
             opencode_npm: "@ai-sdk/anthropic".to_string(),
@@ -353,7 +332,6 @@ mod tests {
             alias: "cl-mini".to_string(),
             opencode_model_id: "MiniMax-M2.7-highspeed".to_string(),
             kv_cache_enabled: false,
-            context_window_enabled: false,
         };
         generate_aliases(temp.path(), &[instance], &[template]).unwrap();
 
@@ -403,7 +381,6 @@ mod tests {
                 name: "Qwen3 27B".to_string(),
                 env_overrides: HashMap::new(),
                 opencode_model_id: "qwen3-27b".to_string(),
-                context_window: None,
             }],
             opencode_provider_id: String::new(),
             opencode_npm: String::new(),
@@ -420,7 +397,6 @@ mod tests {
             alias: "cl-local".to_string(),
             opencode_model_id: "qwen3-27b".to_string(),
             kv_cache_enabled: true,
-            context_window_enabled: false,
         };
         generate_aliases(temp.path(), &[instance], &[template]).unwrap();
 
@@ -431,93 +407,81 @@ mod tests {
         assert!(content.contains("command claude --exclude-dynamic-system-prompt-sections"));
     }
 
+    /// M3[1m] 跟随官方 2026 文档：model id 含 `[1m]` 后缀，env_overrides 自动注入 4 个 ANTHROPIC_DEFAULT_*_MODEL
     #[test]
-    fn test_build_env_injects_context_window_vars() {
+    fn test_aliases_contain_minimax_m3_1m_model_id() {
+        use crate::templates::register_templates;
         let temp = TempDir::new().unwrap();
-        let mut env = HashMap::new();
-        env.insert(
-            "ANTHROPIC_BASE_URL".to_string(),
-            "https://api.minimaxi.com/anthropic".to_string(),
-        );
-        let template = ProviderTemplate {
-            id: "minimax".to_string(),
-            name: "MiniMax".to_string(),
-            default_env: env,
-            models: vec![ModelTemplate {
-                id: "MiniMax-M3".to_string(),
-                name: "MiniMax M3".to_string(),
-                env_overrides: HashMap::new(),
-                opencode_model_id: "MiniMax-M3".to_string(),
-                context_window: Some(1_000_000),
-            }],
-            opencode_provider_id: "minimax-cn".to_string(),
-            opencode_npm: "@ai-sdk/anthropic".to_string(),
-            opencode_base_url: "https://api.minimaxi.com/anthropic/v1".to_string(),
-            opencode_env_var: "MINIMAX_API_KEY".to_string(),
-            opencode_models: vec!["MiniMax-M3".to_string()],
-        };
+        let templates = register_templates();
         let instance = ProviderInstance {
-            id: "minimax-MiniMax-M3-cl-m3".to_string(),
+            id: "minimax-MiniMax-M3[1m]-cl-m3".to_string(),
             template_id: "minimax".to_string(),
-            model_id: "MiniMax-M3".to_string(),
+            model_id: "MiniMax-M3[1m]".to_string(),
             api_key: "sk-test".to_string(),
             created_at: chrono::Utc::now(),
             alias: "cl-m3".to_string(),
-            opencode_model_id: "MiniMax-M3".to_string(),
+            opencode_model_id: "MiniMax-M3[1m]".to_string(),
             kv_cache_enabled: false,
-            context_window_enabled: true,
         };
-        generate_aliases(temp.path(), &[instance], &[template]).unwrap();
-
+        generate_aliases(temp.path(), &[instance], &templates).unwrap();
         let content = std::fs::read_to_string(temp.path().join("aliases.zsh")).unwrap();
-        assert!(content.contains("export DISABLE_COMPACT=1"));
-        assert!(content.contains("export CLAUDE_CODE_MAX_CONTEXT_TOKENS=1000000"));
-        assert!(content.contains("export CLAUDE_CODE_AUTO_COMPACT_WINDOW=1000000"));
-        assert!(content.contains("DISABLE_COMPACT"));
+        assert!(
+            content.contains("MiniMax-M3[1m]"),
+            "aliases.zsh 应含 MiniMax-M3[1m] model id（跟随官方文档），实际:\n{content}"
+        );
     }
 
+    /// M3[1m] env_overrides 硬编码 CLAUDE_CODE_AUTO_COMPACT_WINDOW=1000000（官方推荐）
     #[test]
-    fn test_build_env_skips_context_window_when_disabled() {
+    fn test_aliases_contain_auto_compact_window_var() {
+        use crate::templates::register_templates;
         let temp = TempDir::new().unwrap();
-        let mut env = HashMap::new();
-        env.insert(
-            "ANTHROPIC_BASE_URL".to_string(),
-            "https://api.minimaxi.com/anthropic".to_string(),
-        );
-        let template = ProviderTemplate {
-            id: "minimax".to_string(),
-            name: "MiniMax".to_string(),
-            default_env: env,
-            models: vec![ModelTemplate {
-                id: "MiniMax-M3".to_string(),
-                name: "MiniMax M3".to_string(),
-                env_overrides: HashMap::new(),
-                opencode_model_id: "MiniMax-M3".to_string(),
-                context_window: Some(1_000_000),
-            }],
-            opencode_provider_id: "minimax-cn".to_string(),
-            opencode_npm: "@ai-sdk/anthropic".to_string(),
-            opencode_base_url: "https://api.minimaxi.com/anthropic/v1".to_string(),
-            opencode_env_var: "MINIMAX_API_KEY".to_string(),
-            opencode_models: vec!["MiniMax-M3".to_string()],
-        };
+        let templates = register_templates();
         let instance = ProviderInstance {
-            id: "minimax-MiniMax-M3-cl-m3".to_string(),
+            id: "minimax-MiniMax-M3[1m]-cl-m3".to_string(),
             template_id: "minimax".to_string(),
-            model_id: "MiniMax-M3".to_string(),
+            model_id: "MiniMax-M3[1m]".to_string(),
             api_key: "sk-test".to_string(),
             created_at: chrono::Utc::now(),
             alias: "cl-m3".to_string(),
-            opencode_model_id: "MiniMax-M3".to_string(),
+            opencode_model_id: "MiniMax-M3[1m]".to_string(),
             kv_cache_enabled: false,
-            context_window_enabled: false,
         };
-        generate_aliases(temp.path(), &[instance], &[template]).unwrap();
-
+        generate_aliases(temp.path(), &[instance], &templates).unwrap();
         let content = std::fs::read_to_string(temp.path().join("aliases.zsh")).unwrap();
-        assert!(!content.contains("export DISABLE_COMPACT=1"));
-        assert!(!content.contains("export CLAUDE_CODE_MAX_CONTEXT_TOKENS"));
-        assert!(!content.contains("export CLAUDE_CODE_AUTO_COMPACT_WINDOW"));
+        assert!(
+            content.contains("CLAUDE_CODE_AUTO_COMPACT_WINDOW=1000000"),
+            "M3[1m] env_overrides 应硬编码 CLAUDE_CODE_AUTO_COMPACT_WINDOW=1000000，实际:\n{content}"
+        );
+    }
+
+    /// build_env 不再注入 DISABLE_COMPACT / CLAUDE_CODE_MAX_CONTEXT_TOKENS（机制废弃）
+    #[test]
+    fn test_aliases_do_not_contain_disabled_compact_var() {
+        use crate::templates::register_templates;
+        let temp = TempDir::new().unwrap();
+        let templates = register_templates();
+        let instance = ProviderInstance {
+            id: "minimax-MiniMax-M3[1m]-cl-m3".to_string(),
+            template_id: "minimax".to_string(),
+            model_id: "MiniMax-M3[1m]".to_string(),
+            api_key: "sk-test".to_string(),
+            created_at: chrono::Utc::now(),
+            alias: "cl-m3".to_string(),
+            opencode_model_id: "MiniMax-M3[1m]".to_string(),
+            kv_cache_enabled: false,
+        };
+        generate_aliases(temp.path(), &[instance], &templates).unwrap();
+        let content = std::fs::read_to_string(temp.path().join("aliases.zsh")).unwrap();
+        // DISABLE_COMPACT 不应被 build_env 注入（旧 auto-inject 机制已废弃）
+        assert!(
+            !content.contains("DISABLE_COMPACT="),
+            "aliases.zsh 不应含 DISABLE_COMPACT=（auto-inject 机制已废弃），实际:\n{content}"
+        );
+        assert!(
+            !content.contains("CLAUDE_CODE_MAX_CONTEXT_TOKENS="),
+            "aliases.zsh 不应含 CLAUDE_CODE_MAX_CONTEXT_TOKENS=，实际:\n{content}"
+        );
     }
 
     #[test]
@@ -563,7 +527,6 @@ mod tests {
                 name: "MiniMax M2.7 Highspeed".to_string(),
                 env_overrides: HashMap::new(),
                 opencode_model_id: "MiniMax-M2.7-highspeed".to_string(),
-                context_window: None,
             }],
             opencode_provider_id: "minimax-cn".to_string(),
             opencode_npm: "@ai-sdk/anthropic".to_string(),
@@ -580,7 +543,6 @@ mod tests {
             alias: "cl-mini".to_string(),
             opencode_model_id: "MiniMax-M2.7-highspeed".to_string(),
             kv_cache_enabled: false,
-            context_window_enabled: false,
         };
         generate_aliases(temp.path(), &[instance], &[template]).unwrap();
 
@@ -635,7 +597,6 @@ mod tests {
                 name: "MiniMax M2.7 Highspeed".to_string(),
                 env_overrides: HashMap::new(),
                 opencode_model_id: "MiniMax-M2.7-highspeed".to_string(),
-                context_window: None,
             }],
             opencode_provider_id: "minimax-cn".to_string(),
             opencode_npm: "@ai-sdk/anthropic".to_string(),
@@ -652,7 +613,6 @@ mod tests {
             alias: "cl-mini".to_string(),
             opencode_model_id: "MiniMax-M2.7-highspeed".to_string(),
             kv_cache_enabled: false,
-            context_window_enabled: false,
         };
         generate_aliases(temp.path(), &[instance], &[template]).unwrap();
 
@@ -771,7 +731,6 @@ mod tests {
                 name: model_id.to_string(),
                 env_overrides: HashMap::new(),
                 opencode_model_id: model_id.to_string(),
-                context_window: None,
             }],
             opencode_provider_id: String::new(),
             opencode_npm: String::new(),
@@ -788,7 +747,6 @@ mod tests {
             alias: alias.to_string(),
             opencode_model_id: model_id.to_string(),
             kv_cache_enabled: false,
-            context_window_enabled: false,
         };
         (template, instance)
     }

@@ -22,8 +22,6 @@ pub struct ProviderInstance {
     pub opencode_model_id: String,
     /// 是否启用 KV Cache 优化（默认 false）
     pub kv_cache_enabled: bool,
-    /// 是否启用扩展上下文窗口（仅当 model 的 context_window 为 Some 时有效）
-    pub context_window_enabled: bool,
 }
 
 /// alias 校验：只能小写字母、数字、-、_，长度 1-32，不能为空，不能有空白或大写
@@ -37,7 +35,9 @@ pub fn validate_alias(alias: &str) -> Result<(), AppError> {
         return Err(AppError::InvalidAlias("alias 不能为空".to_string()));
     }
     if alias.len() > 32 {
-        return Err(AppError::InvalidAlias("alias 长度不能超过 32 字符".to_string()));
+        return Err(AppError::InvalidAlias(
+            "alias 长度不能超过 32 字符".to_string(),
+        ));
     }
     if !alias
         .chars()
