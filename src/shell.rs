@@ -24,7 +24,6 @@ pub fn render_aliases(instances: &[ProviderInstance], templates: &[ProviderTempl
         let function_def = format_function(
             &instance.alias,
             &env,
-            &all_env_vars,
             instance.kv_cache_enabled,
         );
         lines.push(function_def);
@@ -190,24 +189,21 @@ fn format_print_env_helper(all_env_vars: &[String]) -> String {
 fn format_function(
     name: &str,
     env: &HashMap<String, String>,
-    unset_vars: &[String],
     kv_cache_enabled: bool,
 ) -> String {
-    // 始终 unset 所有 provider 相关的 env，包括 ANTHROPIC_BASE_URL；
-    // 防止上次 cl-* 调用残留到父 shell 后污染本次调用。
-    let unset_line = format!("  unset {}", unset_vars.join(" "));
-
-    // 总是 export 自身 default —— 函数不读取父 shell 的值。
+    // subshell 内的 export —— 父 shell 不受影响（POSIX 隔离）。
+    // subshell exit 后所有 export 销毁；用户 ~/.zshrc 设的同名变量保持不变。
+    // 排序后输出，保持生成的 aliases.zsh diff 稳定。
     let mut export_lines: Vec<String> = env
         .iter()
-        .map(|(k, v)| format!("  export {}={}", k, shell_escape(v)))
+        .map(|(k, v)| format!("    export {}={}", k, shell_escape(v)))
         .collect();
     export_lines.sort();
     let export_block = export_lines.join("\n");
 
     // ys-proxy 通过命令前缀方式把 CC_SWITCH_PROXY_URL 注入到本次调用；
-    // 若命令前缀设置了它，则覆盖 ANTHROPIC_BASE_URL。
-    // CC_SWITCH_PROXY_URL 不在 unset_vars 中，所以它在整个函数体内可见。
+    // subshell fork 时 inherit 父 shell 的 CC_SWITCH_PROXY_URL，
+    // 故此条件判断在 subshell 内仍生效。
     // 限制为 localhost / 127.0.0.1，避免父 shell 中误 export 的 sentinel
     // 把请求路由到任意 host。
     let proxy_override_line = PROXY_OVERRIDE_LINE;
@@ -219,8 +215,8 @@ fn format_function(
     };
 
     format!(
-        "function {} {{\n{}\n{}\n{}\n  __cc_switch_print_env {}\n  {}\n}}",
-        name, unset_line, export_block, proxy_override_line, name, claude_cmd
+        "function {} {{\n  (\n{}\n{}\n    __cc_switch_print_env {}\n    {}\n  )\n}}",
+        name, export_block, proxy_override_line, name, claude_cmd
     )
 }
 
@@ -243,7 +239,7 @@ pub(crate) fn shell_escape(s: &str) -> String {
 /// 显式限制 sentinel 取值为 `http://localhost:*` / `http://127.0.0.1:*`：
 /// 父 shell 中如果误 export 了非本地 URL（例如调试脚本遗留），
 /// 不会被 cl-* 函数采用，请求仍走 provider 默认值。
-const PROXY_OVERRIDE_LINE: &str = "  [[ $CC_SWITCH_PROXY_URL == http://localhost:* || $CC_SWITCH_PROXY_URL == http://127.0.0.1:* ]] && export ANTHROPIC_BASE_URL=\"$CC_SWITCH_PROXY_URL\"";
+const PROXY_OVERRIDE_LINE: &str = "    [[ $CC_SWITCH_PROXY_URL == http://localhost:* || $CC_SWITCH_PROXY_URL == http://127.0.0.1:* ]] && export ANTHROPIC_BASE_URL=\"$CC_SWITCH_PROXY_URL\"";
 
 /// 检查 zshrc 文件是否包含 source ~/.cc-switch-tui/aliases.zsh
 pub fn ensure_zshrc_source(zshrc_path: &std::path::Path) -> std::io::Result<bool> {
