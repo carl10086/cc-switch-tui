@@ -1093,6 +1093,82 @@ mod tests {
     }
 
     #[test]
+    fn test_function_body_subshell_reads_ys_proxy_sentinel() {
+        // 验证 subshell 能读到父 shell 的 CC_SWITCH_PROXY_URL sentinel，
+        // 且 PROXY_OVERRIDE_LINE 条件判断在 subshell 内生效 —— 把
+        // ANTHROPIC_BASE_URL 覆盖为本地 proxy URL。
+        //
+        // 与 test_ys_proxy_sentinel_overrides_anthropic_base_url 不同：本测试
+        // 不通过 ys-proxy wrapper，而是用户预先 export CC_SWITCH_PROXY_URL，
+        // 直接调 cl-mini —— 更精确隔离 subshell 读 sentinel 的能力。
+        if std::process::Command::new("zsh")
+            .arg("--version")
+            .output()
+            .is_err()
+        {
+            return;
+        }
+
+        let temp = TempDir::new().unwrap();
+        let (tmpl, inst) = fixture(
+            "minimax",
+            "MiniMax-M2.7-highspeed",
+            "cl-mini",
+            "https://api.minimaxi.com/anthropic",
+        );
+        generate_aliases(temp.path(), &[inst], &[tmpl]).unwrap();
+
+        let bin_dir = temp.path().join("bin");
+        std::fs::create_dir_all(&bin_dir).unwrap();
+        let claude_stub = bin_dir.join("claude");
+        std::fs::write(
+            &claude_stub,
+            "#!/bin/zsh\necho \"CLAUDE_URL=$ANTHROPIC_BASE_URL\"\nexit 0\n",
+        )
+        .unwrap();
+        std::fs::set_permissions(
+            &claude_stub,
+            std::os::unix::fs::PermissionsExt::from_mode(0o755),
+        )
+        .unwrap();
+
+        let out_file = temp.path().join("out.txt");
+        let aliases_path = temp.path().join("aliases.zsh");
+        let script = format!(
+            "emulate zsh\n\
+             export PATH=\"{bin}:$PATH\"\n\
+             source {aliases}\n\
+             export CC_SWITCH_PROXY_URL=http://localhost:7480/ys-proxy/cl-mini\n\
+             cl-mini >{out} 2>&1\n",
+            bin = bin_dir.display(),
+            aliases = aliases_path.display(),
+            out = out_file.display(),
+        );
+        std::fs::write(temp.path().join("run.zsh"), script).unwrap();
+        let out = std::process::Command::new("zsh")
+            .arg(temp.path().join("run.zsh"))
+            .output()
+            .expect("zsh should be available");
+        assert!(
+            out.status.success(),
+            "zsh 执行失败: {}",
+            String::from_utf8_lossy(&out.stderr)
+        );
+
+        let combined = std::fs::read_to_string(&out_file).unwrap();
+        assert!(
+            combined.contains("CLAUDE_URL=http://localhost:7480/ys-proxy/cl-mini"),
+            "subshell 内应读到 CC_SWITCH_PROXY_URL 并覆盖 ANTHROPIC_BASE_URL，实际:\n{combined}"
+        );
+        // 同时父 shell 不应残留 CC_SWITCH_PROXY_URL（用户 export 的 sentinel 在
+        // cl-* 返回后仍在 —— 这是用户自己设的，不是泄漏。但 cl-* 不应把它再次写入）
+        assert!(
+            std::env::var("CC_SWITCH_PROXY_URL").is_err(),
+            "cl-* 不应在父 shell 残留 CC_SWITCH_PROXY_URL（test runner 父进程也不应被污染）"
+        );
+    }
+
+    #[test]
     fn test_ys_proxy_sentinel_overrides_anthropic_base_url() {
         // 真实 zsh 回归：ys-proxy cl-mini 应把本地代理 URL 传给 claude，
         // 且调用结束后父 shell 不残留 CC_SWITCH_PROXY_URL。
