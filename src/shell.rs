@@ -1031,6 +1031,68 @@ mod tests {
     }
 
     #[test]
+    fn test_function_body_preserves_zshrc_exports() {
+        // 验证用户在父 shell export 的 MINIMAX_API_KEY（模拟 ~/.zshrc 设的值）
+        // 不被 cl-* 调用破坏。subshell 内 export 不应影响父 shell 同名变量。
+        if std::process::Command::new("zsh")
+            .arg("--version")
+            .output()
+            .is_err()
+        {
+            return;
+        }
+
+        let temp = TempDir::new().unwrap();
+        let (tmpl, inst) = fixture(
+            "minimax",
+            "MiniMax-M2.7-highspeed",
+            "cl-mini",
+            "https://api.minimaxi.com/anthropic",
+        );
+        generate_aliases(temp.path(), &[inst], &[tmpl]).unwrap();
+
+        let bin_dir = temp.path().join("bin");
+        std::fs::create_dir_all(&bin_dir).unwrap();
+        let claude_stub = bin_dir.join("claude");
+        std::fs::write(&claude_stub, "#!/bin/zsh\necho \"OK\"\nexit 0\n").unwrap();
+        std::fs::set_permissions(
+            &claude_stub,
+            std::os::unix::fs::PermissionsExt::from_mode(0o755),
+        )
+        .unwrap();
+
+        let result_out = temp.path().join("after.txt");
+        let aliases_path = temp.path().join("aliases.zsh");
+        let script = format!(
+            "emulate zsh\n\
+             export MINIMAX_API_KEY=zshrc_value_should_survive\n\
+             export PATH=\"{bin}:$PATH\"\n\
+             source {aliases}\n\
+             cl-mini >/dev/null 2>&1\n\
+             echo \"AFTER=$MINIMAX_API_KEY\" >{result}\n",
+            bin = bin_dir.display(),
+            aliases = aliases_path.display(),
+            result = result_out.display(),
+        );
+        std::fs::write(temp.path().join("run.zsh"), script).unwrap();
+        let out = std::process::Command::new("zsh")
+            .arg(temp.path().join("run.zsh"))
+            .output()
+            .expect("zsh should be available");
+        assert!(
+            out.status.success(),
+            "zsh 执行失败: {}",
+            String::from_utf8_lossy(&out.stderr)
+        );
+
+        let result = std::fs::read_to_string(&result_out).unwrap();
+        assert!(
+            result.contains("AFTER=zshrc_value_should_survive"),
+            "cl-* 调用后用户 ~/.zshrc 设的 MINIMAX_API_KEY 应保持原值，实际:\n{result}"
+        );
+    }
+
+    #[test]
     fn test_ys_proxy_sentinel_overrides_anthropic_base_url() {
         // 真实 zsh 回归：ys-proxy cl-mini 应把本地代理 URL 传给 claude，
         // 且调用结束后父 shell 不残留 CC_SWITCH_PROXY_URL。
