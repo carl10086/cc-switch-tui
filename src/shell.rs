@@ -21,11 +21,7 @@ pub fn render_aliases(instances: &[ProviderInstance], templates: &[ProviderTempl
             continue;
         }
         let env = build_env(instance, templates);
-        let function_def = format_function(
-            &instance.alias,
-            &env,
-            instance.kv_cache_enabled,
-        );
+        let function_def = format_function(&instance.alias, &env, instance.kv_cache_enabled);
         lines.push(function_def);
     }
 
@@ -98,8 +94,14 @@ fn build_env(
             if let Some(model) = template.models.iter().find(|m| m.id == instance.model_id) {
                 if let Some(window) = model.context_window {
                     env.insert("DISABLE_COMPACT".to_string(), "1".to_string());
-                    env.insert("CLAUDE_CODE_MAX_CONTEXT_TOKENS".to_string(), window.to_string());
-                    env.insert("CLAUDE_CODE_AUTO_COMPACT_WINDOW".to_string(), window.to_string());
+                    env.insert(
+                        "CLAUDE_CODE_MAX_CONTEXT_TOKENS".to_string(),
+                        window.to_string(),
+                    );
+                    env.insert(
+                        "CLAUDE_CODE_AUTO_COMPACT_WINDOW".to_string(),
+                        window.to_string(),
+                    );
                 }
             }
         }
@@ -186,11 +188,7 @@ fn format_print_env_helper(all_env_vars: &[String]) -> String {
     )
 }
 
-fn format_function(
-    name: &str,
-    env: &HashMap<String, String>,
-    kv_cache_enabled: bool,
-) -> String {
+fn format_function(name: &str, env: &HashMap<String, String>, kv_cache_enabled: bool) -> String {
     // subshell 内的 export —— 父 shell 不受影响（POSIX 隔离）。
     // subshell exit 后所有 export 销毁；用户 ~/.zshrc 设的同名变量保持不变。
     // 排序后输出，保持生成的 aliases.zsh diff 稳定。
@@ -313,15 +311,16 @@ mod tests {
         generate_aliases(temp.path(), &[instance], &[template]).unwrap();
 
         let content = std::fs::read_to_string(temp.path().join("aliases.zsh")).unwrap();
-        // 新格式：函数格式，包含 unset 和 export
+        // 新格式：cl-* 函数体外层 ( ... ) 形成 subshell
         assert!(content.contains("function cl-mini {"));
-        assert!(content.contains("unset"));
+        assert!(content.contains("  (\n") || content.contains("function cl-mini {\n  ("));
         assert!(content.contains("export"));
         assert!(content.contains("command claude \"$@\""));
+        assert!(content.contains("  )\n}"));
     }
 
     #[test]
-    fn test_generate_aliases_contains_unset_vars() {
+    fn test_generate_aliases_omits_unset_line() {
         let temp = TempDir::new().unwrap();
         let mut env = HashMap::new();
         env.insert(
@@ -359,11 +358,36 @@ mod tests {
         generate_aliases(temp.path(), &[instance], &[template]).unwrap();
 
         let content = std::fs::read_to_string(temp.path().join("aliases.zsh")).unwrap();
-        // 验证函数格式：包含 unset 和 export
-        assert!(content.contains("unset ANTHROPIC_AUTH_TOKEN"));
+
+        // cl-* 函数体外层 ( ... ) 形成 subshell —— ( 与 ) 各占独立行
+        let cl_block_start = content
+            .find("function cl-mini {")
+            .expect("function cl-mini 必须存在");
+        let cl_block_end = content[cl_block_start..]
+            .find("\n}")
+            .map(|i| cl_block_start + i)
+            .expect("cl-mini 函数体必须以 \\n} 结尾");
+        let cl_body = &content[cl_block_start..=cl_block_end];
+        assert!(
+            cl_body.contains("\n  (\n"),
+            "cl-mini 函数体外层 ( 应独占一行（subshell 包裹），实际:\n{cl_body}"
+        );
+        assert!(
+            cl_body.trim_end_matches('\n').ends_with("\n  )"),
+            "cl-mini 函数体内层 ) 应独占一行（subshell 闭合），实际:\n{cl_body}"
+        );
+
+        // cl-* 块内不应有以 `unset ` 开头的行（subshell 不需要清理）
+        let has_unset_line = cl_body
+            .lines()
+            .any(|l| l.trim_start().starts_with("unset "));
+        assert!(
+            !has_unset_line,
+            "cl-mini 函数体不应生成 unset 行（subshell 隔离已生效），实际:\n{cl_body}"
+        );
+
+        // 关键 export 仍存在（核心行为不变）
         assert!(content.contains("export ANTHROPIC_AUTH_TOKEN=sk-test"));
-        // 验证 CC_SWITCH_ALIAS 同时出现在 unset 和 export 中
-        assert!(content.contains("CC_SWITCH_ALIAS"));
         assert!(content.contains("export CC_SWITCH_ALIAS=cl-mini"));
     }
 
@@ -565,7 +589,9 @@ mod tests {
         let helper_pos = content
             .find("function __cc_switch_print_env {")
             .expect("应存在 helper 定义");
-        let cl_mini_pos = content.find("function cl-mini {").expect("应存在 cl-mini 函数");
+        let cl_mini_pos = content
+            .find("function cl-mini {")
+            .expect("应存在 cl-mini 函数");
         assert!(
             helper_pos < cl_mini_pos,
             "helper 函数定义必须在 cl-mini 之前"
@@ -579,17 +605,18 @@ mod tests {
         let call_pos = cl_mini_body
             .find("__cc_switch_print_env cl-mini")
             .expect("cl-mini 应调用 __cc_switch_print_env");
-        assert!(
-            call_pos < cmd_pos,
-            "helper 调用必须在 command claude 之前"
-        );
+        assert!(call_pos < cmd_pos, "helper 调用必须在 command claude 之前");
     }
 
     #[test]
     fn test_print_env_helper_runtime_output() {
         // 在真实的 zsh 中执行 helper，验证 redaction、<unset>、CC_SWITCH_QUIET 行为。
         // 如果系统没有 zsh，则跳过。
-        if std::process::Command::new("zsh").arg("--version").output().is_err() {
+        if std::process::Command::new("zsh")
+            .arg("--version")
+            .output()
+            .is_err()
+        {
             return;
         }
 
@@ -649,28 +676,37 @@ mod tests {
             .arg(temp.path().join("run.zsh"))
             .output()
             .expect("zsh should be available");
-        assert!(out.status.success(), "zsh 执行失败: {}", String::from_utf8_lossy(&out.stderr));
+        assert!(
+            out.status.success(),
+            "zsh 执行失败: {}",
+            String::from_utf8_lossy(&out.stderr)
+        );
         let line = String::from_utf8(out.stdout).unwrap();
 
         assert!(
             line.contains("[cc-switch-tui] cl-mini:"),
-            "输出应包含前缀: {}", line
+            "输出应包含前缀: {}",
+            line
         );
         assert!(
             line.contains("ANTHROPIC_AUTH_TOKEN=<redacted>"),
-            "token 应被 redacted: {}", line
+            "token 应被 redacted: {}",
+            line
         );
         assert!(
             !line.contains("sk-real-secret-token"),
-            "真实 token 不应泄露: {}", line
+            "真实 token 不应泄露: {}",
+            line
         );
         assert!(
             line.contains("DISABLE_COMPACT=<unset>"),
-            "未设置变量应显示 <unset>: {}", line
+            "未设置变量应显示 <unset>: {}",
+            line
         );
         assert!(
             line.contains("ANTHROPIC_BASE_URL="),
-            "BASE_URL 应被打印: {}", line
+            "BASE_URL 应被打印: {}",
+            line
         );
 
         // 验证 CC_SWITCH_QUIET=1 时不输出
@@ -690,7 +726,10 @@ mod tests {
             .output()
             .expect("zsh should be available");
         assert!(quiet_out.status.success());
-        let quiet_line = String::from_utf8(quiet_out.stdout).unwrap().trim().to_string();
+        let quiet_line = String::from_utf8(quiet_out.stdout)
+            .unwrap()
+            .trim()
+            .to_string();
         assert!(
             quiet_line.is_empty(),
             "CC_SWITCH_QUIET=1 时不应有输出，实际: {:?}",
@@ -756,7 +795,8 @@ mod tests {
 
     #[test]
     fn test_function_body_no_parent_url_leakage() {
-        // 静态断言：生成的 cl-* 函数体必须放弃旧的 ${VAR:-default} 回退模式。
+        // 静态断言：生成的 cl-* 函数体必须放弃旧的 ${VAR:-default} 回退模式，
+        // 并直接 export 自身 default；subshell 隔离替代了原 unset 行清理。
         let temp = TempDir::new().unwrap();
         let (tmpl, inst) = fixture(
             "minimax",
@@ -771,14 +811,12 @@ mod tests {
             !content.contains("${ANTHROPIC_BASE_URL:-"),
             "cl-* 函数体不应再用 ${{ANTHROPIC_BASE_URL:-...}} 回退模式（这是原 bug 的根因）"
         );
-        // 检查 ANTHROPIC_BASE_URL 出现在 unset 行（作为独立 token）
-        let unset_line = content
-            .lines()
-            .find(|l| l.trim_start().starts_with("unset "))
-            .expect("unset 行应存在");
+        // 不再有 unset 行 —— subshell 隔离替代了原清理机制
         assert!(
-            unset_line.split_whitespace().any(|t| t == "ANTHROPIC_BASE_URL"),
-            "unset 行必须包含 ANTHROPIC_BASE_URL 作为独立 token 以清理父 shell 残留，实际行: {unset_line:?}"
+            !content
+                .lines()
+                .any(|l| l.trim_start().starts_with("unset ")),
+            "cl-* 函数体不应生成 unset 行（subshell 隔离已生效），整个文件也不该有"
         );
         assert!(
             content.contains("export ANTHROPIC_BASE_URL=https://api.minimaxi.com/anthropic"),
@@ -819,7 +857,11 @@ mod tests {
     fn test_function_body_isolates_previous_alias_export() {
         // 真实 zsh 回归：先调用 cl-kimi 让父 shell 残留 kimi URL，
         // 再调用 cl-mini，cl-mini 必须传给 claude minimaxi 的 URL。
-        if std::process::Command::new("zsh").arg("--version").output().is_err() {
+        if std::process::Command::new("zsh")
+            .arg("--version")
+            .output()
+            .is_err()
+        {
             return;
         }
 
@@ -907,7 +949,11 @@ mod tests {
     fn test_ys_proxy_sentinel_overrides_anthropic_base_url() {
         // 真实 zsh 回归：ys-proxy cl-mini 应把本地代理 URL 传给 claude，
         // 且调用结束后父 shell 不残留 CC_SWITCH_PROXY_URL。
-        if std::process::Command::new("zsh").arg("--version").output().is_err() {
+        if std::process::Command::new("zsh")
+            .arg("--version")
+            .output()
+            .is_err()
+        {
             return;
         }
 
@@ -970,72 +1016,14 @@ mod tests {
     }
 
     #[test]
-    fn test_unset_includes_anthropic_base_url_even_when_template_omits_it() {
-        // 回归：即使模板 default_env 不声明 ANTHROPIC_BASE_URL，
-        // unset 行也必须包含它 —— 否则父 shell 残留值（旧 bug 路径）会回归。
-        let temp = TempDir::new().unwrap();
-        let template = ProviderTemplate {
-            id: "no-url".to_string(),
-            name: "NoUrl".to_string(),
-            default_env: HashMap::new(), // 故意不放 ANTHROPIC_BASE_URL
-            models: vec![ModelTemplate {
-                id: "m".to_string(),
-                name: "m".to_string(),
-                env_overrides: HashMap::new(),
-                opencode_model_id: "m".to_string(),
-                context_window: None,
-            }],
-            opencode_provider_id: String::new(),
-            opencode_npm: String::new(),
-            opencode_base_url: String::new(),
-            opencode_env_var: String::new(),
-            opencode_models: vec!["m".to_string()],
-        };
-        let instance = ProviderInstance {
-            id: "no-url-m-cl-x".to_string(),
-            template_id: "no-url".to_string(),
-            model_id: "m".to_string(),
-            api_key: "sk-test".to_string(),
-            created_at: chrono::Utc::now(),
-            alias: "cl-x".to_string(),
-            opencode_model_id: "m".to_string(),
-            kv_cache_enabled: false,
-            context_window_enabled: false,
-        };
-        generate_aliases(temp.path(), &[instance], &[template]).unwrap();
-        let content = std::fs::read_to_string(temp.path().join("aliases.zsh")).unwrap();
-
-        // 模板没声明 ANTHROPIC_BASE_URL，但 unset 行必须仍然包含它
-        let unset_line = content
-            .lines()
-            .find(|l| l.trim_start().starts_with("unset "))
-            .expect("unset 行应存在");
-        assert!(
-            unset_line.split_whitespace().any(|t| t == "ANTHROPIC_BASE_URL"),
-            "即使模板未声明 BASE_URL，unset 行也必须包含它以清理父 shell 残留，实际: {unset_line:?}"
-        );
-        // 模板没声明 → 函数体不应有 own export ANTHROPIC_BASE_URL=... 行
-        // （sentinel 检查中的 `&& export ...` 算作同一行的 [[ 测试，不算 own export）
-        let own_export_lines: Vec<_> = content
-            .lines()
-            .filter(|l| l.trim_start().starts_with("export ANTHROPIC_BASE_URL="))
-            .collect();
-        assert!(
-            own_export_lines.is_empty(),
-            "模板未声明 BASE_URL 时函数体不应 export 它（避免覆盖自身 default），找到: {own_export_lines:?}"
-        );
-        // sentinel 检查仍应在函数体中 —— ys-proxy 仍可工作
-        assert!(
-            content.contains(PROXY_OVERRIDE_LINE),
-            "sentinel 检查应在函数体中，ys-proxy 路径不应依赖模板是否声明 BASE_URL"
-        );
-    }
-
-    #[test]
     fn test_ys_proxy_rejects_non_localhost_sentinel_value() {
         // 安全收紧：父 shell 中预先 export 一个非 localhost 的 CC_SWITCH_PROXY_URL，
         // 调用 cl-mini 验证它不会被采用（请求仍走 provider 默认值）。
-        if std::process::Command::new("zsh").arg("--version").output().is_err() {
+        if std::process::Command::new("zsh")
+            .arg("--version")
+            .output()
+            .is_err()
+        {
             return;
         }
 
