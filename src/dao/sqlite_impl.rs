@@ -608,8 +608,10 @@ mod tests {
     }
 
     #[test]
-    fn test_migration_is_idempotent() {
-        // 启动两次：第二次无副作用（行数不变 / 列不变 / 数据不变）
+    fn test_migration_runs_once_on_old_db_and_is_idempotent() {
+        // 旧 DB 状态：旧 model_id 行 + 旧 context_window_enabled 列同时存在
+        // —— 这是生产环境升级路径的真实场景。
+        // 验证：第一次启动同时触发 UPDATE rename + DROP COLUMN；第二次启动幂等无副作用。
         let temp = TempDir::new().unwrap();
         let db_path = temp.path().join("test.db").to_string_lossy().to_string();
         let conn = Connection::open(&db_path).unwrap();
@@ -630,26 +632,39 @@ mod tests {
         .unwrap();
         conn.execute(
             "INSERT INTO instances (id, template_id, model_id, api_key, created_at, alias, opencode_model_id, kv_cache_enabled, context_window_enabled)
-             VALUES ('test-1', 'minimax', 'MiniMax-M3[1m]', 'key', '2024-01-01T00:00:00Z', 'cl-test', '', 0, 0)",
+             VALUES ('test-1', 'minimax', 'MiniMax-M3', 'key', '2024-01-01T00:00:00Z', 'cl-test', '', 0, 1)",
             [],
         ).unwrap();
         drop(conn);
 
-        // 第一次启动
+        // 第一次启动：rename + drop 都应执行
         let templates = register_templates();
         let dao1 = SqliteDaoImpl::new(&db_path, templates.clone()).unwrap();
-        let row1_count = dao1.list_instances().len();
-        let row1_model_id = dao1.get_instance("test-1").unwrap().model_id.clone();
-
-        // 第二次启动（应幂等）
-        let dao2 = SqliteDaoImpl::new(&db_path, templates).unwrap();
-        let row2_count = dao2.list_instances().len();
-        let row2_model_id = dao2.get_instance("test-1").unwrap().model_id.clone();
-
-        assert_eq!(row1_count, row2_count, "行数应在两次启动间保持不变");
         assert_eq!(
-            row1_model_id, row2_model_id,
-            "model_id 应在两次启动间保持不变"
+            dao1.get_instance("test-1").unwrap().model_id,
+            "MiniMax-M3[1m]",
+            "第一次启动后 model_id 应从 MiniMax-M3 rename 到 MiniMax-M3[1m]"
+        );
+        let columns_after_first: Vec<String> = Connection::open(&db_path)
+            .unwrap()
+            .prepare("SELECT name FROM pragma_table_info('instances')")
+            .unwrap()
+            .query_map([], |row| row.get(0))
+            .unwrap()
+            .collect::<Result<_, _>>()
+            .unwrap();
+        assert!(
+            !columns_after_first.contains(&"context_window_enabled".to_string()),
+            "第一次启动后 context_window_enabled 列应被 DROP；当前列: {columns_after_first:?}"
+        );
+
+        // 第二次启动：幂等无副作用
+        let dao2 = SqliteDaoImpl::new(&db_path, templates).unwrap();
+        assert_eq!(dao2.list_instances().len(), 1, "第二次启动后行数应保持不变");
+        assert_eq!(
+            dao2.get_instance("test-1").unwrap().model_id,
+            "MiniMax-M3[1m]",
+            "第二次启动 model_id 应保持 MiniMax-M3[1m]"
         );
     }
 }

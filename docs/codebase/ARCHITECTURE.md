@@ -231,7 +231,6 @@ pub trait Dao {
     fn rename_instance(&mut self, old_id: &str, new_id: &str, alias: String) -> Result<(), AppError>;
     fn set_opencode_model_id(&mut self, id: &str, opencode_model_id: String) -> Result<(), AppError>;
     fn set_kv_cache_enabled(&mut self, id: &str, enabled: bool) -> Result<(), AppError>;
-    // fn set_context_window_enabled(&mut self, id: &str, enabled: bool) -> Result<(), AppError>; // removed
 }
 ```
 
