@@ -92,7 +92,6 @@ impl From<ImportedInstance> for ProviderInstance {
             created_at: Utc::now(),
             opencode_model_id: i.opencode_model_id,
             kv_cache_enabled: i.kv_cache_enabled,
-            context_window_enabled: false,
         }
     }
 }
@@ -100,9 +99,7 @@ impl From<ImportedInstance> for ProviderInstance {
 /// GET /api/config/export
 /// 导出当前所有 instances 为 JSON（不含 apiKey）。
 /// Content-Disposition: attachment 触发浏览器下载。
-pub async fn export(
-    State(state): State<AppState>,
-) -> Result<axum::response::Response, ApiError> {
+pub async fn export(State(state): State<AppState>) -> Result<axum::response::Response, ApiError> {
     let dao = state.dao.lock().await;
     let instances: Vec<ExportedInstance> =
         dao.list_instances().into_iter().map(Into::into).collect();
@@ -140,7 +137,10 @@ pub async fn import(
     if payload.version != EXPORT_VERSION {
         return Err(ApiError::validation(
             "version",
-            format!("unsupported version {}, expected {}", payload.version, EXPORT_VERSION),
+            format!(
+                "unsupported version {}, expected {}",
+                payload.version, EXPORT_VERSION
+            ),
         ));
     }
 

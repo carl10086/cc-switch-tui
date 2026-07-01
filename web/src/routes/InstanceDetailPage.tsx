@@ -38,7 +38,6 @@ export function InstanceDetailPage() {
         apiKey: instance.apiKey,
         opencodeModelId: instance.opencodeModelId,
         kvCacheEnabled: instance.kvCacheEnabled,
-        contextWindowEnabled: instance.contextWindowEnabled,
       });
       setDirty(false);
     }
@@ -177,29 +176,6 @@ export function InstanceDetailPage() {
           />
           <span>Enable KV Cache optimization</span>
         </label>
-
-        {templates?.find((t) => t.id === instance.templateId)?.models.find((m) => m.id === draft.modelId)?.contextWindow && (
-          <label
-            className="flex items-center gap-2 text-sm"
-            title="Disables all compaction, including manual /compact. Monitor context usage carefully."
-          >
-            <input
-              type="checkbox"
-              checked={draft.contextWindowEnabled ?? false}
-              onChange={(e) => set('contextWindowEnabled', e.target.checked)}
-              className="rounded"
-            />
-            <span>
-              Enable extended context window (
-              {(templates?.find((t) => t.id === instance.templateId)?.models.find((m) => m.id === draft.modelId)?.contextWindow ?? 0) >= 1_000_000
-                ? `${(templates?.find((t) => t.id === instance.templateId)?.models.find((m) => m.id === draft.modelId)?.contextWindow ?? 0) / 1_000_000}M`
-                : (templates?.find((t) => t.id === instance.templateId)?.models.find((m) => m.id === draft.modelId)?.contextWindow ?? 0) >= 1_000
-                  ? `${(templates?.find((t) => t.id === instance.templateId)?.models.find((m) => m.id === draft.modelId)?.contextWindow ?? 0) / 1_000}K`
-                  : templates?.find((t) => t.id === instance.templateId)?.models.find((m) => m.id === draft.modelId)?.contextWindow}{' '}
-              tokens)
-            </span>
-          </label>
-        )}
 
         <div className="flex justify-end gap-2 pt-2">
           <Link

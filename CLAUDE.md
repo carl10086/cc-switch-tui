@@ -34,7 +34,7 @@ make release        # git push tag（需先 make tag VERSION=x.y.z）
 ARCHITECTURE.md 描述"系统怎么工作"；本节规定"什么不能动"。
 
 - **不要修改** `~/.cc-switch-tui/port` 文件的格式 / 语义；端口逻辑集中在 `src/port.rs`。
-- **不要把** provider-specific env（`CLAUDE_CODE_MAX_CONTEXT_TOKENS`、`CLAUDE_CODE_AUTO_COMPACT_WINDOW`、`DISABLE_COMPACT`）**写入 common config**——必须 per-provider 注入，由 `src/shell.rs::build_env` 在 alias 函数体内按 `context_window_enabled` 决策。
+- **不要把** provider-specific env（`CLAUDE_CODE_AUTO_COMPACT_WINDOW`、`ANTHROPIC_MODEL` 等）**写入 common config**——必须 per-provider 注入；context window 相关 env vars 由 model template 的 `env_overrides` 字面量决定（不再走 `instance.context_window_enabled` toggle，字段已废弃）。
 - **不要新增** Crate / npm 依赖而不更新 `docs/codebase/ARCHITECTURE.md` 的 "Pattern Overview" 与对应层 "Key files" 列表。
 - **不要在 PR 中提交** `app.log`、`traces.sqlite`、`dist/`、`web-dist/`、`target/`（已在 `.gitignore` 但需复检）。
 - **不要在** `src/proxy/upstream.rs::send_request` **之外**注入 `Authorization` header——`api_key` 注入是 proxy 唯一职责，handler / DAO 都不该接触。
@@ -50,7 +50,7 @@ ARCHITECTURE.md 描述"系统怎么工作"；本节规定"什么不能动"。
 **对本项目代码的硬约束**（不可妥协）:
 
 1. 上下文相关 env 必须在 provider scope（不要放 common config；不同 provider 窗口大小不同：200K vs 1M）。
-2. 不要依赖 `model` 字段的 `[1m]` 后缀（VS Code 扩展会重置）；用 env 变量 `ANTHROPIC_BASE_URL` / `ANTHROPIC_AUTH_TOKEN` / `ANTHROPIC_MODEL` 组合覆盖。
+2. `model` 字段的 `[1m]` 后缀**仅在 Claude Code 终端场景下可靠**：cc-switch-tui 通过 `ANTHROPIC_MODEL` env 变量在 cl-* 函数体内注入，shell 进程不被重置。**VS Code 扩展场景下 env var 可能被 extension 重置**，需自行验证。当前 follow 官方文档使用 `MiniMax-M3[1m]`（含后缀）。
 3. Provider 切换是 alias 级别（shell function 隔离 env），不要在进程内做 env 覆盖——`ys-proxy` wrapper 在子 shell 中重设 `ANTHROPIC_BASE_URL`，是唯一允许的代理路径。
 
-完整 env 表、`DISABLE_COMPACT=1` + `CLAUDE_CODE_MAX_CONTEXT_TOKENS` 配合机制、已知 Issue（#46416 / #50083 / #57964 / #63471 / #63376 / #62353）保留在 `git log -p CLAUDE.md` 的 v1 历史中可查。
+完整 env 表、已知 Issue（#46416 / #50083 / #57964 / #63471 / #63376 / #62353）保留在 `git log -p CLAUDE.md` 的 v1 历史中可查。`DISABLE_COMPACT=1` + `CLAUDE_CODE_MAX_CONTEXT_TOKENS` 机制已废弃（`instance.context_window_enabled` 字段删除），改由 model template 的 `env_overrides` 字面量提供 `CLAUDE_CODE_AUTO_COMPACT_WINDOW`。

@@ -56,7 +56,4 @@ pub trait Dao {
 
     /// 更新实例的 KV Cache 优化开关
     fn set_kv_cache_enabled(&mut self, id: &str, enabled: bool) -> Result<(), AppError>;
-
-    /// 更新实例的扩展上下文窗口开关
-    fn set_context_window_enabled(&mut self, id: &str, enabled: bool) -> Result<(), AppError>;
 }

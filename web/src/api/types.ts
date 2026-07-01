@@ -7,6 +7,8 @@ export interface HealthResponse {
 
 // 与 Rust src/api/instances.rs::InstanceSummary 对齐
 // 注：apiKey 仅在 detail 接口返回（S2+ 才会加）
+// contextWindowEnabled 字段已废弃：context window 相关 env vars 现在由
+// model template 的 env_overrides 字面量决定，instance 不再 toggle。
 export interface Instance {
   id: string;
   templateId: string;
@@ -14,15 +16,15 @@ export interface Instance {
   modelId: string;
   opencodeModelId: string;
   kvCacheEnabled: boolean;
-  contextWindowEnabled: boolean;
 }
 
 // 与 Rust src/api/templates.rs::TemplateModelSummary 对齐
+// contextWindow 字段已废弃：前端用 inferContextFromModelId(id) 从 model id
+// 后缀（如 [1m]）推断上下文窗口大小；不再通过 API 字段传输。
 export interface TemplateModel {
   id: string;
   name: string;
   opencodeModelId: string;
-  contextWindow?: number;
 }
 
 // 与 Rust src/api/templates.rs::TemplateSummary 对齐

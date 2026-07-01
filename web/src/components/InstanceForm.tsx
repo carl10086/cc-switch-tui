@@ -30,7 +30,6 @@ export function InstanceForm({
     apiKey: initial?.apiKey ?? '',
     opencodeModelId: initial?.opencodeModelId ?? '',
     kvCacheEnabled: initial?.kvCacheEnabled ?? false,
-    contextWindowEnabled: initial?.contextWindowEnabled ?? false,
   });
   const [errors, setErrors] = useState<Record<string, string>>({});
 
@@ -59,11 +58,6 @@ export function InstanceForm({
       modelId: currentTemplate.models[0]?.id ?? '',
     }));
   }, [currentTemplate, values.modelId]);
-
-  const currentModel = useMemo(
-    () => currentTemplate?.models.find((m) => m.id === values.modelId),
-    [currentTemplate, values.modelId],
-  );
 
   function set<K extends keyof InstanceFormValues>(key: K, value: InstanceFormValues[K]) {
     setValues((v) => ({ ...v, [key]: value }));
@@ -161,29 +155,6 @@ export function InstanceForm({
         />
         <span>Enable KV Cache optimization</span>
       </label>
-
-      {currentModel?.contextWindow && (
-        <label
-          className="flex items-center gap-2 text-sm"
-          title="Disables all compaction, including manual /compact. Monitor context usage carefully."
-        >
-          <input
-            type="checkbox"
-            checked={values.contextWindowEnabled}
-            onChange={(e) => set('contextWindowEnabled', e.target.checked)}
-            className="rounded"
-          />
-          <span>
-            Enable extended context window (
-            {currentModel.contextWindow >= 1_000_000
-              ? `${currentModel.contextWindow / 1_000_000}M`
-              : currentModel.contextWindow >= 1_000
-                ? `${currentModel.contextWindow / 1_000}K`
-                : currentModel.contextWindow}{' '}
-            tokens)
-          </span>
-        </label>
-      )}
 
       {generalServerError && (
         <div className="text-sm text-red-600">{generalServerError}</div>

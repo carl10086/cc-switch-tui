@@ -19,22 +19,27 @@ fn minimax_template() -> ProviderTemplate {
         "1".to_string(),
     );
 
+    // 跟随 MiniMax 官方 2026 Claude Code 集成文档：
+    //   - model id 使用 MiniMax-M3[1m]（含 [1m] 后缀表示 1M 上下文）
+    //   - CLAUDE_CODE_AUTO_COMPACT_WINDOW=1000000 与 1M 窗口对齐
+    // 配置完全由 model id 决定（env_overrides 字面量），不再走 instance toggle。
     let mut env_overrides_m3 = HashMap::new();
-    env_overrides_m3.insert(
-        "ANTHROPIC_MODEL".to_string(),
-        "MiniMax-M3".to_string(),
-    );
+    env_overrides_m3.insert("ANTHROPIC_MODEL".to_string(), "MiniMax-M3[1m]".to_string());
     env_overrides_m3.insert(
         "ANTHROPIC_DEFAULT_HAIKU_MODEL".to_string(),
-        "MiniMax-M3".to_string(),
+        "MiniMax-M3[1m]".to_string(),
     );
     env_overrides_m3.insert(
         "ANTHROPIC_DEFAULT_OPUS_MODEL".to_string(),
-        "MiniMax-M3".to_string(),
+        "MiniMax-M3[1m]".to_string(),
     );
     env_overrides_m3.insert(
         "ANTHROPIC_DEFAULT_SONNET_MODEL".to_string(),
-        "MiniMax-M3".to_string(),
+        "MiniMax-M3[1m]".to_string(),
+    );
+    env_overrides_m3.insert(
+        "CLAUDE_CODE_AUTO_COMPACT_WINDOW".to_string(),
+        "1000000".to_string(),
     );
 
     let mut env_overrides_m27 = HashMap::new();
@@ -61,18 +66,16 @@ fn minimax_template() -> ProviderTemplate {
         default_env,
         models: vec![
             ModelTemplate {
-                id: "MiniMax-M3".to_string(),
-                name: "MiniMax M3".to_string(),
+                id: "MiniMax-M3[1m]".to_string(),
+                name: "MiniMax M3 [1m]".to_string(),
                 env_overrides: env_overrides_m3,
-                opencode_model_id: "MiniMax-M3".to_string(),
-                context_window: Some(1_000_000),
+                opencode_model_id: "MiniMax-M3[1m]".to_string(),
             },
             ModelTemplate {
                 id: "MiniMax-M2.7-highspeed".to_string(),
                 name: "MiniMax M2.7 Highspeed".to_string(),
                 env_overrides: env_overrides_m27,
                 opencode_model_id: "MiniMax-M2.7-highspeed".to_string(),
-                context_window: None,
             },
         ],
         opencode_provider_id: "minimax-cn".to_string(),
@@ -81,7 +84,7 @@ fn minimax_template() -> ProviderTemplate {
         opencode_env_var: "MINIMAX_API_KEY".to_string(),
         opencode_models: vec![
             "MiniMax-M2.7-highspeed".to_string(),
-            "MiniMax-M3".to_string(),
+            "MiniMax-M3[1m]".to_string(),
         ],
     }
 }
@@ -98,10 +101,7 @@ fn kimi_template() -> ProviderTemplate {
     // model 字段；后端会自动映射到最新发布的模型。与 MiniMax 模式对齐，显式注入
     // 4 个 ANTHROPIC_MODEL*，避免 Claude Code 用默认 model 名发请求被 Kimi 后端拒识。
     let mut env_overrides = HashMap::new();
-    env_overrides.insert(
-        "ANTHROPIC_MODEL".to_string(),
-        "kimi-for-coding".to_string(),
-    );
+    env_overrides.insert("ANTHROPIC_MODEL".to_string(), "kimi-for-coding".to_string());
     env_overrides.insert(
         "ANTHROPIC_DEFAULT_HAIKU_MODEL".to_string(),
         "kimi-for-coding".to_string(),
@@ -124,7 +124,6 @@ fn kimi_template() -> ProviderTemplate {
             name: "Kimi for Coding".to_string(),
             env_overrides,
             opencode_model_id: "kimi-for-coding".to_string(),
-            context_window: None,
         }],
         opencode_provider_id: "kimi-for-coding".to_string(),
         opencode_npm: "@ai-sdk/anthropic".to_string(),

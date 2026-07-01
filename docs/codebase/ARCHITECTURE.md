@@ -67,7 +67,7 @@ Key characteristics:
   - Define the unified error type `AppError`
 - **Key files**:
   - `src/domain/instance.rs` — `ProviderInstance` struct and `validate_alias()` function (lowercase alnum + `-_`, length 1-32, no whitespace)
-  - `src/domain/template.rs` — `ProviderTemplate` (immutable built-in definition with `default_env`, `models`, `opencode_*` fields, `opencode_models: Vec<OpenCodeModel>`) and `ModelTemplate` (per-model env overrides + `context_window: Option<u64>`)
+  - `src/domain/template.rs` — `ProviderTemplate` (immutable built-in definition with `default_env`, `models`, `opencode_*` fields, `opencode_models: Vec<OpenCodeModel>`) and `ModelTemplate` (per-model env overrides; `context_window` field removed — window size now baked into `env_overrides` literal)
   - `src/domain/error.rs` — `AppError` enum: `InstanceAlreadyExists`, `InstanceNotFound`, `TemplateNotFound`, `ModelNotFound`, `Database(String)`, `InvalidAlias(String)`, `AliasAlreadyExists(String)`
 - **Depends on**: None (pure Rust + chrono + thiserror)
 - **Used by**: API layer, DAO layer, Shell layer, Proxy layer, Trace layer
@@ -80,7 +80,7 @@ Key characteristics:
   - Persist provider instances to SQLite with in-place schema migration
   - Cache all instances in memory for fast reads (refresh on every mutation)
 - **Key files**:
-  - `src/dao/mod.rs` — `Dao` trait defining the contract (`get_templates`, `list_instances`, `create_instance`, `update_instance`, `set_alias`, `set_opencode_model_id`, `set_kv_cache_enabled`, `set_context_window_enabled`, `rename_instance`)
+  - `src/dao/mod.rs` — `Dao` trait defining the contract (`get_templates`, `list_instances`, `create_instance`, `update_instance`, `set_alias`, `set_opencode_model_id`, `set_kv_cache_enabled`, `rename_instance`; `set_context_window_enabled` removed)
   - `src/dao/sqlite_impl.rs` — `SqliteDaoImpl` with SQLite CRUD; schema created with `CREATE TABLE IF NOT EXISTS`, missing columns added with `PRAGMA table_info` checks followed by `ALTER TABLE`
   - `src/dao/memory_impl.rs` — `MemoryDaoImpl` for tests
 - **Depends on**: Domain layer
@@ -168,7 +168,7 @@ POST /api/aliases/apply (src/api/aliases.rs::apply)
 The `aliases.zsh` file contains:
 
 - `__cc_switch_print_env <alias>` helper — emits a single `[cc-switch-tui] <alias>: KEY=VALUE ...` line to stderr showing the actual env that will be passed to `claude` (credential-like keys redacted as `<redacted>`, missing keys shown as `<unset>`; suppressed when `CC_SWITCH_QUIET=1`).
-- Per-instance `cl-{alias}` function: **always** unsets the full provider env set (including `ANTHROPIC_BASE_URL`, so a stale export from a previous `cl-*` call in the same shell cannot leak into the next invocation), then exports its own values verbatim, then applies `CC_SWITCH_PROXY_URL` (if set via the zsh command-prefix form) to `ANTHROPIC_BASE_URL`, calls the diagnostic helper, and runs `command claude "$@"`. Optional `DISABLE_COMPACT` / `CLAUDE_CODE_MAX_CONTEXT_TOKENS` / `CLAUDE_CODE_AUTO_COMPACT_WINDOW` are added only when `context_window_enabled` and the model has a `context_window`.
+- Per-instance `cl-{alias}` function: wraps function body in `(...)` subshell so all `export`s are isolated from the parent shell (POSIX subshell isolation; see `feat/cl-subshell-wrap`). Exports its own env values verbatim from `default_env + env_overrides`, then applies `CC_SWITCH_PROXY_URL` (if set via the zsh command-prefix form) to `ANTHROPIC_BASE_URL`, calls the diagnostic helper, and runs `command claude "$@"`. Context-window related env vars (`CLAUDE_CODE_AUTO_COMPACT_WINDOW` etc.) are now baked into the model template's `env_overrides` literal — no per-instance toggle.
 - `ys-proxy` wrapper: uses the zsh command-prefix form `CC_SWITCH_PROXY_URL="http://127.0.0.1:7480/ys-proxy/${alias_name}" $alias_name "$@"` so the sentinel is visible only for the duration of the call (never leaks back to the parent shell) and the underlying `cl-*` function applies it after exporting its own default.
 - `oc-{alias}` functions set `OPENCODE_CONFIG` and the provider env var before `command opencode "$@"`.
 
@@ -231,7 +231,6 @@ pub trait Dao {
     fn rename_instance(&mut self, old_id: &str, new_id: &str, alias: String) -> Result<(), AppError>;
     fn set_opencode_model_id(&mut self, id: &str, opencode_model_id: String) -> Result<(), AppError>;
     fn set_kv_cache_enabled(&mut self, id: &str, enabled: bool) -> Result<(), AppError>;
-    fn set_context_window_enabled(&mut self, id: &str, enabled: bool) -> Result<(), AppError>;
 }
 ```
 
@@ -275,7 +274,7 @@ HTTP status mapping: `NotFound → 404`, `Validation → 400`, `Conflict → 409
 Located in `src/domain/template.rs` and `src/domain/instance.rs`.
 
 - `ProviderTemplate` (`src/domain/template.rs`): Immutable built-in definition of a third-party provider. Carries `default_env: HashMap<String, String>`, `models: Vec<ModelTemplate>`, plus `opencode_*` metadata (`opencode_provider_id`, `opencode_npm`, `opencode_base_url`, `opencode_env_var`, `opencode_models: Vec<OpenCodeModel>`). Built by builder functions in `src/templates.rs::register_templates()`.
-- `ProviderInstance` (`src/domain/instance.rs`): User-created record referencing a template via `template_id`, with user-specific overrides (`api_key`, `model_id`, `alias`, `opencode_model_id`, `kv_cache_enabled: bool`, `context_window_enabled: bool`). ID format: `{template_id}-{alias}`.
+- `ProviderInstance` (`src/domain/instance.rs`): User-created record referencing a template via `template_id`, with user-specific overrides (`api_key`, `model_id`, `alias`, `opencode_model_id`, `kv_cache_enabled: bool`; `context_window_enabled` removed). ID format: `{template_id}-{alias}`.
 
 ### `TraceSession` / `TraceRecord`
 
@@ -373,7 +372,7 @@ Use `tracing::{info, warn, error}` (not `println`). Log destination is `app.log`
 
 ### Database Schema Migration
 
-- **DAO (`src/dao/sqlite_impl.rs::new`)**: `CREATE TABLE IF NOT EXISTS instances` on init, then `PRAGMA table_info` check followed by `ALTER TABLE instances ADD COLUMN <col> DEFAULT ...` for `alias`, `opencode_model_id`, `kv_cache_enabled`, `context_window_enabled`. No external migration tool.
+- **DAO (`src/dao/sqlite_impl.rs::new`)**: `CREATE TABLE IF NOT EXISTS instances` on init, then `PRAGMA table_info` check followed by `ALTER TABLE instances ADD COLUMN <col> DEFAULT ...` for `alias`, `opencode_model_id`, `kv_cache_enabled`. After schema setup, idempotent migration runs: `UPDATE instances SET model_id = 'MiniMax-M3[1m]' WHERE model_id = 'MiniMax-M3'` (rename old model id) and `ALTER TABLE instances DROP COLUMN context_window_enabled` (SQLite ≥ 3.35). No external migration tool.
 - **Trace store (`src/trace/store.rs::init_schema`)**: `CREATE TABLE IF NOT EXISTS` for `sessions` and `records`; for incremental columns, run an `ALTER TABLE` and ignore errors whose message contains `duplicate column` (the SQLite error text); any other error is surfaced as `AppError::Database`. `clear_all()` follows `DELETE FROM sessions` with `VACUUM` to reclaim space.
 
 ### Static Asset Embedding

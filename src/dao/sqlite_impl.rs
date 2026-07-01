@@ -60,9 +60,15 @@ impl SqliteDaoImpl {
                 [],
             );
         }
-        if !columns.contains(&"context_window_enabled".to_string()) {
+        // 一次性迁移（幂等）：旧 MiniMax-M3 model id 永久 rename 到新 id
+        let _ = conn.execute(
+            "UPDATE instances SET model_id = 'MiniMax-M3[1m]' WHERE model_id = 'MiniMax-M3'",
+            [],
+        );
+        // DROP COLUMN context_window_enabled（SQLite ≥ 3.35 支持；列不存在时失败被忽略）
+        if columns.contains(&"context_window_enabled".to_string()) {
             let _ = conn.execute(
-                "ALTER TABLE instances ADD COLUMN context_window_enabled INTEGER NOT NULL DEFAULT 0",
+                "ALTER TABLE instances DROP COLUMN context_window_enabled",
                 [],
             );
         }
@@ -77,7 +83,7 @@ impl SqliteDaoImpl {
 
     fn refresh_instances(&mut self) -> Result<(), AppError> {
         let mut stmt = Self::db(self.conn.prepare(
-            "SELECT id, template_id, model_id, api_key, created_at, alias, opencode_model_id, kv_cache_enabled, context_window_enabled FROM instances"
+            "SELECT id, template_id, model_id, api_key, created_at, alias, opencode_model_id, kv_cache_enabled FROM instances"
         ))?;
         let rows = Self::db(stmt.query_map([], |row| {
             Ok(ProviderInstance {
@@ -97,7 +103,6 @@ impl SqliteDaoImpl {
                 alias: row.get(5)?,
                 opencode_model_id: row.get(6)?,
                 kv_cache_enabled: row.get::<_, i32>("kv_cache_enabled")? != 0,
-                context_window_enabled: row.get::<_, i32>("context_window_enabled")? != 0,
             })
         }))?;
         self.instances.clear();
@@ -129,8 +134,8 @@ impl Dao for SqliteDaoImpl {
         validate_alias(&instance.alias)?;
         let created_at_str = instance.created_at.to_rfc3339();
         match self.conn.execute(
-            "INSERT INTO instances (id, template_id, model_id, api_key, created_at, alias, opencode_model_id, kv_cache_enabled, context_window_enabled)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
+            "INSERT INTO instances (id, template_id, model_id, api_key, created_at, alias, opencode_model_id, kv_cache_enabled)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
             rusqlite::params![
                 &instance.id,
                 &instance.template_id,
@@ -140,7 +145,6 @@ impl Dao for SqliteDaoImpl {
                 &instance.alias,
                 &instance.opencode_model_id,
                 instance.kv_cache_enabled as i32,
-                instance.context_window_enabled as i32,
             ],
         ) {
             Ok(_) => {
@@ -228,18 +232,6 @@ impl Dao for SqliteDaoImpl {
         Ok(())
     }
 
-    fn set_context_window_enabled(&mut self, id: &str, enabled: bool) -> Result<(), AppError> {
-        let changes = Self::db(self.conn.execute(
-            "UPDATE instances SET context_window_enabled = ?1 WHERE id = ?2",
-            rusqlite::params![enabled as i32, id],
-        ))?;
-        if changes == 0 {
-            return Err(AppError::InstanceNotFound(id.to_string()));
-        }
-        self.refresh_instances()?;
-        Ok(())
-    }
-
     fn rename_instance(
         &mut self,
         old_id: &str,
@@ -271,8 +263,8 @@ impl Dao for SqliteDaoImpl {
         // Insert new instance
         let created_at_str = old_instance.created_at.to_rfc3339();
         Self::db(self.conn.execute(
-            "INSERT INTO instances (id, template_id, model_id, api_key, created_at, alias, opencode_model_id, kv_cache_enabled, context_window_enabled)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
+            "INSERT INTO instances (id, template_id, model_id, api_key, created_at, alias, opencode_model_id, kv_cache_enabled)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
             rusqlite::params![
                 new_id,
                 old_instance.template_id,
@@ -282,7 +274,6 @@ impl Dao for SqliteDaoImpl {
                 alias,
                 old_instance.opencode_model_id,
                 old_instance.kv_cache_enabled as i32,
-                old_instance.context_window_enabled as i32,
             ],
         ))?;
 
@@ -322,7 +313,6 @@ mod tests {
             alias: "cl-mini".to_string(),
             opencode_model_id: String::new(),
             kv_cache_enabled: false,
-            context_window_enabled: false,
         };
         dao.create_instance(instance.clone()).unwrap();
         let found = dao.get_instance(&instance.id).unwrap();
@@ -342,7 +332,6 @@ mod tests {
             alias: "cl-mini".to_string(),
             opencode_model_id: String::new(),
             kv_cache_enabled: false,
-            context_window_enabled: false,
         };
         dao.create_instance(instance).unwrap();
         dao.set_alias("minimax-MiniMax-M2.7-highspeed", "cl-mini".to_string())
@@ -363,7 +352,6 @@ mod tests {
             alias: "cl-mini".to_string(),
             opencode_model_id: String::new(),
             kv_cache_enabled: false,
-            context_window_enabled: false,
         };
         dao.create_instance(instance).unwrap();
         dao.update_instance(
@@ -403,7 +391,6 @@ mod tests {
             alias: "cl-mini".to_string(),
             opencode_model_id: String::new(),
             kv_cache_enabled: false,
-            context_window_enabled: false,
         };
         dao.create_instance(instance).unwrap();
 
@@ -435,7 +422,6 @@ mod tests {
             alias: "cl-mini".to_string(),
             opencode_model_id: String::new(),
             kv_cache_enabled: false,
-            context_window_enabled: false,
         };
         dao.create_instance(instance).unwrap();
         dao.delete_instance("minimax-MiniMax-M2.7-highspeed")
@@ -462,7 +448,6 @@ mod tests {
             alias: "cl-mini".to_string(),
             opencode_model_id: String::new(),
             kv_cache_enabled: false,
-            context_window_enabled: false,
         };
         dao.create_instance(instance.clone()).unwrap();
         let result = dao.create_instance(instance);
@@ -481,7 +466,6 @@ mod tests {
             alias: "cl-mini".to_string(),
             opencode_model_id: String::new(),
             kv_cache_enabled: false,
-            context_window_enabled: false,
         };
         dao.create_instance(instance).unwrap();
 
@@ -514,7 +498,6 @@ mod tests {
             alias: "cl-mini".to_string(),
             opencode_model_id: String::new(),
             kv_cache_enabled: false,
-            context_window_enabled: false,
         };
         let instance2 = ProviderInstance {
             id: "minimax-MiniMax-M2.7-highspeed-cl-mini".to_string(),
@@ -525,7 +508,6 @@ mod tests {
             alias: "cl-mini".to_string(),
             opencode_model_id: String::new(),
             kv_cache_enabled: false,
-            context_window_enabled: false,
         };
         dao.create_instance(instance1).unwrap();
         dao.create_instance(instance2).unwrap();
@@ -547,8 +529,8 @@ mod tests {
     }
 
     #[test]
-    fn test_context_window_column_migration() {
-        // 使用临时文件模拟旧数据库（不含 context_window_enabled 列）
+    fn test_migration_renames_old_minimax_m3_model_id() {
+        // 模拟旧 DB：含 MiniMax-M3 行 + 含 context_window_enabled 列
         let temp = TempDir::new().unwrap();
         let db_path = temp.path().join("test.db").to_string_lossy().to_string();
         let conn = Connection::open(&db_path).unwrap();
@@ -561,71 +543,128 @@ mod tests {
                 created_at TEXT NOT NULL,
                 alias TEXT NOT NULL DEFAULT '',
                 opencode_model_id TEXT NOT NULL DEFAULT '',
-                kv_cache_enabled INTEGER NOT NULL DEFAULT 0
+                kv_cache_enabled INTEGER NOT NULL DEFAULT 0,
+                context_window_enabled INTEGER NOT NULL DEFAULT 0
             )",
             [],
-        ).unwrap();
+        )
+        .unwrap();
         conn.execute(
-            "INSERT INTO instances (id, template_id, model_id, api_key, created_at, alias, opencode_model_id, kv_cache_enabled)
-             VALUES ('test-1', 'minimax', 'MiniMax-M3', 'key', '2024-01-01T00:00:00Z', 'cl-test', '', 0)",
+            "INSERT INTO instances (id, template_id, model_id, api_key, created_at, alias, opencode_model_id, kv_cache_enabled, context_window_enabled)
+             VALUES ('test-1', 'minimax', 'MiniMax-M3', 'key', '2024-01-01T00:00:00Z', 'cl-test', '', 0, 1)",
             [],
         ).unwrap();
         drop(conn);
 
-        // 用新代码打开旧数据库，应自动添加列
+        // 启动新代码：旧 model_id 应被 rename 到 MiniMax-M3[1m]
         let templates = register_templates();
         let dao = SqliteDaoImpl::new(&db_path, templates).unwrap();
         let instance = dao.get_instance("test-1").unwrap();
-        assert!(!instance.context_window_enabled);
+        assert_eq!(
+            instance.model_id, "MiniMax-M3[1m]",
+            "旧 model_id='MiniMax-M3' 应被自动 rename 到 'MiniMax-M3[1m]'"
+        );
     }
 
     #[test]
-    fn test_create_instance_with_context_window_enabled() {
-        let mut dao = create_test_dao();
-        let instance = ProviderInstance {
-            id: "minimax-MiniMax-M3".to_string(),
-            template_id: "minimax".to_string(),
-            model_id: "MiniMax-M3".to_string(),
-            api_key: "key".to_string(),
-            created_at: chrono::Utc::now(),
-            alias: "cl-m3".to_string(),
-            opencode_model_id: String::new(),
-            kv_cache_enabled: false,
-            context_window_enabled: true,
-        };
-        dao.create_instance(instance).unwrap();
-        let found = dao.get_instance("minimax-MiniMax-M3").unwrap();
-        assert!(found.context_window_enabled);
+    fn test_migration_drops_context_window_enabled_column() {
+        // 模拟旧 DB 含 context_window_enabled 列
+        let temp = TempDir::new().unwrap();
+        let db_path = temp.path().join("test.db").to_string_lossy().to_string();
+        let conn = Connection::open(&db_path).unwrap();
+        conn.execute(
+            "CREATE TABLE instances (
+                id TEXT PRIMARY KEY,
+                template_id TEXT NOT NULL,
+                model_id TEXT NOT NULL,
+                api_key TEXT NOT NULL,
+                created_at TEXT NOT NULL,
+                alias TEXT NOT NULL DEFAULT '',
+                opencode_model_id TEXT NOT NULL DEFAULT '',
+                kv_cache_enabled INTEGER NOT NULL DEFAULT 0,
+                context_window_enabled INTEGER NOT NULL DEFAULT 0
+            )",
+            [],
+        )
+        .unwrap();
+        drop(conn);
+
+        // 启动新代码：context_window_enabled 列应被 DROP
+        let templates = register_templates();
+        let _dao = SqliteDaoImpl::new(&db_path, templates).unwrap();
+
+        let conn = Connection::open(&db_path).unwrap();
+        let columns: Vec<String> = conn
+            .prepare("SELECT name FROM pragma_table_info('instances')")
+            .unwrap()
+            .query_map([], |row| row.get(0))
+            .unwrap()
+            .collect::<Result<_, _>>()
+            .unwrap();
+        assert!(
+            !columns.contains(&"context_window_enabled".to_string()),
+            "context_window_enabled 列应在启动时被 DROP；当前列: {columns:?}"
+        );
     }
 
     #[test]
-    fn test_set_context_window_enabled() {
-        let mut dao = create_test_dao();
-        let instance = ProviderInstance {
-            id: "minimax-MiniMax-M3".to_string(),
-            template_id: "minimax".to_string(),
-            model_id: "MiniMax-M3".to_string(),
-            api_key: "key".to_string(),
-            created_at: chrono::Utc::now(),
-            alias: "cl-m3".to_string(),
-            opencode_model_id: String::new(),
-            kv_cache_enabled: false,
-            context_window_enabled: false,
-        };
-        dao.create_instance(instance).unwrap();
-        dao.set_context_window_enabled("minimax-MiniMax-M3", true).unwrap();
-        let found = dao.get_instance("minimax-MiniMax-M3").unwrap();
-        assert!(found.context_window_enabled);
+    fn test_migration_runs_once_on_old_db_and_is_idempotent() {
+        // 旧 DB 状态：旧 model_id 行 + 旧 context_window_enabled 列同时存在
+        // —— 这是生产环境升级路径的真实场景。
+        // 验证：第一次启动同时触发 UPDATE rename + DROP COLUMN；第二次启动幂等无副作用。
+        let temp = TempDir::new().unwrap();
+        let db_path = temp.path().join("test.db").to_string_lossy().to_string();
+        let conn = Connection::open(&db_path).unwrap();
+        conn.execute(
+            "CREATE TABLE instances (
+                id TEXT PRIMARY KEY,
+                template_id TEXT NOT NULL,
+                model_id TEXT NOT NULL,
+                api_key TEXT NOT NULL,
+                created_at TEXT NOT NULL,
+                alias TEXT NOT NULL DEFAULT '',
+                opencode_model_id TEXT NOT NULL DEFAULT '',
+                kv_cache_enabled INTEGER NOT NULL DEFAULT 0,
+                context_window_enabled INTEGER NOT NULL DEFAULT 0
+            )",
+            [],
+        )
+        .unwrap();
+        conn.execute(
+            "INSERT INTO instances (id, template_id, model_id, api_key, created_at, alias, opencode_model_id, kv_cache_enabled, context_window_enabled)
+             VALUES ('test-1', 'minimax', 'MiniMax-M3', 'key', '2024-01-01T00:00:00Z', 'cl-test', '', 0, 1)",
+            [],
+        ).unwrap();
+        drop(conn);
 
-        dao.set_context_window_enabled("minimax-MiniMax-M3", false).unwrap();
-        let found = dao.get_instance("minimax-MiniMax-M3").unwrap();
-        assert!(!found.context_window_enabled);
-    }
+        // 第一次启动：rename + drop 都应执行
+        let templates = register_templates();
+        let dao1 = SqliteDaoImpl::new(&db_path, templates.clone()).unwrap();
+        assert_eq!(
+            dao1.get_instance("test-1").unwrap().model_id,
+            "MiniMax-M3[1m]",
+            "第一次启动后 model_id 应从 MiniMax-M3 rename 到 MiniMax-M3[1m]"
+        );
+        let columns_after_first: Vec<String> = Connection::open(&db_path)
+            .unwrap()
+            .prepare("SELECT name FROM pragma_table_info('instances')")
+            .unwrap()
+            .query_map([], |row| row.get(0))
+            .unwrap()
+            .collect::<Result<_, _>>()
+            .unwrap();
+        assert!(
+            !columns_after_first.contains(&"context_window_enabled".to_string()),
+            "第一次启动后 context_window_enabled 列应被 DROP；当前列: {columns_after_first:?}"
+        );
 
-    #[test]
-    fn test_set_context_window_enabled_not_found() {
-        let mut dao = create_test_dao();
-        let result = dao.set_context_window_enabled("nonexistent", true);
-        assert!(matches!(result, Err(AppError::InstanceNotFound(_))));
+        // 第二次启动：幂等无副作用
+        let dao2 = SqliteDaoImpl::new(&db_path, templates).unwrap();
+        assert_eq!(dao2.list_instances().len(), 1, "第二次启动后行数应保持不变");
+        assert_eq!(
+            dao2.get_instance("test-1").unwrap().model_id,
+            "MiniMax-M3[1m]",
+            "第二次启动 model_id 应保持 MiniMax-M3[1m]"
+        );
     }
 }

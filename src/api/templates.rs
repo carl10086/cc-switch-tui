@@ -7,13 +7,14 @@ use crate::domain::ProviderTemplate;
 
 /// Per-model summary for the Web UI.
 /// 用于 OpenCode Model ID 下拉：UI 列出 name，存的值是 opencode_model_id。
+/// Context window 信息由前端从 model id 推断（如 `[1m]` → "1M context"），
+/// 不再通过 API 字段传输。
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct TemplateModelSummary {
     pub id: String,
     pub name: String,
     pub opencode_model_id: String,
-    pub context_window: Option<u64>,
 }
 
 /// Template summary for the Web UI.
@@ -52,7 +53,6 @@ impl From<&ProviderTemplate> for TemplateSummary {
                     id: m.id.clone(),
                     name: m.name.clone(),
                     opencode_model_id: m.opencode_model_id.clone(),
-                    context_window: m.context_window,
                 })
                 .collect(),
             opencode_models: t.opencode_models.clone(),

@@ -9,10 +9,18 @@ interface Props {
   placeholder?: string;
 }
 
-function formatTokens(n: number): string {
-  if (n >= 1_000_000) return `${n / 1_000_000}M`;
-  if (n >= 1_000) return `${n / 1_000}K`;
-  return n.toString();
+/**
+ * 从 model id 推断上下文窗口大小。
+ * 约定：model id 末端的 `[1m]` / `[200k]` 后缀表示窗口大小。
+ * 当前已知约定：
+ *   - `[1m]`   → "1M context"
+ *   - `[200k]` → "200K context"
+ * 后续如新增 model 后缀，在此扩展。
+ */
+function inferContextFromModelId(modelId: string): string | null {
+  if (modelId.includes('[1m]')) return '1M context';
+  if (modelId.includes('[200k]')) return '200K context';
+  return null;
 }
 
 /**
@@ -26,7 +34,7 @@ export function ModelSelect({ models, value, onChange, placeholder }: Props) {
       <input
         value={value}
         onChange={(e) => onChange(e.target.value)}
-        placeholder={placeholder ?? 'MiniMax-M3'}
+        placeholder={placeholder ?? 'MiniMax-M3[1m]'}
         className="w-full px-3 py-1.5 text-sm rounded border border-input bg-background font-mono"
       />
     );
@@ -37,12 +45,14 @@ export function ModelSelect({ models, value, onChange, placeholder }: Props) {
       onChange={(e) => onChange(e.target.value)}
       className="w-full px-3 py-1.5 text-sm rounded border border-input bg-background font-mono"
     >
-      {models.map((m) => (
-        <option key={m.id} value={m.id}>
-          {m.name} ({m.id})
-          {m.contextWindow ? ` · ${formatTokens(m.contextWindow)} context` : ''}
-        </option>
-      ))}
+      {models.map((m) => {
+        const ctx = inferContextFromModelId(m.id);
+        return (
+          <option key={m.id} value={m.id}>
+            {m.name} ({m.id}){ctx ? ` · ${ctx}` : ''}
+          </option>
+        );
+      })}
     </select>
   );
 }
