@@ -455,6 +455,31 @@ mod tests {
         );
     }
 
+    /// Kimi highspeed 档位：model id `kimi-for-coding-highspeed` 应出现在生成的 aliases.zsh 中
+    /// （Kimi 后端自动映射到最新高速档位；与 MiniMax M3[1m] 同模式 — per-model env_overrides 注入）
+    #[test]
+    fn test_aliases_contain_kimi_for_coding_highspeed_model_id() {
+        use crate::templates::register_templates;
+        let temp = TempDir::new().unwrap();
+        let templates = register_templates();
+        let instance = ProviderInstance {
+            id: "kimi-kimi-for-coding-highspeed-cl-kimi-fast".to_string(),
+            template_id: "kimi".to_string(),
+            model_id: "kimi-for-coding-highspeed".to_string(),
+            api_key: "sk-test".to_string(),
+            created_at: chrono::Utc::now(),
+            alias: "cl-kimi-fast".to_string(),
+            opencode_model_id: "kimi-for-coding-highspeed".to_string(),
+            kv_cache_enabled: false,
+        };
+        generate_aliases(temp.path(), &[instance], &templates).unwrap();
+        let content = std::fs::read_to_string(temp.path().join("aliases.zsh")).unwrap();
+        assert!(
+            content.contains("kimi-for-coding-highspeed"),
+            "aliases.zsh 应含 kimi-for-coding-highspeed model id（Kimi highspeed 档位），实际:\n{content}"
+        );
+    }
+
     /// build_env 不再注入 DISABLE_COMPACT / CLAUDE_CODE_MAX_CONTEXT_TOKENS（机制废弃）
     #[test]
     fn test_aliases_do_not_contain_disabled_compact_var() {
