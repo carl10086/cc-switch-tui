@@ -44,12 +44,11 @@ pub fn redact_user_id_pii(body: &mut Value) -> bool {
         }
     }
 
-    let redacted = serde_json::to_string(&parsed).unwrap_or_else(|_| user_id_str);
-    if let Some(metadata) = body.get_mut("metadata") {
-        if let Some(user_id) = metadata.get_mut("user_id") {
+    let redacted = serde_json::to_string(&parsed).unwrap_or(user_id_str);
+    if let Some(metadata) = body.get_mut("metadata")
+        && let Some(user_id) = metadata.get_mut("user_id") {
             *user_id = Value::String(redacted);
         }
-    }
 
     true
 }

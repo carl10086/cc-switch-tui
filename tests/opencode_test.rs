@@ -28,7 +28,7 @@ async fn http_request(
 async fn test_get_opencode_config_returns_json() {
     let addr = api::spawn_app().await;
     // 创建一条带 minimax 的 instance
-    let create_body = r#"{"templateId":"minimax","alias":"cl-oc","modelId":"MiniMax-M3","apiKey":"sk-x"}"#;
+    let create_body = r#"{"templateId":"minimax","alias":"cl-oc","modelId":"MiniMax-M3[1m]","apiKey":"sk-x"}"#;
     http_request(addr, "POST", "/api/instances", Some(create_body)).await;
 
     let raw = http_request(addr, "GET", "/api/opencode-config/minimax-cl-oc", None).await;
@@ -52,7 +52,7 @@ async fn test_opencode_config_not_found_returns_404() {
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
 async fn test_apply_opencode_config_returns_path() {
     let addr = api::spawn_app().await;
-    let create_body = r#"{"templateId":"minimax","alias":"cl-oc","modelId":"MiniMax-M3","apiKey":"sk-x"}"#;
+    let create_body = r#"{"templateId":"minimax","alias":"cl-oc","modelId":"MiniMax-M3[1m]","apiKey":"sk-x"}"#;
     http_request(addr, "POST", "/api/instances", Some(create_body)).await;
 
     let raw = http_request(

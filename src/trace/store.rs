@@ -17,13 +17,12 @@ pub struct TraceStore {
 impl TraceStore {
     /// Open or create the trace database at `path`.
     pub fn new(path: &str) -> Result<Self, AppError> {
-        if path != ":memory:" {
-            if let Some(parent) = Path::new(path).parent() {
+        if path != ":memory:"
+            && let Some(parent) = Path::new(path).parent() {
                 std::fs::create_dir_all(parent).map_err(|e| {
                     AppError::Database(format!("创建 trace 目录失败: {}", e))
                 })?;
             }
-        }
         let conn = Connection::open(path)
             .map_err(|e| AppError::Database(e.to_string()))?;
         conn.pragma_update(None, "journal_mode", "WAL")
@@ -245,7 +244,7 @@ impl TraceStore {
             .query_map([id], Self::row_to_session)
             .map_err(|e| AppError::Database(e.to_string()))?;
 
-        Ok(sessions.next().transpose().map_err(|e| AppError::Database(e.to_string()))?)
+        sessions.next().transpose().map_err(|e| AppError::Database(e.to_string()))
     }
 
     /// Get all records for a session without pagination (for export).

@@ -39,7 +39,7 @@ pub async fn list_sessions(
 ) -> Result<Json<ListSessionsResponse>, ApiError> {
     let store = state.trace_store.lock().await;
     let sessions = store
-        .list_sessions(query.limit.max(1).min(100), query.offset.max(0), query.date.as_deref())
+        .list_sessions(query.limit.clamp(1, 100), query.offset.clamp(0, i64::MAX), query.date.as_deref())
         .map_err(|e| ApiError::internal(e.to_string()))?;
     let total = store
         .count_sessions(query.date.as_deref())
@@ -74,7 +74,7 @@ pub async fn get_records(
 ) -> Result<Json<GetRecordsResponse>, ApiError> {
     let store = state.trace_store.lock().await;
     let records = store
-        .get_records(&id, query.limit.max(1).min(100), query.offset.max(0))
+        .get_records(&id, query.limit.clamp(1, 100), query.offset.clamp(0, i64::MAX))
         .map_err(|e| ApiError::internal(e.to_string()))?;
     Ok(Json(GetRecordsResponse { records }))
 }

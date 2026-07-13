@@ -120,7 +120,7 @@ pub async fn create(
             Ok((StatusCode::CREATED, Json(InstanceDetail::from(instance))))
         }
         Err(AppError::InstanceAlreadyExists(_)) => {
-            Err(ApiError::conflict("alias", format!("alias already exists")))
+            Err(ApiError::conflict("alias", "alias already exists".to_string()))
         }
         Err(AppError::InvalidAlias(msg)) => Err(ApiError::validation("alias", msg)),
         Err(e) => Err(ApiError::internal(e.to_string())),

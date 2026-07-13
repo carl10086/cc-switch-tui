@@ -16,12 +16,11 @@ impl SqliteDaoImpl {
     }
 
     pub fn new(path: &str, templates: Vec<ProviderTemplate>) -> Result<Self, AppError> {
-        if path != ":memory:" {
-            if let Some(parent) = Path::new(path).parent() {
+        if path != ":memory:"
+            && let Some(parent) = Path::new(path).parent() {
                 std::fs::create_dir_all(parent)
                     .map_err(|e| AppError::Database(format!("创建目录失败: {}", e)))?;
             }
-        }
         let conn = Self::db(Connection::open(path))?;
         Self::db(conn.execute(
             "CREATE TABLE IF NOT EXISTS instances (

@@ -3,7 +3,6 @@
 /refer
 .idea
 /dist
-/app.log
 /.codegraph
 /web/node_modules
 /web/dist

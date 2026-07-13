@@ -62,6 +62,12 @@ fn get_str(value: &Value, key: &str) -> String {
 /// Parser for Anthropic request/response payloads.
 pub struct AnthropicParser;
 
+impl Default for AnthropicParser {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl AnthropicParser {
     pub fn new() -> Self {
         Self
@@ -137,26 +143,24 @@ impl AnthropicParser {
     ) {
         match event.event_type.as_deref() {
             Some("message_start") => {
-                if let Ok(json) = serde_json::from_str::<Value>(&event.data) {
-                    if let Some(model) = json
+                if let Ok(json) = serde_json::from_str::<Value>(&event.data)
+                    && let Some(model) = json
                         .get("message")
                         .and_then(|m| m.get("model"))
                         .and_then(Value::as_str)
                     {
                         acc.model = model.to_string();
                     }
-                }
             }
             Some("content_block_delta") => {
-                if let Ok(json) = serde_json::from_str::<Value>(&event.data) {
-                    if let Some(text) = json
+                if let Ok(json) = serde_json::from_str::<Value>(&event.data)
+                    && let Some(text) = json
                         .get("delta")
                         .and_then(|d| d.get("text"))
                         .and_then(Value::as_str)
                     {
                         acc.content.push(text.to_string());
                     }
-                }
             }
             Some("message_delta") => {
                 if let Ok(json) = serde_json::from_str::<Value>(&event.data) {
