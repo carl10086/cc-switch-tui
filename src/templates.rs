@@ -97,20 +97,45 @@ fn kimi_template() -> ProviderTemplate {
         "https://api.kimi.com/coding/".to_string(),
     );
 
-    // Kimi 官方建议第三方工具统一使用 stable alias `kimi-for-coding` 作为请求体
-    // model 字段；后端会自动映射到最新发布的模型。与 MiniMax 模式对齐，显式注入
-    // 4 个 ANTHROPIC_MODEL*，避免 Claude Code 用默认 model 名发请求被 Kimi 后端拒识。
-    let mut env_overrides = HashMap::new();
-    env_overrides.insert("ANTHROPIC_MODEL".to_string(), "kimi-for-coding".to_string());
-    env_overrides.insert(
+    // Kimi 官方建议第三方工具统一使用 stable alias 作为请求体 model 字段；
+    // 后端会自动映射到最新发布的模型。与 MiniMax 模式对齐，显式注入 4 个
+    // ANTHROPIC_MODEL*，避免 Claude Code 用默认 model 名发请求被 Kimi 后端拒识。
+    //
+    // 档位（2026-07 跟随 Kimi 官方档位表）：
+    //   - kimi-for-coding          普通版：所有会员可用，基准速度
+    //   - kimi-for-coding-highspeed 高速版：5–6× 输出速度、3× 额度、Allegretto+ 会员
+    let mut env_overrides_highspeed = HashMap::new();
+    env_overrides_highspeed.insert(
+        "ANTHROPIC_MODEL".to_string(),
+        "kimi-for-coding-highspeed".to_string(),
+    );
+    env_overrides_highspeed.insert(
+        "ANTHROPIC_DEFAULT_HAIKU_MODEL".to_string(),
+        "kimi-for-coding-highspeed".to_string(),
+    );
+    env_overrides_highspeed.insert(
+        "ANTHROPIC_DEFAULT_OPUS_MODEL".to_string(),
+        "kimi-for-coding-highspeed".to_string(),
+    );
+    env_overrides_highspeed.insert(
+        "ANTHROPIC_DEFAULT_SONNET_MODEL".to_string(),
+        "kimi-for-coding-highspeed".to_string(),
+    );
+
+    let mut env_overrides_normal = HashMap::new();
+    env_overrides_normal.insert(
+        "ANTHROPIC_MODEL".to_string(),
+        "kimi-for-coding".to_string(),
+    );
+    env_overrides_normal.insert(
         "ANTHROPIC_DEFAULT_HAIKU_MODEL".to_string(),
         "kimi-for-coding".to_string(),
     );
-    env_overrides.insert(
+    env_overrides_normal.insert(
         "ANTHROPIC_DEFAULT_OPUS_MODEL".to_string(),
         "kimi-for-coding".to_string(),
     );
-    env_overrides.insert(
+    env_overrides_normal.insert(
         "ANTHROPIC_DEFAULT_SONNET_MODEL".to_string(),
         "kimi-for-coding".to_string(),
     );
@@ -119,16 +144,28 @@ fn kimi_template() -> ProviderTemplate {
         id: "kimi".to_string(),
         name: "Kimi".to_string(),
         default_env,
-        models: vec![ModelTemplate {
-            id: "kimi-for-coding".to_string(),
-            name: "Kimi for Coding".to_string(),
-            env_overrides,
-            opencode_model_id: "kimi-for-coding".to_string(),
-        }],
+        models: vec![
+            // 高速版排在第一位，作为默认 model
+            ModelTemplate {
+                id: "kimi-for-coding-highspeed".to_string(),
+                name: "Kimi for Coding · Highspeed".to_string(),
+                env_overrides: env_overrides_highspeed,
+                opencode_model_id: "kimi-for-coding-highspeed".to_string(),
+            },
+            ModelTemplate {
+                id: "kimi-for-coding".to_string(),
+                name: "Kimi for Coding".to_string(),
+                env_overrides: env_overrides_normal,
+                opencode_model_id: "kimi-for-coding".to_string(),
+            },
+        ],
         opencode_provider_id: "kimi-for-coding".to_string(),
         opencode_npm: "@ai-sdk/anthropic".to_string(),
         opencode_base_url: "https://api.kimi.com/coding/v1".to_string(),
         opencode_env_var: "KIMI_API_KEY".to_string(),
-        opencode_models: vec!["kimi-for-coding".to_string()],
+        opencode_models: vec![
+            "kimi-for-coding-highspeed".to_string(),
+            "kimi-for-coding".to_string(),
+        ],
     }
 }
