@@ -27,6 +27,12 @@ pub struct UpstreamClient {
     client: Client,
 }
 
+impl Default for UpstreamClient {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl UpstreamClient {
     pub fn new() -> Self {
         Self {

@@ -45,6 +45,53 @@ source ~/.cc-switch-tui/aliases.zsh
 
 启动后会自动打开浏览器，通过 Web 界面创建第一个 Instance。
 
+## PM2 常驻运行
+
+如果你希望 `cc-switch-tui` 作为后台常驻进程运行（例如配合 PM2 管理），可以使用项目自带的 `ecosystem.config.js`。
+
+### 前置步骤
+
+先编译 release 二进制：
+
+```bash
+cargo build --release
+# 或全量构建（含前端）
+make build
+```
+
+### 启动 / 停止 / 重启
+
+```bash
+# 启动
+pm2 start ecosystem.config.js
+
+# 查看状态
+pm2 status cc-switch-tui
+
+# 查看日志
+pm2 logs cc-switch-tui
+
+# 重启
+pm2 restart ecosystem.config.js
+
+# 停止
+pm2 stop ecosystem.config.js
+
+# 移除进程
+pm2 delete ecosystem.config.js
+```
+
+PM2 配置中已默认设置 `CC_SWITCH_NO_OPEN=1`，因此常驻启动时**不会**自动打开浏览器。
+
+### 开机自启
+
+```bash
+pm2 save
+pm2 startup
+```
+
+执行 `pm2 startup` 后按终端提示完成系统级启动脚本注册即可。
+
 ## 核心概念
 
 **Provider** — 模型提供商，目前支持 MiniMax、Kimi。

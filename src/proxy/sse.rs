@@ -17,6 +17,12 @@ pub struct SseParser {
     current_lines: Vec<String>,
 }
 
+impl Default for SseParser {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl SseParser {
     pub fn new() -> Self {
         Self {

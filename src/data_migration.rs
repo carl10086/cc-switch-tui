@@ -35,7 +35,7 @@ impl std::error::Error for DataMigrationError {
 
 impl From<DataMigrationError> for io::Error {
     fn from(e: DataMigrationError) -> Self {
-        io::Error::new(io::ErrorKind::Other, e)
+        io::Error::other(e)
     }
 }
 

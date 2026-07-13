@@ -67,11 +67,10 @@ pub async fn get(State(state): State<AppState>) -> Result<Json<Diagnostics>, Api
 }
 
 fn check_writable(path: &std::path::Path) -> bool {
-    if let Some(parent) = path.parent() {
-        if !parent.exists() {
+    if let Some(parent) = path.parent()
+        && !parent.exists() {
             return std::fs::create_dir_all(parent).is_ok();
         }
-    }
     // 尝试在路径存在时测写
     if path.exists() {
         std::fs::OpenOptions::new()
@@ -82,6 +81,7 @@ fn check_writable(path: &std::path::Path) -> bool {
         std::fs::OpenOptions::new()
             .write(true)
             .create(true)
+            .truncate(true)
             .open(parent.join(".write_test"))
             .map(|_| {
                 let _ = std::fs::remove_file(parent.join(".write_test"));
@@ -100,6 +100,7 @@ fn check_dir_writable(path: &std::path::Path) -> bool {
     std::fs::OpenOptions::new()
         .write(true)
         .create(true)
+        .truncate(true)
         .open(path.join(".write_test"))
         .map(|_| {
             let _ = std::fs::remove_file(path.join(".write_test"));

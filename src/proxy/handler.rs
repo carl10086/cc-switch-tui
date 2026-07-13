@@ -196,7 +196,7 @@ pub async fn proxy_handler(
             if let Ok(ref bytes) = result {
                 let _ = trace_tx.send(bytes.clone());
             }
-            result.map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e))
+            result.map_err(std::io::Error::other)
         });
 
         let body = Body::from_stream(client_stream);
