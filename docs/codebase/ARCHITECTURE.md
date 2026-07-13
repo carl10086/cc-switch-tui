@@ -290,7 +290,7 @@ Located in `src/trace/models.rs`. Frontend TypeScript counterparts in `web/src/a
 - **File**: `src/main.rs`
 - **Trigger**: `cargo run` or executing the compiled binary `cc-switch-tui`
 - **Responsibilities**:
-  1. Initialize `tracing` subscriber to `app.log` (append mode, no ANSI, env filter)
+  1. Initialize `tracing` subscriber to `~/.cc-switch-tui/app.log` (append mode, no ANSI, env filter)
   2. Resolve `~/.cc-switch-tui` via `data_migration::default_cc_dir()` and migrate any legacy project-local DB
   3. Load templates via `register_templates()`
   4. Initialize `SqliteDaoImpl` with `~/.cc-switch-tui/db.sqlite` and `TraceStore` with `~/.cc-switch-tui/traces.sqlite`
@@ -359,7 +359,7 @@ HTTP status codes: `400` (validation), `404` (not found), `409` (alias conflict)
 
 ### Logging
 
-Use `tracing::{info, warn, error}` (not `println`). Log destination is `app.log` in the working directory (append mode, no ANSI). Set `RUST_LOG` to control verbosity (default `INFO`).
+Use `tracing::{info, warn, error}` (not `println`). Log destination is `~/.cc-switch-tui/app.log` (append mode, no ANSI). Set `RUST_LOG` to control verbosity (default `INFO`).
 
 ## Cross-Cutting Concerns
 
@@ -367,7 +367,7 @@ Use `tracing::{info, warn, error}` (not `println`). Log destination is `app.log`
 
 - **Implementation**: `tracing` + `tracing-subscriber` in `src/main.rs`
 - **Configuration**: `RUST_LOG` env var (defaults to `INFO`)
-- **Output**: `app.log` (append mode, no ANSI)
+- **Output**: `~/.cc-switch-tui/app.log` (append mode, no ANSI)
 - **Pattern**: Use `tracing::info!`, `tracing::warn!`, `tracing::error!` throughout handlers, infrastructure, and the proxy
 
 ### Database Schema Migration
