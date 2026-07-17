@@ -480,6 +480,31 @@ mod tests {
         );
     }
 
+    /// Kimi k3[1m] 档位：model id `k3[1m]` 应出现在生成的 aliases.zsh 中
+    /// （2026-07-16 发布，1M context；per-model env_overrides 注入，同 MiniMax M3[1m] 模式）
+    #[test]
+    fn test_aliases_contain_kimi_k3_1m_model_id() {
+        use crate::templates::register_templates;
+        let temp = TempDir::new().unwrap();
+        let templates = register_templates();
+        let instance = ProviderInstance {
+            id: "kimi-k3[1m]-cl-k3".to_string(),
+            template_id: "kimi".to_string(),
+            model_id: "k3[1m]".to_string(),
+            api_key: "sk-test".to_string(),
+            created_at: chrono::Utc::now(),
+            alias: "cl-k3".to_string(),
+            opencode_model_id: "k3[1m]".to_string(),
+            kv_cache_enabled: false,
+        };
+        generate_aliases(temp.path(), &[instance], &templates).unwrap();
+        let content = std::fs::read_to_string(temp.path().join("aliases.zsh")).unwrap();
+        assert!(
+            content.contains("k3[1m]"),
+            "aliases.zsh 应含 k3[1m] model id（Kimi k3 1M 档位），实际:\n{content}"
+        );
+    }
+
     /// build_env 不再注入 DISABLE_COMPACT / CLAUDE_CODE_MAX_CONTEXT_TOKENS（机制废弃）
     #[test]
     fn test_aliases_do_not_contain_disabled_compact_var() {
@@ -892,15 +917,17 @@ mod tests {
             "emulate zsh\n\
              unset ANTHROPIC_AUTH_TOKEN ANTHROPIC_BASE_URL ANTHROPIC_DEFAULT_HAIKU_MODEL \\\n\
                    ANTHROPIC_DEFAULT_OPUS_MODEL ANTHROPIC_DEFAULT_SONNET_MODEL \\\n\
-                   ANTHROPIC_MODEL API_TIMEOUT_MS CC_SWITCH_ALIAS \\\n\
-                   CLAUDE_CODE_MAX_CONTEXT_TOKENS CLAUDE_CODE_AUTO_COMPACT_WINDOW \\\n\
-                   DISABLE_COMPACT CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC \\\n\
+                   ANTHROPIC_DEFAULT_FABLE_MODEL ANTHROPIC_MODEL API_TIMEOUT_MS \\\n\
+                   CC_SWITCH_ALIAS CLAUDE_CODE_MAX_CONTEXT_TOKENS \\\n\
+                   CLAUDE_CODE_AUTO_COMPACT_WINDOW CLAUDE_CODE_SUBAGENT_MODEL \\\n\
+                   CLAUDE_CODE_EFFORT_LEVEL DISABLE_COMPACT \\\n\
+                   CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC \\\n\
                    CMUX_PRESERVE_CLAUDE_AUTH_SELECTION_ENV\n\
              export PATH=\"{bin}:$PATH\"\n\
              source {aliases}\n\
              cl-kimi >{kimi} 2>&1\n\
              cl-mini >{mini} 2>&1\n\
-             env | grep -E '^(ANTHROPIC|API_TIMEOUT_MS|CC_SWITCH_ALIAS)=' >{poll} 2>&1 || true\n",
+             env | grep -E '^(ANTHROPIC_|API_TIMEOUT_MS|CC_SWITCH_|CLAUDE_CODE_(SUBAGENT_MODEL|EFFORT_LEVEL|MAX_CONTEXT_TOKENS|AUTO_COMPACT_WINDOW|DISABLE_NONESSENTIAL_TRAFFIC)|DISABLE_COMPACT)=' >{poll} 2>&1 || true\n",
             bin = bin_dir.display(),
             aliases = aliases_path.display(),
             kimi = kimi_out.display(),
@@ -983,14 +1010,16 @@ mod tests {
             "emulate zsh\n\
              unset ANTHROPIC_AUTH_TOKEN ANTHROPIC_BASE_URL ANTHROPIC_DEFAULT_HAIKU_MODEL \\\n\
                    ANTHROPIC_DEFAULT_OPUS_MODEL ANTHROPIC_DEFAULT_SONNET_MODEL \\\n\
-                   ANTHROPIC_MODEL API_TIMEOUT_MS CC_SWITCH_ALIAS \\\n\
-                   CLAUDE_CODE_MAX_CONTEXT_TOKENS CLAUDE_CODE_AUTO_COMPACT_WINDOW \\\n\
-                   DISABLE_COMPACT CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC \\\n\
+                   ANTHROPIC_DEFAULT_FABLE_MODEL ANTHROPIC_MODEL API_TIMEOUT_MS \\\n\
+                   CC_SWITCH_ALIAS CLAUDE_CODE_MAX_CONTEXT_TOKENS \\\n\
+                   CLAUDE_CODE_AUTO_COMPACT_WINDOW CLAUDE_CODE_SUBAGENT_MODEL \\\n\
+                   CLAUDE_CODE_EFFORT_LEVEL DISABLE_COMPACT \\\n\
+                   CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC \\\n\
                    CMUX_PRESERVE_CLAUDE_AUTH_SELECTION_ENV\n\
              export PATH=\"{bin}:$PATH\"\n\
              source {aliases}\n\
              cl-mini >/dev/null 2>&1\n\
-             env | grep -E '^(ANTHROPIC|API_TIMEOUT_MS|CC_SWITCH)' >{poll} 2>&1 || true\n",
+             env | grep -E '^(ANTHROPIC_|API_TIMEOUT_MS|CC_SWITCH_|CLAUDE_CODE_(SUBAGENT_MODEL|EFFORT_LEVEL|MAX_CONTEXT_TOKENS|AUTO_COMPACT_WINDOW|DISABLE_NONESSENTIAL_TRAFFIC)|DISABLE_COMPACT)=' >{poll} 2>&1 || true\n",
             bin = bin_dir.display(),
             aliases = aliases_path.display(),
             poll = poll_out.display(),
