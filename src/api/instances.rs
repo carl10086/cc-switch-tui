@@ -119,9 +119,10 @@ pub async fn create(
                 .ok_or_else(|| ApiError::internal("just-created instance not found"))?;
             Ok((StatusCode::CREATED, Json(InstanceDetail::from(instance))))
         }
-        Err(AppError::InstanceAlreadyExists(_)) => {
-            Err(ApiError::conflict("alias", "alias already exists".to_string()))
-        }
+        Err(AppError::InstanceAlreadyExists(_)) => Err(ApiError::conflict(
+            "alias",
+            "alias already exists".to_string(),
+        )),
         Err(AppError::InvalidAlias(msg)) => Err(ApiError::validation("alias", msg)),
         Err(e) => Err(ApiError::internal(e.to_string())),
     }

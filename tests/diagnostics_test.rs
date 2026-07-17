@@ -18,7 +18,10 @@ async fn http_request(
         "{method} {path} HTTP/1.0\r\nHost: localhost\r\nConnection: close\r\nContent-Type: application/json\r\nContent-Length: {}\r\n\r\n{body_str}",
         body_str.len()
     );
-    stream.write_all(req.as_bytes()).await.expect("write failed");
+    stream
+        .write_all(req.as_bytes())
+        .await
+        .expect("write failed");
     let mut buf = Vec::new();
     stream.read_to_end(&mut buf).await.expect("read failed");
     String::from_utf8_lossy(&buf).into_owned()
@@ -31,7 +34,10 @@ async fn test_get_settings_returns_defaults() {
     assert!(raw.starts_with("HTTP/1.0 200"), "expected 200, got:\n{raw}");
     let body_start = raw.find("\r\n\r\n").map(|i| i + 4).unwrap_or(0);
     let body = &raw[body_start..];
-    assert!(body.contains("\"autoOpenBrowser\":true"), "expected autoOpenBrowser:true, got:\n{body}");
+    assert!(
+        body.contains("\"autoOpenBrowser\":true"),
+        "expected autoOpenBrowser:true, got:\n{body}"
+    );
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
@@ -44,8 +50,14 @@ async fn test_put_settings_persists() {
     let get_raw = http_request(addr, "GET", "/api/settings", None).await;
     let body_start = get_raw.find("\r\n\r\n").map(|i| i + 4).unwrap_or(0);
     let body = &get_raw[body_start..];
-    assert!(body.contains("\"autoOpenBrowser\":false"), "expected autoOpenBrowser:false, got:\n{body}");
-    assert!(body.contains("\"defaultTemplate\":\"minimax\""), "expected defaultTemplate:minimax, got:\n{body}");
+    assert!(
+        body.contains("\"autoOpenBrowser\":false"),
+        "expected autoOpenBrowser:false, got:\n{body}"
+    );
+    assert!(
+        body.contains("\"defaultTemplate\":\"minimax\""),
+        "expected defaultTemplate:minimax, got:\n{body}"
+    );
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
@@ -57,6 +69,12 @@ async fn test_diagnostics_returns_paths_and_status() {
     let body = &raw[body_start..];
     assert!(body.contains("\"dbPath\""), "expected dbPath, got:\n{body}");
     assert!(body.contains("\"status\""), "expected status, got:\n{body}");
-    assert!(body.contains("\"instanceCount\":0"), "expected instanceCount:0, got:\n{body}");
-    assert!(body.contains("aliases.zsh"), "expected aliases.zsh path, got:\n{body}");
+    assert!(
+        body.contains("\"instanceCount\":0"),
+        "expected instanceCount:0, got:\n{body}"
+    );
+    assert!(
+        body.contains("aliases.zsh"),
+        "expected aliases.zsh path, got:\n{body}"
+    );
 }

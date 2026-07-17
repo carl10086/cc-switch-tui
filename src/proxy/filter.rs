@@ -82,7 +82,10 @@ mod tests {
     #[test]
     fn test_redacts_sensitive() {
         let mut headers = HeaderMap::new();
-        headers.insert("authorization", HeaderValue::from_static("Bearer secret-token"));
+        headers.insert(
+            "authorization",
+            HeaderValue::from_static("Bearer secret-token"),
+        );
         headers.insert("x-api-key", HeaderValue::from_static("short"));
         headers.insert("content-type", HeaderValue::from_static("application/json"));
 

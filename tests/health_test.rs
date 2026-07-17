@@ -14,7 +14,10 @@ async fn http_get(addr: std::net::SocketAddr, path: &str) -> String {
         .await
         .expect("connect failed");
     let req = format!("GET {path} HTTP/1.0\r\nHost: localhost\r\nConnection: close\r\n\r\n");
-    stream.write_all(req.as_bytes()).await.expect("write failed");
+    stream
+        .write_all(req.as_bytes())
+        .await
+        .expect("write failed");
     let mut buf = Vec::new();
     stream.read_to_end(&mut buf).await.expect("read failed");
     String::from_utf8_lossy(&buf).into_owned()
@@ -30,7 +33,16 @@ async fn test_health_returns_json() {
         raw.contains("application/json"),
         "expected application/json content-type, got:\n{raw}"
     );
-    assert!(raw.contains("\"status\":\"ok\""), "expected status=ok, got:\n{raw}");
-    assert!(raw.contains("\"version\""), "expected version field, got:\n{raw}");
-    assert!(raw.contains("\"dbPath\""), "expected dbPath field, got:\n{raw}");
+    assert!(
+        raw.contains("\"status\":\"ok\""),
+        "expected status=ok, got:\n{raw}"
+    );
+    assert!(
+        raw.contains("\"version\""),
+        "expected version field, got:\n{raw}"
+    );
+    assert!(
+        raw.contains("\"dbPath\""),
+        "expected dbPath field, got:\n{raw}"
+    );
 }

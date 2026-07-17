@@ -18,13 +18,12 @@ impl TraceStore {
     /// Open or create the trace database at `path`.
     pub fn new(path: &str) -> Result<Self, AppError> {
         if path != ":memory:"
-            && let Some(parent) = Path::new(path).parent() {
-                std::fs::create_dir_all(parent).map_err(|e| {
-                    AppError::Database(format!("创建 trace 目录失败: {}", e))
-                })?;
-            }
-        let conn = Connection::open(path)
-            .map_err(|e| AppError::Database(e.to_string()))?;
+            && let Some(parent) = Path::new(path).parent()
+        {
+            std::fs::create_dir_all(parent)
+                .map_err(|e| AppError::Database(format!("创建 trace 目录失败: {}", e)))?;
+        }
+        let conn = Connection::open(path).map_err(|e| AppError::Database(e.to_string()))?;
         conn.pragma_update(None, "journal_mode", "WAL")
             .map_err(|e| AppError::Database(e.to_string()))?;
         conn.pragma_update(None, "foreign_keys", true)
@@ -68,10 +67,8 @@ impl TraceStore {
         .map_err(|e| AppError::Database(e.to_string()))?;
 
         // Migration: add claude_session_id to existing tables
-        let _migrate: Result<_, _> = conn.execute(
-            "ALTER TABLE records ADD COLUMN claude_session_id TEXT",
-            [],
-        );
+        let _migrate: Result<_, _> =
+            conn.execute("ALTER TABLE records ADD COLUMN claude_session_id TEXT", []);
 
         conn.execute(
             "CREATE INDEX IF NOT EXISTS idx_sessions_updated_at ON sessions(updated_at)",
@@ -197,11 +194,9 @@ impl TraceStore {
             .map_err(|e| AppError::Database(e.to_string()))?;
 
         let sessions = if let Some(d) = date {
-            stmt
-                .query_map(rusqlite::params![limit, offset, d], Self::row_to_session)
+            stmt.query_map(rusqlite::params![limit, offset, d], Self::row_to_session)
         } else {
-            stmt
-                .query_map(rusqlite::params![limit, offset], Self::row_to_session)
+            stmt.query_map(rusqlite::params![limit, offset], Self::row_to_session)
         }
         .map_err(|e| AppError::Database(e.to_string()))?
         .collect::<Result<_, _>>()
@@ -219,11 +214,9 @@ impl TraceStore {
         };
 
         let count: i64 = if let Some(d) = date {
-            self.conn
-                .query_row(sql, [d], |row| row.get(0))
+            self.conn.query_row(sql, [d], |row| row.get(0))
         } else {
-            self.conn
-                .query_row(sql, [], |row| row.get(0))
+            self.conn.query_row(sql, [], |row| row.get(0))
         }
         .map_err(|e| AppError::Database(e.to_string()))?;
 
@@ -244,7 +237,10 @@ impl TraceStore {
             .query_map([id], Self::row_to_session)
             .map_err(|e| AppError::Database(e.to_string()))?;
 
-        sessions.next().transpose().map_err(|e| AppError::Database(e.to_string()))
+        sessions
+            .next()
+            .transpose()
+            .map_err(|e| AppError::Database(e.to_string()))
     }
 
     /// Get all records for a session without pagination (for export).
@@ -283,7 +279,10 @@ impl TraceStore {
             .map_err(|e| AppError::Database(e.to_string()))?;
 
         let records = stmt
-            .query_map(rusqlite::params![session_id, limit, offset], Self::row_to_record)
+            .query_map(
+                rusqlite::params![session_id, limit, offset],
+                Self::row_to_record,
+            )
             .map_err(|e| AppError::Database(e.to_string()))?
             .collect::<Result<_, _>>()
             .map_err(|e| AppError::Database(e.to_string()))?;
@@ -380,7 +379,9 @@ mod tests {
     #[test]
     fn test_create_session() {
         let store = create_test_store();
-        let id = store.create_session("cl-kimi", "kimi", "kimi-k2.6").unwrap();
+        let id = store
+            .create_session("cl-kimi", "kimi", "kimi-k2.6")
+            .unwrap();
         assert!(!id.is_empty());
 
         let session = store.get_session(&id).unwrap().unwrap();
@@ -394,7 +395,9 @@ mod tests {
     #[test]
     fn test_append_record() {
         let store = create_test_store();
-        let id = store.create_session("cl-kimi", "kimi", "kimi-k2.6").unwrap();
+        let id = store
+            .create_session("cl-kimi", "kimi", "kimi-k2.6")
+            .unwrap();
 
         store
             .append_record(
@@ -428,7 +431,9 @@ mod tests {
     #[test]
     fn test_append_record_with_claude_session_id() {
         let store = create_test_store();
-        let id = store.create_session("cl-kimi", "kimi", "kimi-k2.6").unwrap();
+        let id = store
+            .create_session("cl-kimi", "kimi", "kimi-k2.6")
+            .unwrap();
 
         store
             .append_record(
@@ -442,7 +447,10 @@ mod tests {
 
         let records = store.get_records(&id, 100, 0).unwrap();
         assert_eq!(records.len(), 1);
-        assert_eq!(records[0].claude_session_id, Some("dda157ab-1c1a-42d2-aec9-83b5d44789b9".to_string()));
+        assert_eq!(
+            records[0].claude_session_id,
+            Some("dda157ab-1c1a-42d2-aec9-83b5d44789b9".to_string())
+        );
     }
 
     #[test]

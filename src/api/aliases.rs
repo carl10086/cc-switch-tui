@@ -8,9 +8,7 @@ use crate::shell;
 
 /// GET /api/aliases
 /// 渲染 aliases.zsh 内容（text/plain），不写盘
-pub async fn get(
-    State(state): State<AppState>,
-) -> Result<axum::response::Response, ApiError> {
+pub async fn get(State(state): State<AppState>) -> Result<axum::response::Response, ApiError> {
     let dao = state.dao.lock().await;
     let instances: Vec<_> = dao.list_instances().into_iter().cloned().collect();
     let templates: Vec<_> = dao.get_templates().into_iter().cloned().collect();
@@ -32,8 +30,8 @@ pub struct ApplyResponse {
 /// POST /api/aliases/apply
 /// 写入 aliases.zsh + opencode 配置文件到 ~/.cc-switch-tui/
 pub async fn apply(State(state): State<AppState>) -> Result<Json<ApplyResponse>, ApiError> {
-    let home = dirs::home_dir()
-        .ok_or_else(|| ApiError::internal("could not determine home directory"))?;
+    let home =
+        dirs::home_dir().ok_or_else(|| ApiError::internal("could not determine home directory"))?;
     let dir = home.join(".cc-switch-tui");
 
     let dao = state.dao.lock().await;

@@ -1,4 +1,7 @@
-use axum::{Json, extract::{Path, State}};
+use axum::{
+    Json,
+    extract::{Path, State},
+};
 use serde::Serialize;
 use serde_json::Value;
 
@@ -26,7 +29,9 @@ pub async fn get(
             .clone();
         let template = dao
             .get_template(&instance.template_id)
-            .ok_or_else(|| ApiError::not_found(format!("template {} not found", instance.template_id)))?
+            .ok_or_else(|| {
+                ApiError::not_found(format!("template {} not found", instance.template_id))
+            })?
             .clone();
         (instance, template)
     };
@@ -42,8 +47,8 @@ pub async fn apply(
     State(state): State<AppState>,
     Path(instance_id): Path<String>,
 ) -> Result<Json<ApplyResponse>, ApiError> {
-    let home = dirs::home_dir()
-        .ok_or_else(|| ApiError::internal("could not determine home directory"))?;
+    let home =
+        dirs::home_dir().ok_or_else(|| ApiError::internal("could not determine home directory"))?;
     let dir = home.join(".cc-switch-tui");
 
     let (instance, template) = {
@@ -54,7 +59,9 @@ pub async fn apply(
             .clone();
         let template = dao
             .get_template(&instance.template_id)
-            .ok_or_else(|| ApiError::not_found(format!("template {} not found", instance.template_id)))?
+            .ok_or_else(|| {
+                ApiError::not_found(format!("template {} not found", instance.template_id))
+            })?
             .clone();
         (instance, template)
     };

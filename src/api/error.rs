@@ -64,9 +64,11 @@ impl IntoResponse for ApiError {
     fn into_response(self) -> Response {
         let (status, code, field) = match &self {
             ApiError::NotFound(_) => (StatusCode::NOT_FOUND, "NOT_FOUND", None),
-            ApiError::Validation { field, .. } => {
-                (StatusCode::BAD_REQUEST, "VALIDATION_ERROR", Some(field.as_str()))
-            }
+            ApiError::Validation { field, .. } => (
+                StatusCode::BAD_REQUEST,
+                "VALIDATION_ERROR",
+                Some(field.as_str()),
+            ),
             ApiError::Conflict { field, .. } => {
                 (StatusCode::CONFLICT, "ALIAS_CONFLICT", Some(field.as_str()))
             }

@@ -49,7 +49,9 @@ impl UpstreamClient {
         body: Bytes,
         api_key: &str,
     ) -> Result<ForwardedResponse, AppError> {
-        let response = self.send_request(method, url, headers, body, api_key).await?;
+        let response = self
+            .send_request(method, url, headers, body, api_key)
+            .await?;
 
         let status = response.status();
         let headers = response.headers().clone();
@@ -74,7 +76,9 @@ impl UpstreamClient {
         body: Bytes,
         api_key: &str,
     ) -> Result<ForwardedStream, AppError> {
-        let response = self.send_request(method, url, headers, body, api_key).await?;
+        let response = self
+            .send_request(method, url, headers, body, api_key)
+            .await?;
 
         let status = response.status();
         let headers = response.headers().clone();
@@ -117,10 +121,10 @@ impl UpstreamClient {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use axum::{body::Body, routing::post, Router};
+    use axum::{Router, body::Body, routing::post};
     use futures::StreamExt;
 
-    async fn mock_handler(body: Body) -> axum::response::Response <String> {
+    async fn mock_handler(body: Body) -> axum::response::Response<String> {
         let bytes = axum::body::to_bytes(body, usize::MAX).await.unwrap();
         axum::response::Response::builder()
             .status(200)
