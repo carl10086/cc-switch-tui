@@ -21,7 +21,8 @@ fn minimax_template() -> ProviderTemplate {
 
     // 跟随 MiniMax 官方 2026 Claude Code 集成文档：
     //   - model id 使用 MiniMax-M3[1m]（含 [1m] 后缀表示 1M 上下文）
-    //   - CLAUDE_CODE_AUTO_COMPACT_WINDOW=1000000 与 1M 窗口对齐
+    //   - CLAUDE_CODE_AUTO_COMPACT_WINDOW=1000000 / MAX_CONTEXT_TOKENS=1000000
+    //     与 1M 窗口对齐
     // 配置完全由 model id 决定（env_overrides 字面量），不再走 instance toggle。
     let mut env_overrides_m3 = HashMap::new();
     env_overrides_m3.insert("ANTHROPIC_MODEL".to_string(), "MiniMax-M3[1m]".to_string());
@@ -38,7 +39,19 @@ fn minimax_template() -> ProviderTemplate {
         "MiniMax-M3[1m]".to_string(),
     );
     env_overrides_m3.insert(
+        "ANTHROPIC_DEFAULT_FABLE_MODEL".to_string(),
+        "MiniMax-M3[1m]".to_string(),
+    );
+    env_overrides_m3.insert(
+        "CLAUDE_CODE_SUBAGENT_MODEL".to_string(),
+        "MiniMax-M3[1m]".to_string(),
+    );
+    env_overrides_m3.insert(
         "CLAUDE_CODE_AUTO_COMPACT_WINDOW".to_string(),
+        "1000000".to_string(),
+    );
+    env_overrides_m3.insert(
+        "CLAUDE_CODE_MAX_CONTEXT_TOKENS".to_string(),
         "1000000".to_string(),
     );
 
@@ -58,6 +71,22 @@ fn minimax_template() -> ProviderTemplate {
     env_overrides_m27.insert(
         "ANTHROPIC_DEFAULT_SONNET_MODEL".to_string(),
         "MiniMax-M2.7-highspeed".to_string(),
+    );
+    env_overrides_m27.insert(
+        "ANTHROPIC_DEFAULT_FABLE_MODEL".to_string(),
+        "MiniMax-M2.7-highspeed".to_string(),
+    );
+    env_overrides_m27.insert(
+        "CLAUDE_CODE_SUBAGENT_MODEL".to_string(),
+        "MiniMax-M2.7-highspeed".to_string(),
+    );
+    env_overrides_m27.insert(
+        "CLAUDE_CODE_AUTO_COMPACT_WINDOW".to_string(),
+        "1000000".to_string(),
+    );
+    env_overrides_m27.insert(
+        "CLAUDE_CODE_MAX_CONTEXT_TOKENS".to_string(),
+        "1000000".to_string(),
     );
 
     ProviderTemplate {
@@ -154,6 +183,22 @@ fn kimi_template() -> ProviderTemplate {
         "ANTHROPIC_DEFAULT_SONNET_MODEL".to_string(),
         "kimi-for-coding-highspeed".to_string(),
     );
+    env_overrides_highspeed.insert(
+        "ANTHROPIC_DEFAULT_FABLE_MODEL".to_string(),
+        "kimi-for-coding-highspeed".to_string(),
+    );
+    env_overrides_highspeed.insert(
+        "CLAUDE_CODE_SUBAGENT_MODEL".to_string(),
+        "kimi-for-coding-highspeed".to_string(),
+    );
+    env_overrides_highspeed.insert(
+        "CLAUDE_CODE_AUTO_COMPACT_WINDOW".to_string(),
+        "262144".to_string(),
+    );
+    env_overrides_highspeed.insert(
+        "CLAUDE_CODE_MAX_CONTEXT_TOKENS".to_string(),
+        "262144".to_string(),
+    );
 
     let mut env_overrides_normal = HashMap::new();
     env_overrides_normal.insert(
@@ -171,6 +216,22 @@ fn kimi_template() -> ProviderTemplate {
     env_overrides_normal.insert(
         "ANTHROPIC_DEFAULT_SONNET_MODEL".to_string(),
         "kimi-for-coding".to_string(),
+    );
+    env_overrides_normal.insert(
+        "ANTHROPIC_DEFAULT_FABLE_MODEL".to_string(),
+        "kimi-for-coding".to_string(),
+    );
+    env_overrides_normal.insert(
+        "CLAUDE_CODE_SUBAGENT_MODEL".to_string(),
+        "kimi-for-coding".to_string(),
+    );
+    env_overrides_normal.insert(
+        "CLAUDE_CODE_AUTO_COMPACT_WINDOW".to_string(),
+        "262144".to_string(),
+    );
+    env_overrides_normal.insert(
+        "CLAUDE_CODE_MAX_CONTEXT_TOKENS".to_string(),
+        "262144".to_string(),
     );
 
     ProviderTemplate {

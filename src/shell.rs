@@ -407,7 +407,7 @@ mod tests {
         assert!(content.contains("command claude --exclude-dynamic-system-prompt-sections"));
     }
 
-    /// M3[1m] 跟随官方 2026 文档：model id 含 `[1m]` 后缀，env_overrides 自动注入 4 个 ANTHROPIC_DEFAULT_*_MODEL
+    /// M3[1m] 跟随官方 2026 文档：model id 含 `[1m]` 后缀，env_overrides 自动注入模型路由槽位
     #[test]
     fn test_aliases_contain_minimax_m3_1m_model_id() {
         use crate::templates::register_templates;
@@ -429,11 +429,19 @@ mod tests {
             content.contains("MiniMax-M3[1m]"),
             "aliases.zsh 应含 MiniMax-M3[1m] model id（跟随官方文档），实际:\n{content}"
         );
+        assert!(
+            content.contains("ANTHROPIC_DEFAULT_FABLE_MODEL='MiniMax-M3[1m]'"),
+            "aliases.zsh 应注入 ANTHROPIC_DEFAULT_FABLE_MODEL=MiniMax-M3[1m]，实际:\n{content}"
+        );
+        assert!(
+            content.contains("CLAUDE_CODE_SUBAGENT_MODEL='MiniMax-M3[1m]'"),
+            "aliases.zsh 应注入 CLAUDE_CODE_SUBAGENT_MODEL=MiniMax-M3[1m]，实际:\n{content}"
+        );
     }
 
-    /// M3[1m] env_overrides 硬编码 CLAUDE_CODE_AUTO_COMPACT_WINDOW=1000000（官方推荐）
+    /// M3[1m] env_overrides 硬编码 1M context 参数（官方推荐）
     #[test]
-    fn test_aliases_contain_auto_compact_window_var() {
+    fn test_aliases_m3_1m_injects_context_params() {
         use crate::templates::register_templates;
         let temp = TempDir::new().unwrap();
         let templates = register_templates();
@@ -452,6 +460,38 @@ mod tests {
         assert!(
             content.contains("CLAUDE_CODE_AUTO_COMPACT_WINDOW=1000000"),
             "M3[1m] env_overrides 应硬编码 CLAUDE_CODE_AUTO_COMPACT_WINDOW=1000000，实际:\n{content}"
+        );
+        assert!(
+            content.contains("CLAUDE_CODE_MAX_CONTEXT_TOKENS=1000000"),
+            "M3[1m] env_overrides 应硬编码 CLAUDE_CODE_MAX_CONTEXT_TOKENS=1000000，实际:\n{content}"
+        );
+    }
+
+    /// MiniMax-M2.7-highspeed 为 1M context，注入 1000000 对齐窗口
+    #[test]
+    fn test_aliases_m2_7_highspeed_injects_context_params() {
+        use crate::templates::register_templates;
+        let temp = TempDir::new().unwrap();
+        let templates = register_templates();
+        let instance = ProviderInstance {
+            id: "minimax-MiniMax-M2.7-highspeed-cl-mini".to_string(),
+            template_id: "minimax".to_string(),
+            model_id: "MiniMax-M2.7-highspeed".to_string(),
+            api_key: "sk-test".to_string(),
+            created_at: chrono::Utc::now(),
+            alias: "cl-mini".to_string(),
+            opencode_model_id: "MiniMax-M2.7-highspeed".to_string(),
+            kv_cache_enabled: false,
+        };
+        generate_aliases(temp.path(), &[instance], &templates).unwrap();
+        let content = std::fs::read_to_string(temp.path().join("aliases.zsh")).unwrap();
+        assert!(
+            content.contains("CLAUDE_CODE_AUTO_COMPACT_WINDOW=1000000"),
+            "M2.7-highspeed env_overrides 应硬编码 CLAUDE_CODE_AUTO_COMPACT_WINDOW=1000000，实际:\n{content}"
+        );
+        assert!(
+            content.contains("CLAUDE_CODE_MAX_CONTEXT_TOKENS=1000000"),
+            "M2.7-highspeed env_overrides 应硬编码 CLAUDE_CODE_MAX_CONTEXT_TOKENS=1000000，实际:\n{content}"
         );
     }
 
@@ -478,6 +518,70 @@ mod tests {
             content.contains("kimi-for-coding-highspeed"),
             "aliases.zsh 应含 kimi-for-coding-highspeed model id（Kimi highspeed 档位），实际:\n{content}"
         );
+        assert!(
+            content.contains("ANTHROPIC_DEFAULT_FABLE_MODEL=kimi-for-coding-highspeed"),
+            "aliases.zsh 应注入 ANTHROPIC_DEFAULT_FABLE_MODEL=kimi-for-coding-highspeed，实际:\n{content}"
+        );
+        assert!(
+            content.contains("CLAUDE_CODE_SUBAGENT_MODEL=kimi-for-coding-highspeed"),
+            "aliases.zsh 应注入 CLAUDE_CODE_SUBAGENT_MODEL=kimi-for-coding-highspeed，实际:\n{content}"
+        );
+    }
+
+    /// Kimi 普通档位：256K context，注入 262144
+    #[test]
+    fn test_aliases_kimi_for_coding_injects_256k_context_params() {
+        use crate::templates::register_templates;
+        let temp = TempDir::new().unwrap();
+        let templates = register_templates();
+        let instance = ProviderInstance {
+            id: "kimi-kimi-for-coding-cl-kimi".to_string(),
+            template_id: "kimi".to_string(),
+            model_id: "kimi-for-coding".to_string(),
+            api_key: "sk-test".to_string(),
+            created_at: chrono::Utc::now(),
+            alias: "cl-kimi".to_string(),
+            opencode_model_id: "kimi-for-coding".to_string(),
+            kv_cache_enabled: false,
+        };
+        generate_aliases(temp.path(), &[instance], &templates).unwrap();
+        let content = std::fs::read_to_string(temp.path().join("aliases.zsh")).unwrap();
+        assert!(
+            content.contains("CLAUDE_CODE_AUTO_COMPACT_WINDOW=262144"),
+            "kimi-for-coding env_overrides 应硬编码 CLAUDE_CODE_AUTO_COMPACT_WINDOW=262144，实际:\n{content}"
+        );
+        assert!(
+            content.contains("CLAUDE_CODE_MAX_CONTEXT_TOKENS=262144"),
+            "kimi-for-coding env_overrides 应硬编码 CLAUDE_CODE_MAX_CONTEXT_TOKENS=262144，实际:\n{content}"
+        );
+    }
+
+    /// Kimi highspeed 档位：256K context，同样注入 262144
+    #[test]
+    fn test_aliases_kimi_highspeed_injects_256k_context_params() {
+        use crate::templates::register_templates;
+        let temp = TempDir::new().unwrap();
+        let templates = register_templates();
+        let instance = ProviderInstance {
+            id: "kimi-kimi-for-coding-highspeed-cl-kimi-fast".to_string(),
+            template_id: "kimi".to_string(),
+            model_id: "kimi-for-coding-highspeed".to_string(),
+            api_key: "sk-test".to_string(),
+            created_at: chrono::Utc::now(),
+            alias: "cl-kimi-fast".to_string(),
+            opencode_model_id: "kimi-for-coding-highspeed".to_string(),
+            kv_cache_enabled: false,
+        };
+        generate_aliases(temp.path(), &[instance], &templates).unwrap();
+        let content = std::fs::read_to_string(temp.path().join("aliases.zsh")).unwrap();
+        assert!(
+            content.contains("CLAUDE_CODE_AUTO_COMPACT_WINDOW=262144"),
+            "kimi-for-coding-highspeed env_overrides 应硬编码 CLAUDE_CODE_AUTO_COMPACT_WINDOW=262144，实际:\n{content}"
+        );
+        assert!(
+            content.contains("CLAUDE_CODE_MAX_CONTEXT_TOKENS=262144"),
+            "kimi-for-coding-highspeed env_overrides 应硬编码 CLAUDE_CODE_MAX_CONTEXT_TOKENS=262144，实际:\n{content}"
+        );
     }
 
     /// Kimi k3[1m] 档位：model id `k3[1m]` 应出现在生成的 aliases.zsh 中
@@ -503,11 +607,23 @@ mod tests {
             content.contains("k3[1m]"),
             "aliases.zsh 应含 k3[1m] model id（Kimi k3 1M 档位），实际:\n{content}"
         );
+        assert!(
+            content.contains("ANTHROPIC_DEFAULT_FABLE_MODEL='k3[1m]'"),
+            "aliases.zsh 应注入 ANTHROPIC_DEFAULT_FABLE_MODEL=k3[1m]，实际:\n{content}"
+        );
+        assert!(
+            content.contains("CLAUDE_CODE_SUBAGENT_MODEL='k3[1m]'"),
+            "aliases.zsh 应注入 CLAUDE_CODE_SUBAGENT_MODEL=k3[1m]，实际:\n{content}"
+        );
+        assert!(
+            content.contains("CLAUDE_CODE_EFFORT_LEVEL=max"),
+            "aliases.zsh 应注入 CLAUDE_CODE_EFFORT_LEVEL=max，实际:\n{content}"
+        );
     }
 
-    /// build_env 不再注入 DISABLE_COMPACT / CLAUDE_CODE_MAX_CONTEXT_TOKENS（机制废弃）
+    /// build_env 不再注入 DISABLE_COMPACT（旧 auto-inject 机制已废弃）
     #[test]
-    fn test_aliases_do_not_contain_disabled_compact_var() {
+    fn test_aliases_do_not_contain_disabled_compact() {
         use crate::templates::register_templates;
         let temp = TempDir::new().unwrap();
         let templates = register_templates();
@@ -527,10 +643,6 @@ mod tests {
         assert!(
             !content.contains("DISABLE_COMPACT="),
             "aliases.zsh 不应含 DISABLE_COMPACT=（auto-inject 机制已废弃），实际:\n{content}"
-        );
-        assert!(
-            !content.contains("CLAUDE_CODE_MAX_CONTEXT_TOKENS="),
-            "aliases.zsh 不应含 CLAUDE_CODE_MAX_CONTEXT_TOKENS=，实际:\n{content}"
         );
     }
 
