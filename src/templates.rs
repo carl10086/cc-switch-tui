@@ -25,6 +25,19 @@ fn routing_env_vars(model_id: &str) -> HashMap<String, String> {
     env
 }
 
+/// 构建 1M/256K 对齐的上下文参数 env vars（`AUTO_COMPACT_WINDOW` +
+/// `MAX_CONTEXT_TOKENS`），均取同一 `window` 值（与 model 上下文大小一致）。
+fn context_env_vars(window: u32) -> HashMap<String, String> {
+    let w = window.to_string();
+    [
+        ("CLAUDE_CODE_AUTO_COMPACT_WINDOW", w.clone()),
+        ("CLAUDE_CODE_MAX_CONTEXT_TOKENS", w),
+    ]
+    .into_iter()
+    .map(|(k, v)| (k.to_string(), v))
+    .collect()
+}
+
 /// 注册并返回所有内置的 Provider 模板
 pub fn register_templates() -> Vec<ProviderTemplate> {
     vec![minimax_template(), kimi_template()]
@@ -49,24 +62,10 @@ fn minimax_template() -> ProviderTemplate {
     //     与 1M 窗口对齐
     // 配置完全由 model id 决定（env_overrides 字面量），不再走 instance toggle。
     let mut env_overrides_m3 = routing_env_vars("MiniMax-M3[1m]");
-    env_overrides_m3.insert(
-        "CLAUDE_CODE_AUTO_COMPACT_WINDOW".to_string(),
-        "1000000".to_string(),
-    );
-    env_overrides_m3.insert(
-        "CLAUDE_CODE_MAX_CONTEXT_TOKENS".to_string(),
-        "1000000".to_string(),
-    );
+    env_overrides_m3.extend(context_env_vars(1000000));
 
     let mut env_overrides_m27 = routing_env_vars("MiniMax-M2.7-highspeed");
-    env_overrides_m27.insert(
-        "CLAUDE_CODE_AUTO_COMPACT_WINDOW".to_string(),
-        "1000000".to_string(),
-    );
-    env_overrides_m27.insert(
-        "CLAUDE_CODE_MAX_CONTEXT_TOKENS".to_string(),
-        "1000000".to_string(),
-    );
+    env_overrides_m27.extend(context_env_vars(1000000));
 
     ProviderTemplate {
         id: "minimax".to_string(),
@@ -118,34 +117,13 @@ fn kimi_template() -> ProviderTemplate {
     // （思考程度，当前仅 k3 支持）+ 1M 窗口对齐（1048576）。
     let mut env_overrides_k3 = routing_env_vars("k3[1m]");
     env_overrides_k3.insert("CLAUDE_CODE_EFFORT_LEVEL".to_string(), "max".to_string());
-    env_overrides_k3.insert(
-        "CLAUDE_CODE_AUTO_COMPACT_WINDOW".to_string(),
-        "1048576".to_string(),
-    );
-    env_overrides_k3.insert(
-        "CLAUDE_CODE_MAX_CONTEXT_TOKENS".to_string(),
-        "1048576".to_string(),
-    );
+    env_overrides_k3.extend(context_env_vars(1048576));
 
     let mut env_overrides_highspeed = routing_env_vars("kimi-for-coding-highspeed");
-    env_overrides_highspeed.insert(
-        "CLAUDE_CODE_AUTO_COMPACT_WINDOW".to_string(),
-        "262144".to_string(),
-    );
-    env_overrides_highspeed.insert(
-        "CLAUDE_CODE_MAX_CONTEXT_TOKENS".to_string(),
-        "262144".to_string(),
-    );
+    env_overrides_highspeed.extend(context_env_vars(262144));
 
     let mut env_overrides_normal = routing_env_vars("kimi-for-coding");
-    env_overrides_normal.insert(
-        "CLAUDE_CODE_AUTO_COMPACT_WINDOW".to_string(),
-        "262144".to_string(),
-    );
-    env_overrides_normal.insert(
-        "CLAUDE_CODE_MAX_CONTEXT_TOKENS".to_string(),
-        "262144".to_string(),
-    );
+    env_overrides_normal.extend(context_env_vars(262144));
 
     ProviderTemplate {
         id: "kimi".to_string(),

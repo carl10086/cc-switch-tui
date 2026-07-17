@@ -252,7 +252,29 @@ mod tests {
     const POLLUTION_GREP_RE: &str = "^(ANTHROPIC_|API_TIMEOUT_MS|CC_SWITCH_|\
          CLAUDE_CODE_(SUBAGENT_MODEL|EFFORT_LEVEL|MAX_CONTEXT_TOKENS|\
          AUTO_COMPACT_WINDOW|DISABLE_NONESSENTIAL_TRAFFIC)|DISABLE_COMPACT)=";
+
+    /// 污染测试脚本开头 `unset` 的变量列表，确保父 shell 预存变量不污染结果。
+    /// 维护要求同 `POLLUTION_GREP_RE`——新 env var 注入需同步加入。
+    const POLLUTION_UNSET_VARS: &str = "ANTHROPIC_AUTH_TOKEN ANTHROPIC_BASE_URL \
+         ANTHROPIC_DEFAULT_HAIKU_MODEL ANTHROPIC_DEFAULT_OPUS_MODEL \
+         ANTHROPIC_DEFAULT_SONNET_MODEL ANTHROPIC_DEFAULT_FABLE_MODEL \
+         ANTHROPIC_MODEL API_TIMEOUT_MS CC_SWITCH_ALIAS \
+         CLAUDE_CODE_MAX_CONTEXT_TOKENS CLAUDE_CODE_AUTO_COMPACT_WINDOW \
+         CLAUDE_CODE_SUBAGENT_MODEL CLAUDE_CODE_EFFORT_LEVEL \
+         DISABLE_COMPACT CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC \
+         CMUX_PRESERVE_CLAUDE_AUTH_SELECTION_ENV";
     use tempfile::TempDir;
+
+    /// 在 `bin_dir` 下写入 stub `claude` 可执行脚本（chmod 0o755），
+    /// 避免污染测试依赖真实二进制。返回 stub 路径。
+    fn write_claude_stub(bin_dir: &std::path::Path, body: &str) -> std::path::PathBuf {
+        std::fs::create_dir_all(bin_dir).unwrap();
+        let stub = bin_dir.join("claude");
+        std::fs::write(&stub, format!("#!/bin/zsh\n{}\nexit 0\n", body)).unwrap();
+        std::fs::set_permissions(&stub, std::os::unix::fs::PermissionsExt::from_mode(0o755))
+            .unwrap();
+        stub
+    }
 
     #[test]
     fn test_generate_aliases_creates_file() {
@@ -1017,18 +1039,7 @@ mod tests {
 
         // 用 stub 替换 PATH 中的 claude，避免依赖真实二进制。
         let bin_dir = temp.path().join("bin");
-        std::fs::create_dir_all(&bin_dir).unwrap();
-        let claude_stub = bin_dir.join("claude");
-        std::fs::write(
-            &claude_stub,
-            "#!/bin/zsh\necho \"CLAUDE_URL=$ANTHROPIC_BASE_URL\"\nexit 0\n",
-        )
-        .unwrap();
-        std::fs::set_permissions(
-            &claude_stub,
-            std::os::unix::fs::PermissionsExt::from_mode(0o755),
-        )
-        .unwrap();
+        write_claude_stub(&bin_dir, "echo \"CLAUDE_URL=$ANTHROPIC_BASE_URL\"");
 
         let kimi_out = temp.path().join("kimi.txt");
         let mini_out = temp.path().join("mini.txt");
@@ -1036,14 +1047,7 @@ mod tests {
         let aliases_path = temp.path().join("aliases.zsh");
         let script = format!(
             "emulate zsh\n\
-             unset ANTHROPIC_AUTH_TOKEN ANTHROPIC_BASE_URL ANTHROPIC_DEFAULT_HAIKU_MODEL \\\n\
-                   ANTHROPIC_DEFAULT_OPUS_MODEL ANTHROPIC_DEFAULT_SONNET_MODEL \\\n\
-                   ANTHROPIC_DEFAULT_FABLE_MODEL ANTHROPIC_MODEL API_TIMEOUT_MS \\\n\
-                   CC_SWITCH_ALIAS CLAUDE_CODE_MAX_CONTEXT_TOKENS \\\n\
-                   CLAUDE_CODE_AUTO_COMPACT_WINDOW CLAUDE_CODE_SUBAGENT_MODEL \\\n\
-                   CLAUDE_CODE_EFFORT_LEVEL DISABLE_COMPACT \\\n\
-                   CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC \\\n\
-                   CMUX_PRESERVE_CLAUDE_AUTH_SELECTION_ENV\n\
+             unset {unset_vars}\n\
              export PATH=\"{bin}:$PATH\"\n\
              source {aliases}\n\
              cl-kimi >{kimi} 2>&1\n\
@@ -1055,6 +1059,7 @@ mod tests {
             mini = mini_out.display(),
             poll = poll_out.display(),
             poll_re = POLLUTION_GREP_RE,
+            unset_vars = POLLUTION_UNSET_VARS,
         );
         std::fs::write(temp.path().join("run.zsh"), script).unwrap();
         let out = std::process::Command::new("zsh")
@@ -1117,27 +1122,13 @@ mod tests {
 
         // stub claude：仅打印一行 OK，避免依赖真实二进制
         let bin_dir = temp.path().join("bin");
-        std::fs::create_dir_all(&bin_dir).unwrap();
-        let claude_stub = bin_dir.join("claude");
-        std::fs::write(&claude_stub, "#!/bin/zsh\necho \"OK\"\nexit 0\n").unwrap();
-        std::fs::set_permissions(
-            &claude_stub,
-            std::os::unix::fs::PermissionsExt::from_mode(0o755),
-        )
-        .unwrap();
+        write_claude_stub(&bin_dir, "echo \"OK\"");
 
         let poll_out = temp.path().join("poll.txt");
         let aliases_path = temp.path().join("aliases.zsh");
         let script = format!(
             "emulate zsh\n\
-             unset ANTHROPIC_AUTH_TOKEN ANTHROPIC_BASE_URL ANTHROPIC_DEFAULT_HAIKU_MODEL \\\n\
-                   ANTHROPIC_DEFAULT_OPUS_MODEL ANTHROPIC_DEFAULT_SONNET_MODEL \\\n\
-                   ANTHROPIC_DEFAULT_FABLE_MODEL ANTHROPIC_MODEL API_TIMEOUT_MS \\\n\
-                   CC_SWITCH_ALIAS CLAUDE_CODE_MAX_CONTEXT_TOKENS \\\n\
-                   CLAUDE_CODE_AUTO_COMPACT_WINDOW CLAUDE_CODE_SUBAGENT_MODEL \\\n\
-                   CLAUDE_CODE_EFFORT_LEVEL DISABLE_COMPACT \\\n\
-                   CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC \\\n\
-                   CMUX_PRESERVE_CLAUDE_AUTH_SELECTION_ENV\n\
+             unset {unset_vars}\n\
              export PATH=\"{bin}:$PATH\"\n\
              source {aliases}\n\
              cl-mini >/dev/null 2>&1\n\
@@ -1146,6 +1137,7 @@ mod tests {
             aliases = aliases_path.display(),
             poll = poll_out.display(),
             poll_re = POLLUTION_GREP_RE,
+            unset_vars = POLLUTION_UNSET_VARS,
         );
         std::fs::write(temp.path().join("run.zsh"), script).unwrap();
         let out = std::process::Command::new("zsh")
