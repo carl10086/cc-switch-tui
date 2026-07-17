@@ -14,7 +14,10 @@ async fn http_get(addr: std::net::SocketAddr, path: &str) -> String {
         .await
         .expect("connect failed");
     let req = format!("GET {path} HTTP/1.0\r\nHost: localhost\r\nConnection: close\r\n\r\n");
-    stream.write_all(req.as_bytes()).await.expect("write failed");
+    stream
+        .write_all(req.as_bytes())
+        .await
+        .expect("write failed");
     let mut buf = Vec::new();
     stream.read_to_end(&mut buf).await.expect("read failed");
     String::from_utf8_lossy(&buf).into_owned()
@@ -25,7 +28,10 @@ async fn test_list_instances_empty_db_returns_empty_array() {
     let addr = api::spawn_app().await;
     let raw = http_get(addr, "/api/instances").await;
     assert!(raw.starts_with("HTTP/1.0 200"), "expected 200, got:\n{raw}");
-    assert!(raw.contains("application/json"), "expected JSON, got:\n{raw}");
+    assert!(
+        raw.contains("application/json"),
+        "expected JSON, got:\n{raw}"
+    );
     // body 末尾应该是 []
     let body_start = raw.find("\r\n\r\n").map(|i| i + 4).unwrap_or(0);
     let body = &raw[body_start..];

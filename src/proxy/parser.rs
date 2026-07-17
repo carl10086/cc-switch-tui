@@ -56,7 +56,11 @@ impl StreamingAccumulator {
 
 /// Extract a string field from JSON, defaulting to empty string.
 fn get_str(value: &Value, key: &str) -> String {
-    value.get(key).and_then(Value::as_str).unwrap_or("").to_string()
+    value
+        .get(key)
+        .and_then(Value::as_str)
+        .unwrap_or("")
+        .to_string()
 }
 
 /// Parser for Anthropic request/response payloads.
@@ -81,7 +85,10 @@ impl AnthropicParser {
         };
 
         result.model = get_str(&json, "model");
-        result.max_tokens = json.get("max_tokens").and_then(Value::as_u64).map(|v| v as u32);
+        result.max_tokens = json
+            .get("max_tokens")
+            .and_then(Value::as_u64)
+            .map(|v| v as u32);
         result.system = json
             .get("system")
             .and_then(Value::as_str)
@@ -111,7 +118,12 @@ impl AnthropicParser {
         if let Some(arr) = json.get("content").and_then(Value::as_array) {
             let texts: Vec<String> = arr
                 .iter()
-                .filter_map(|block| block.get("text").and_then(Value::as_str).map(|s| s.to_string()))
+                .filter_map(|block| {
+                    block
+                        .get("text")
+                        .and_then(Value::as_str)
+                        .map(|s| s.to_string())
+                })
                 .collect();
             result.content = texts.join("");
         }
@@ -137,10 +149,7 @@ impl AnthropicParser {
     }
 
     /// Parse a single SSE event and update the accumulator.
-    pub fn apply_streaming_event(&self,
-        acc: &mut StreamingAccumulator,
-        event: &SseEvent,
-    ) {
+    pub fn apply_streaming_event(&self, acc: &mut StreamingAccumulator, event: &SseEvent) {
         match event.event_type.as_deref() {
             Some("message_start") => {
                 if let Ok(json) = serde_json::from_str::<Value>(&event.data)
@@ -148,9 +157,9 @@ impl AnthropicParser {
                         .get("message")
                         .and_then(|m| m.get("model"))
                         .and_then(Value::as_str)
-                    {
-                        acc.model = model.to_string();
-                    }
+                {
+                    acc.model = model.to_string();
+                }
             }
             Some("content_block_delta") => {
                 if let Ok(json) = serde_json::from_str::<Value>(&event.data)
@@ -158,9 +167,9 @@ impl AnthropicParser {
                         .get("delta")
                         .and_then(|d| d.get("text"))
                         .and_then(Value::as_str)
-                    {
-                        acc.content.push(text.to_string());
-                    }
+                {
+                    acc.content.push(text.to_string());
+                }
             }
             Some("message_delta") => {
                 if let Ok(json) = serde_json::from_str::<Value>(&event.data) {

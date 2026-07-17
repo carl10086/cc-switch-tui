@@ -4,10 +4,7 @@ const MAX_CLAUDE_SESSION_ID_LEN: usize = 128;
 
 /// Extract `session_id` from `metadata.user_id` in the request body.
 pub fn extract_claude_session_id(body: &Value) -> Option<String> {
-    let user_id = body
-        .get("metadata")?
-        .get("user_id")?
-        .as_str()?;
+    let user_id = body.get("metadata")?.get("user_id")?.as_str()?;
 
     let parsed: Value = serde_json::from_str(user_id).ok()?;
     let s = parsed.get("session_id")?.as_str()?;
@@ -46,9 +43,10 @@ pub fn redact_user_id_pii(body: &mut Value) -> bool {
 
     let redacted = serde_json::to_string(&parsed).unwrap_or(user_id_str);
     if let Some(metadata) = body.get_mut("metadata")
-        && let Some(user_id) = metadata.get_mut("user_id") {
-            *user_id = Value::String(redacted);
-        }
+        && let Some(user_id) = metadata.get_mut("user_id")
+    {
+        *user_id = Value::String(redacted);
+    }
 
     true
 }

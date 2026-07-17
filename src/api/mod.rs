@@ -1,4 +1,7 @@
-use axum::{Router, routing::{any, get, post}};
+use axum::{
+    Router,
+    routing::{any, get, post},
+};
 
 pub mod aliases;
 pub mod config;
@@ -32,10 +35,7 @@ pub fn router(state: AppState) -> Router {
                 .patch(instances::patch)
                 .delete(instances::delete),
         )
-        .route(
-            "/api/instances/:id/duplicate",
-            post(instances::duplicate),
-        )
+        .route("/api/instances/:id/duplicate", post(instances::duplicate))
         .route("/api/templates", get(templates::list))
         .route("/api/aliases", get(aliases::get))
         .route("/api/aliases/apply", post(aliases::apply))
@@ -43,10 +43,7 @@ pub fn router(state: AppState) -> Router {
         .route("/api/opencode-config/:id/apply", post(opencode::apply))
         .route("/api/config/export", get(config::export))
         .route("/api/config/import", post(config::import))
-        .route(
-            "/api/settings",
-            get(settings::get).put(settings::put),
-        )
+        .route("/api/settings", get(settings::get).put(settings::put))
         .route("/api/diagnostics", get(diagnostics::get))
         .route(
             "/api/traces/sessions",
@@ -56,10 +53,7 @@ pub fn router(state: AppState) -> Router {
             "/api/traces/sessions/:id",
             get(traces::get_session).delete(traces::delete_session),
         )
-        .route(
-            "/api/traces/sessions/:id/records",
-            get(traces::get_records),
-        )
+        .route("/api/traces/sessions/:id/records", get(traces::get_records))
         .route(
             "/api/traces/sessions/:id/export/jsonl",
             get(traces::export_session),

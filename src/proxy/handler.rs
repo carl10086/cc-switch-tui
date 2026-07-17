@@ -64,8 +64,7 @@ pub async fn proxy_handler(
         if let Ok(mut body_json) = serde_json::from_str::<serde_json::Value>(&body_str) {
             let sid = extract_claude_session_id(&body_json);
             let _ = redact_user_id_pii(&mut body_json);
-            let redacted = serde_json::to_string(&body_json)
-                .unwrap_or_else(|_| body_str.clone());
+            let redacted = serde_json::to_string(&body_json).unwrap_or_else(|_| body_str.clone());
             (sid, redacted)
         } else {
             (None, body_str.clone())
@@ -87,7 +86,9 @@ pub async fn proxy_handler(
         let template = templates
             .iter()
             .find(|t| t.id == instance.template_id)
-            .ok_or_else(|| ApiError::internal(format!("template not found: {}", instance.template_id)))?;
+            .ok_or_else(|| {
+                ApiError::internal(format!("template not found: {}", instance.template_id))
+            })?;
 
         let upstream_url = template
             .default_env
@@ -118,7 +119,13 @@ pub async fn proxy_handler(
     if is_streaming_request(&body_bytes) {
         // --- 流式路径：延迟到 message_start 创建 session ---
         let stream_resp = client
-            .forward_streaming(method, &upstream_url, filtered_headers, body_bytes, &api_key)
+            .forward_streaming(
+                method,
+                &upstream_url,
+                filtered_headers,
+                body_bytes,
+                &api_key,
+            )
             .await
             .map_err(|e| ApiError::internal(e.to_string()))?;
 
@@ -142,9 +149,12 @@ pub async fn proxy_handler(
                 let events = parser.feed(&chunk);
                 for event in events {
                     // 第一个 message_start 时创建 session 并记录 request
-                    if event.event_type.as_deref() == Some("message_start") && session_id.is_none() {
+                    if event.event_type.as_deref() == Some("message_start") && session_id.is_none()
+                    {
                         let store = trace_store.lock().await;
-                        if let Ok(sid) = store.create_session(&alias_clone, &provider_clone, &model_clone) {
+                        if let Ok(sid) =
+                            store.create_session(&alias_clone, &provider_clone, &model_clone)
+                        {
                             let _ = store.append_record(
                                 &sid,
                                 Some(1),
@@ -171,12 +181,13 @@ pub async fn proxy_handler(
             // 保存 response
             if let Some(ref sid) = session_id {
                 let response_summary = accumulator.into_response();
-                let response_json = serde_json::to_string(&response_summary)
-                    .unwrap_or_else(|_| "{}".to_string());
+                let response_json =
+                    serde_json::to_string(&response_summary).unwrap_or_else(|_| "{}".to_string());
                 let summary = serde_json::to_string(&json!({
                     "request": request_summary_clone,
                     "response": &response_summary,
-                })).unwrap_or_default();
+                }))
+                .unwrap_or_default();
 
                 let store = trace_store.lock().await;
                 let _ = store.append_record(
@@ -213,7 +224,13 @@ pub async fn proxy_handler(
     } else {
         // --- 非流式路径：MVP 仅流式，不记录 trace ---
         let upstream_resp = client
-            .forward(method, &upstream_url, filtered_headers, body_bytes, &api_key)
+            .forward(
+                method,
+                &upstream_url,
+                filtered_headers,
+                body_bytes,
+                &api_key,
+            )
             .await
             .map_err(|e| ApiError::internal(e.to_string()))?;
 
@@ -224,9 +241,9 @@ pub async fn proxy_handler(
             }
         }
 
-        Ok(builder
-            .body(upstream_resp.body.into())
-            .unwrap_or_else(|_| (StatusCode::INTERNAL_SERVER_ERROR, "build response failed").into_response()))
+        Ok(builder.body(upstream_resp.body.into()).unwrap_or_else(|_| {
+            (StatusCode::INTERNAL_SERVER_ERROR, "build response failed").into_response()
+        }))
     }
 }
 
@@ -237,7 +254,9 @@ mod tests {
     #[test]
     fn test_streaming_detection_true() {
         assert!(is_streaming_request(b"{\"stream\":true}"));
-        assert!(is_streaming_request(b"{\"stream\": true, \"model\":\"test\"}"));
+        assert!(is_streaming_request(
+            b"{\"stream\": true, \"model\":\"test\"}"
+        ));
     }
 
     #[test]

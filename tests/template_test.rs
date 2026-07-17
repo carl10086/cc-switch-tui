@@ -20,7 +20,10 @@ fn test_minimax_template_registered() {
         "MiniMax-M3[1m]"
     );
     assert_eq!(
-        model.env_overrides.get("ANTHROPIC_DEFAULT_OPUS_MODEL").unwrap(),
+        model
+            .env_overrides
+            .get("ANTHROPIC_DEFAULT_OPUS_MODEL")
+            .unwrap(),
         "MiniMax-M3[1m]"
     );
 

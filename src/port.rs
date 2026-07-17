@@ -5,10 +5,7 @@ use tokio::net::TcpListener;
 
 /// 尝试绑定 `addr`，若失败就在 `addr.port()+1..addr.port()+1+max_attempts` 范围内找。
 /// 返回 (实际 listener, 实际 port)。
-pub async fn try_bind(
-    start: u16,
-    max_attempts: u16,
-) -> Result<(TcpListener, u16), String> {
+pub async fn try_bind(start: u16, max_attempts: u16) -> Result<(TcpListener, u16), String> {
     for offset in 0..max_attempts {
         let port = start.saturating_add(offset);
         let addr: SocketAddr = format!("127.0.0.1:{port}").parse().unwrap();
@@ -127,7 +124,9 @@ mod tests {
         let (occupied_listener, occupied_port) = try_bind(51000, 1).await.unwrap();
 
         // 再试从 51000 开始，应该跳过 occupied_port
-        let (listener, port) = try_bind(occupied_port, 10).await.expect("should bind next free");
+        let (listener, port) = try_bind(occupied_port, 10)
+            .await
+            .expect("should bind next free");
         assert_ne!(port, occupied_port);
         drop(listener);
         drop(occupied_listener);

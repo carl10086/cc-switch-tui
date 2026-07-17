@@ -25,8 +25,8 @@ pub struct Diagnostics {
 /// GET /api/diagnostics
 /// 返回系统级诊断信息（路径、可写性、计数）。
 pub async fn get(State(state): State<AppState>) -> Result<Json<Diagnostics>, ApiError> {
-    let home = dirs::home_dir()
-        .ok_or_else(|| ApiError::internal("could not determine home directory"))?;
+    let home =
+        dirs::home_dir().ok_or_else(|| ApiError::internal("could not determine home directory"))?;
     let cc_dir = home.join(".cc-switch-tui");
     let db_path = cc_dir.join("db.sqlite");
     let aliases_path = cc_dir.join("aliases.zsh");
@@ -68,15 +68,13 @@ pub async fn get(State(state): State<AppState>) -> Result<Json<Diagnostics>, Api
 
 fn check_writable(path: &std::path::Path) -> bool {
     if let Some(parent) = path.parent()
-        && !parent.exists() {
-            return std::fs::create_dir_all(parent).is_ok();
-        }
+        && !parent.exists()
+    {
+        return std::fs::create_dir_all(parent).is_ok();
+    }
     // 尝试在路径存在时测写
     if path.exists() {
-        std::fs::OpenOptions::new()
-            .write(true)
-            .open(path)
-            .is_ok()
+        std::fs::OpenOptions::new().write(true).open(path).is_ok()
     } else if let Some(parent) = path.parent() {
         std::fs::OpenOptions::new()
             .write(true)
