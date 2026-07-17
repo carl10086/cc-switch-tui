@@ -1,6 +1,30 @@
 use crate::domain::{ModelTemplate, ProviderTemplate};
 use std::collections::HashMap;
 
+/// 构建 6 个模型路由槽位 env vars（MODEL + 4 个 DEFAULT_* + SUBAGENT），
+/// 全部指向同一 `model_id`。避免 Claude Code 用默认名发请求被后端拒识。
+///
+/// per-provider 上下文参数（`AUTO_COMPACT_WINDOW` / `MAX_CONTEXT_TOKENS`）和
+/// `EFFORT_LEVEL`（仅 k3）由 caller 在返回 HashMap 上追加，保持各自独立。
+fn routing_env_vars(model_id: &str) -> HashMap<String, String> {
+    let mut env = HashMap::new();
+    let slots = [
+        "ANTHROPIC_MODEL",
+        "ANTHROPIC_DEFAULT_HAIKU_MODEL",
+        "ANTHROPIC_DEFAULT_OPUS_MODEL",
+        "ANTHROPIC_DEFAULT_SONNET_MODEL",
+        "ANTHROPIC_DEFAULT_FABLE_MODEL",
+    ];
+    for key in slots {
+        env.insert(key.to_string(), model_id.to_string());
+    }
+    env.insert(
+        "CLAUDE_CODE_SUBAGENT_MODEL".to_string(),
+        model_id.to_string(),
+    );
+    env
+}
+
 /// 注册并返回所有内置的 Provider 模板
 pub fn register_templates() -> Vec<ProviderTemplate> {
     vec![minimax_template(), kimi_template()]
@@ -24,28 +48,7 @@ fn minimax_template() -> ProviderTemplate {
     //   - CLAUDE_CODE_AUTO_COMPACT_WINDOW=1000000 / MAX_CONTEXT_TOKENS=1000000
     //     与 1M 窗口对齐
     // 配置完全由 model id 决定（env_overrides 字面量），不再走 instance toggle。
-    let mut env_overrides_m3 = HashMap::new();
-    env_overrides_m3.insert("ANTHROPIC_MODEL".to_string(), "MiniMax-M3[1m]".to_string());
-    env_overrides_m3.insert(
-        "ANTHROPIC_DEFAULT_HAIKU_MODEL".to_string(),
-        "MiniMax-M3[1m]".to_string(),
-    );
-    env_overrides_m3.insert(
-        "ANTHROPIC_DEFAULT_OPUS_MODEL".to_string(),
-        "MiniMax-M3[1m]".to_string(),
-    );
-    env_overrides_m3.insert(
-        "ANTHROPIC_DEFAULT_SONNET_MODEL".to_string(),
-        "MiniMax-M3[1m]".to_string(),
-    );
-    env_overrides_m3.insert(
-        "ANTHROPIC_DEFAULT_FABLE_MODEL".to_string(),
-        "MiniMax-M3[1m]".to_string(),
-    );
-    env_overrides_m3.insert(
-        "CLAUDE_CODE_SUBAGENT_MODEL".to_string(),
-        "MiniMax-M3[1m]".to_string(),
-    );
+    let mut env_overrides_m3 = routing_env_vars("MiniMax-M3[1m]");
     env_overrides_m3.insert(
         "CLAUDE_CODE_AUTO_COMPACT_WINDOW".to_string(),
         "1000000".to_string(),
@@ -55,31 +58,7 @@ fn minimax_template() -> ProviderTemplate {
         "1000000".to_string(),
     );
 
-    let mut env_overrides_m27 = HashMap::new();
-    env_overrides_m27.insert(
-        "ANTHROPIC_MODEL".to_string(),
-        "MiniMax-M2.7-highspeed".to_string(),
-    );
-    env_overrides_m27.insert(
-        "ANTHROPIC_DEFAULT_HAIKU_MODEL".to_string(),
-        "MiniMax-M2.7-highspeed".to_string(),
-    );
-    env_overrides_m27.insert(
-        "ANTHROPIC_DEFAULT_OPUS_MODEL".to_string(),
-        "MiniMax-M2.7-highspeed".to_string(),
-    );
-    env_overrides_m27.insert(
-        "ANTHROPIC_DEFAULT_SONNET_MODEL".to_string(),
-        "MiniMax-M2.7-highspeed".to_string(),
-    );
-    env_overrides_m27.insert(
-        "ANTHROPIC_DEFAULT_FABLE_MODEL".to_string(),
-        "MiniMax-M2.7-highspeed".to_string(),
-    );
-    env_overrides_m27.insert(
-        "CLAUDE_CODE_SUBAGENT_MODEL".to_string(),
-        "MiniMax-M2.7-highspeed".to_string(),
-    );
+    let mut env_overrides_m27 = routing_env_vars("MiniMax-M2.7-highspeed");
     env_overrides_m27.insert(
         "CLAUDE_CODE_AUTO_COMPACT_WINDOW".to_string(),
         "1000000".to_string(),
@@ -137,25 +116,7 @@ fn kimi_template() -> ProviderTemplate {
     //
     // k3[1m] env 跟随官方建议：6 个模型路由槽位 + CLAUDE_CODE_EFFORT_LEVEL=max
     // （思考程度，当前仅 k3 支持）+ 1M 窗口对齐（1048576）。
-    let mut env_overrides_k3 = HashMap::new();
-    env_overrides_k3.insert("ANTHROPIC_MODEL".to_string(), "k3[1m]".to_string());
-    env_overrides_k3.insert(
-        "ANTHROPIC_DEFAULT_HAIKU_MODEL".to_string(),
-        "k3[1m]".to_string(),
-    );
-    env_overrides_k3.insert(
-        "ANTHROPIC_DEFAULT_OPUS_MODEL".to_string(),
-        "k3[1m]".to_string(),
-    );
-    env_overrides_k3.insert(
-        "ANTHROPIC_DEFAULT_SONNET_MODEL".to_string(),
-        "k3[1m]".to_string(),
-    );
-    env_overrides_k3.insert(
-        "ANTHROPIC_DEFAULT_FABLE_MODEL".to_string(),
-        "k3[1m]".to_string(),
-    );
-    env_overrides_k3.insert("CLAUDE_CODE_SUBAGENT_MODEL".to_string(), "k3[1m]".to_string());
+    let mut env_overrides_k3 = routing_env_vars("k3[1m]");
     env_overrides_k3.insert("CLAUDE_CODE_EFFORT_LEVEL".to_string(), "max".to_string());
     env_overrides_k3.insert(
         "CLAUDE_CODE_AUTO_COMPACT_WINDOW".to_string(),
@@ -166,31 +127,7 @@ fn kimi_template() -> ProviderTemplate {
         "1048576".to_string(),
     );
 
-    let mut env_overrides_highspeed = HashMap::new();
-    env_overrides_highspeed.insert(
-        "ANTHROPIC_MODEL".to_string(),
-        "kimi-for-coding-highspeed".to_string(),
-    );
-    env_overrides_highspeed.insert(
-        "ANTHROPIC_DEFAULT_HAIKU_MODEL".to_string(),
-        "kimi-for-coding-highspeed".to_string(),
-    );
-    env_overrides_highspeed.insert(
-        "ANTHROPIC_DEFAULT_OPUS_MODEL".to_string(),
-        "kimi-for-coding-highspeed".to_string(),
-    );
-    env_overrides_highspeed.insert(
-        "ANTHROPIC_DEFAULT_SONNET_MODEL".to_string(),
-        "kimi-for-coding-highspeed".to_string(),
-    );
-    env_overrides_highspeed.insert(
-        "ANTHROPIC_DEFAULT_FABLE_MODEL".to_string(),
-        "kimi-for-coding-highspeed".to_string(),
-    );
-    env_overrides_highspeed.insert(
-        "CLAUDE_CODE_SUBAGENT_MODEL".to_string(),
-        "kimi-for-coding-highspeed".to_string(),
-    );
+    let mut env_overrides_highspeed = routing_env_vars("kimi-for-coding-highspeed");
     env_overrides_highspeed.insert(
         "CLAUDE_CODE_AUTO_COMPACT_WINDOW".to_string(),
         "262144".to_string(),
@@ -200,31 +137,7 @@ fn kimi_template() -> ProviderTemplate {
         "262144".to_string(),
     );
 
-    let mut env_overrides_normal = HashMap::new();
-    env_overrides_normal.insert(
-        "ANTHROPIC_MODEL".to_string(),
-        "kimi-for-coding".to_string(),
-    );
-    env_overrides_normal.insert(
-        "ANTHROPIC_DEFAULT_HAIKU_MODEL".to_string(),
-        "kimi-for-coding".to_string(),
-    );
-    env_overrides_normal.insert(
-        "ANTHROPIC_DEFAULT_OPUS_MODEL".to_string(),
-        "kimi-for-coding".to_string(),
-    );
-    env_overrides_normal.insert(
-        "ANTHROPIC_DEFAULT_SONNET_MODEL".to_string(),
-        "kimi-for-coding".to_string(),
-    );
-    env_overrides_normal.insert(
-        "ANTHROPIC_DEFAULT_FABLE_MODEL".to_string(),
-        "kimi-for-coding".to_string(),
-    );
-    env_overrides_normal.insert(
-        "CLAUDE_CODE_SUBAGENT_MODEL".to_string(),
-        "kimi-for-coding".to_string(),
-    );
+    let mut env_overrides_normal = routing_env_vars("kimi-for-coding");
     env_overrides_normal.insert(
         "CLAUDE_CODE_AUTO_COMPACT_WINDOW".to_string(),
         "262144".to_string(),

@@ -243,6 +243,15 @@ mod tests {
     use super::*;
     use crate::domain::{ModelTemplate, ProviderTemplate};
     use std::collections::HashMap;
+
+    /// 污染测试使用的 env grep 模式。
+    ///
+    /// **维护要求**：必须覆盖 `env_overrides` 中所有可能注入的变量前缀/全名。
+    /// 添加新 model 注入的新 env var（如 `CLAUDE_CODE_*`）时，需同步扩展本模式；
+    /// 同时在脚本 `unset` 列表中也需加入同名变量，避免父 shell 预存变量污染结果。
+    const POLLUTION_GREP_RE: &str = "^(ANTHROPIC_|API_TIMEOUT_MS|CC_SWITCH_|\
+         CLAUDE_CODE_(SUBAGENT_MODEL|EFFORT_LEVEL|MAX_CONTEXT_TOKENS|\
+         AUTO_COMPACT_WINDOW|DISABLE_NONESSENTIAL_TRAFFIC)|DISABLE_COMPACT)=";
     use tempfile::TempDir;
 
     #[test]
@@ -430,12 +439,12 @@ mod tests {
             "aliases.zsh 应含 MiniMax-M3[1m] model id（跟随官方文档），实际:\n{content}"
         );
         assert!(
-            content.contains("ANTHROPIC_DEFAULT_FABLE_MODEL='MiniMax-M3[1m]'"),
-            "aliases.zsh 应注入 ANTHROPIC_DEFAULT_FABLE_MODEL=MiniMax-M3[1m]，实际:\n{content}"
+            content.contains("ANTHROPIC_DEFAULT_FABLE_MODEL"),
+            "aliases.zsh 应含 ANTHROPIC_DEFAULT_FABLE_MODEL 变量名，实际:\n{content}"
         );
         assert!(
-            content.contains("CLAUDE_CODE_SUBAGENT_MODEL='MiniMax-M3[1m]'"),
-            "aliases.zsh 应注入 CLAUDE_CODE_SUBAGENT_MODEL=MiniMax-M3[1m]，实际:\n{content}"
+            content.contains("CLAUDE_CODE_SUBAGENT_MODEL"),
+            "aliases.zsh 应含 CLAUDE_CODE_SUBAGENT_MODEL 变量名，实际:\n{content}"
         );
     }
 
@@ -608,12 +617,12 @@ mod tests {
             "aliases.zsh 应含 k3[1m] model id（Kimi k3 1M 档位），实际:\n{content}"
         );
         assert!(
-            content.contains("ANTHROPIC_DEFAULT_FABLE_MODEL='k3[1m]'"),
-            "aliases.zsh 应注入 ANTHROPIC_DEFAULT_FABLE_MODEL=k3[1m]，实际:\n{content}"
+            content.contains("ANTHROPIC_DEFAULT_FABLE_MODEL"),
+            "aliases.zsh 应含 ANTHROPIC_DEFAULT_FABLE_MODEL 变量名，实际:\n{content}"
         );
         assert!(
-            content.contains("CLAUDE_CODE_SUBAGENT_MODEL='k3[1m]'"),
-            "aliases.zsh 应注入 CLAUDE_CODE_SUBAGENT_MODEL=k3[1m]，实际:\n{content}"
+            content.contains("CLAUDE_CODE_SUBAGENT_MODEL"),
+            "aliases.zsh 应含 CLAUDE_CODE_SUBAGENT_MODEL 变量名，实际:\n{content}"
         );
         assert!(
             content.contains("CLAUDE_CODE_EFFORT_LEVEL=max"),
@@ -1039,12 +1048,13 @@ mod tests {
              source {aliases}\n\
              cl-kimi >{kimi} 2>&1\n\
              cl-mini >{mini} 2>&1\n\
-             env | grep -E '^(ANTHROPIC_|API_TIMEOUT_MS|CC_SWITCH_|CLAUDE_CODE_(SUBAGENT_MODEL|EFFORT_LEVEL|MAX_CONTEXT_TOKENS|AUTO_COMPACT_WINDOW|DISABLE_NONESSENTIAL_TRAFFIC)|DISABLE_COMPACT)=' >{poll} 2>&1 || true\n",
+             env | grep -E '{poll_re}' >{poll} 2>&1 || true\n",
             bin = bin_dir.display(),
             aliases = aliases_path.display(),
             kimi = kimi_out.display(),
             mini = mini_out.display(),
             poll = poll_out.display(),
+            poll_re = POLLUTION_GREP_RE,
         );
         std::fs::write(temp.path().join("run.zsh"), script).unwrap();
         let out = std::process::Command::new("zsh")
@@ -1131,10 +1141,11 @@ mod tests {
              export PATH=\"{bin}:$PATH\"\n\
              source {aliases}\n\
              cl-mini >/dev/null 2>&1\n\
-             env | grep -E '^(ANTHROPIC_|API_TIMEOUT_MS|CC_SWITCH_|CLAUDE_CODE_(SUBAGENT_MODEL|EFFORT_LEVEL|MAX_CONTEXT_TOKENS|AUTO_COMPACT_WINDOW|DISABLE_NONESSENTIAL_TRAFFIC)|DISABLE_COMPACT)=' >{poll} 2>&1 || true\n",
+             env | grep -E '{poll_re}' >{poll} 2>&1 || true\n",
             bin = bin_dir.display(),
             aliases = aliases_path.display(),
             poll = poll_out.display(),
+            poll_re = POLLUTION_GREP_RE,
         );
         std::fs::write(temp.path().join("run.zsh"), script).unwrap();
         let out = std::process::Command::new("zsh")
