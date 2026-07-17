@@ -53,4 +53,26 @@ ARCHITECTURE.md 描述"系统怎么工作"；本节规定"什么不能动"。
 2. `model` 字段的 `[1m]` 后缀**仅在 Claude Code 终端场景下可靠**：cc-switch-tui 通过 `ANTHROPIC_MODEL` env 变量在 cl-* 函数体内注入，shell 进程不被重置。**VS Code 扩展场景下 env var 可能被 extension 重置**，需自行验证。当前 follow 官方文档使用 `MiniMax-M3[1m]`（含后缀）。
 3. Provider 切换是 alias 级别（shell function 隔离 env），不要在进程内做 env 覆盖——`ys-proxy` wrapper 在子 shell 中重设 `ANTHROPIC_BASE_URL`，是唯一允许的代理路径。
 
-完整 env 表、已知 Issue（#46416 / #50083 / #57964 / #63471 / #63376 / #62353）保留在 `git log -p CLAUDE.md` 的 v1 历史中可查。`DISABLE_COMPACT=1` + `CLAUDE_CODE_MAX_CONTEXT_TOKENS` 机制已废弃（`instance.context_window_enabled` 字段删除），改由 model template 的 `env_overrides` 字面量提供 `CLAUDE_CODE_AUTO_COMPACT_WINDOW`。
+完整 env 表、已知 Issue（#46416 / #50083 / #57964 / #63471 / #63376 / #62353）保留在 `git log -p CLAUDE.md` 的 v1 历史中可查。
+
+### Kimi `k3[1m]` 官方推荐 env 示例
+
+```bash
+export ANTHROPIC_BASE_URL=https://api.kimi.com/coding/
+export ANTHROPIC_API_KEY=<你的API Key>
+
+export ANTHROPIC_MODEL="k3[1m]"
+export ANTHROPIC_DEFAULT_FABLE_MODEL=$ANTHROPIC_MODEL
+export ANTHROPIC_DEFAULT_OPUS_MODEL=$ANTHROPIC_MODEL
+export ANTHROPIC_DEFAULT_SONNET_MODEL=$ANTHROPIC_MODEL
+export ANTHROPIC_DEFAULT_HAIKU_MODEL=$ANTHROPIC_MODEL
+export CLAUDE_CODE_SUBAGENT_MODEL=$ANTHROPIC_MODEL
+
+export CLAUDE_CODE_AUTO_COMPACT_WINDOW=1048576
+export CLAUDE_CODE_MAX_CONTEXT_TOKENS=1048576
+export CLAUDE_CODE_EFFORT_LEVEL=max
+
+claude
+```
+
+cc-switch-tui 将上述变量作为 `k3[1m]` 的 `env_overrides` 字面量注入；其他 model id 的上下文大小与路由槽位同理，由各自 `env_overrides` 决定。
