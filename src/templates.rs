@@ -113,10 +113,10 @@ fn kimi_template() -> ProviderTemplate {
     //   - kimi-for-coding-highspeed 高速版：5–6× 输出速度、3× 额度、Allegretto+ 会员
     //   - kimi-for-coding          普通版：所有会员可用，基准速度
     //
-    // k3[1m] env 跟随官方建议：6 个模型路由槽位 + CLAUDE_CODE_EFFORT_LEVEL=max
+    // k3[1m] env 跟随官方建议：6 个模型路由槽位 + CLAUDE_CODE_EFFORT_LEVEL=high
     // （思考程度，当前仅 k3 支持）+ 1M 窗口对齐（1048576）。
     let mut env_overrides_k3 = routing_env_vars("k3[1m]");
-    env_overrides_k3.insert("CLAUDE_CODE_EFFORT_LEVEL".to_string(), "max".to_string());
+    env_overrides_k3.insert("CLAUDE_CODE_EFFORT_LEVEL".to_string(), "high".to_string());
     env_overrides_k3.extend(context_env_vars(1048576));
 
     let mut env_overrides_highspeed = routing_env_vars("kimi-for-coding-highspeed");
