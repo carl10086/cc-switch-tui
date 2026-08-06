@@ -647,8 +647,8 @@ mod tests {
             "aliases.zsh 应含 CLAUDE_CODE_SUBAGENT_MODEL 变量名，实际:\n{content}"
         );
         assert!(
-            content.contains("CLAUDE_CODE_EFFORT_LEVEL=max"),
-            "aliases.zsh 应注入 CLAUDE_CODE_EFFORT_LEVEL=max，实际:\n{content}"
+            content.contains("CLAUDE_CODE_EFFORT_LEVEL=high"),
+            "aliases.zsh 应注入 CLAUDE_CODE_EFFORT_LEVEL=high，实际:\n{content}"
         );
     }
 
