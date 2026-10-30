@@ -69,3 +69,16 @@ MiniMax 官方新文档明确推荐 `MiniMax-M3[1m]` 作为 model id——这是
 - `MiniMax-M2.7-highspeed` 不动（独立命运）。
 - 如果将来 MiniMax 改回不带后缀的 id，需再次 DB migration。考虑成本，远期可在 env_overrides 字面量里改 + 写一个 V2 migration。
 - VS Code 扩展用户不受 cc-switch-tui 覆盖（他们通常不用 `cl-*` alias），无实际影响。
+
+## 后续（2026-10）
+
+本 ADR 的**决策**（Claude Code 终端场景下用 `[1m]` 后缀表达 1M 上下文）仍然有效，
+但具体的 model id 与窗口参数已经变更：
+
+- MiniMax 模板现在只保留一个档位 `MiniMax-M3.1-Flash[1m]`（官方最新旗舰，
+  取代 `MiniMax-M3[1m]` 与 `MiniMax-M2.7-highspeed`）；DB 迁移把历史
+  `model_id` 全量拉平到新 id。
+- 窗口 env 拆成两个语义不同的值：`CLAUDE_CODE_MAX_CONTEXT_TOKENS=1048576`
+  （模型真实窗口 1M）+ `CLAUDE_CODE_AUTO_COMPACT_WINDOW=524288`
+  （官方推荐的 512K 自动压缩阈值）。原文"显式推荐 `CLAUDE_CODE_AUTO_COMPACT_WINDOW=1000000`"
+  对 M3.1-Flash 已不适用。

@@ -30,8 +30,7 @@ impl SqliteDaoImpl {
                 model_id TEXT NOT NULL,
                 api_key TEXT NOT NULL,
                 created_at TEXT NOT NULL,
-                alias TEXT NOT NULL DEFAULT '',
-                opencode_model_id TEXT NOT NULL DEFAULT ''
+                alias TEXT NOT NULL DEFAULT ''
             )",
             [],
         ))?;
@@ -48,21 +47,20 @@ impl SqliteDaoImpl {
                 [],
             );
         }
-        if !columns.contains(&"opencode_model_id".to_string()) {
-            let _ = conn.execute(
-                "ALTER TABLE instances ADD COLUMN opencode_model_id TEXT NOT NULL DEFAULT ''",
-                [],
-            );
-        }
         if !columns.contains(&"kv_cache_enabled".to_string()) {
             let _ = conn.execute(
                 "ALTER TABLE instances ADD COLUMN kv_cache_enabled INTEGER NOT NULL DEFAULT 0",
                 [],
             );
         }
-        // 一次性迁移（幂等）：旧 MiniMax-M3 model id 永久 rename 到新 id
+        // 一次性迁移（幂等）：旧 MiniMax model id 全量拉平到当前唯一档位。
+        // MiniMax 模板现在只保留 MiniMax-M3.1-Flash[1m]，历史档位
+        // （MiniMax-M3 / MiniMax-M3[1m] / MiniMax-M2.7-highspeed）全部拉平，
+        // 避免 UI 下拉出现孤儿 model_id。
         let _ = conn.execute(
-            "UPDATE instances SET model_id = 'MiniMax-M3[1m]' WHERE model_id = 'MiniMax-M3'",
+            "UPDATE instances SET model_id = 'MiniMax-M3.1-Flash[1m]'
+             WHERE template_id = 'minimax'
+               AND model_id IN ('MiniMax-M3', 'MiniMax-M3[1m]', 'MiniMax-M2.7-highspeed')",
             [],
         );
         // DROP COLUMN context_window_enabled（SQLite ≥ 3.35 支持；列不存在时失败被忽略）
@@ -71,6 +69,10 @@ impl SqliteDaoImpl {
                 "ALTER TABLE instances DROP COLUMN context_window_enabled",
                 [],
             );
+        }
+        // DROP COLUMN opencode_model_id —— OpenCode 集成已彻底废弃
+        if columns.contains(&"opencode_model_id".to_string()) {
+            let _ = conn.execute("ALTER TABLE instances DROP COLUMN opencode_model_id", []);
         }
         let mut dao = Self {
             conn,
@@ -83,7 +85,7 @@ impl SqliteDaoImpl {
 
     fn refresh_instances(&mut self) -> Result<(), AppError> {
         let mut stmt = Self::db(self.conn.prepare(
-            "SELECT id, template_id, model_id, api_key, created_at, alias, opencode_model_id, kv_cache_enabled FROM instances"
+            "SELECT id, template_id, model_id, api_key, created_at, alias, kv_cache_enabled FROM instances"
         ))?;
         let rows = Self::db(stmt.query_map([], |row| {
             Ok(ProviderInstance {
@@ -101,7 +103,6 @@ impl SqliteDaoImpl {
                     })?
                     .with_timezone(&chrono::Utc),
                 alias: row.get(5)?,
-                opencode_model_id: row.get(6)?,
                 kv_cache_enabled: row.get::<_, i32>("kv_cache_enabled")? != 0,
             })
         }))?;
@@ -134,8 +135,8 @@ impl Dao for SqliteDaoImpl {
         validate_alias(&instance.alias)?;
         let created_at_str = instance.created_at.to_rfc3339();
         match self.conn.execute(
-            "INSERT INTO instances (id, template_id, model_id, api_key, created_at, alias, opencode_model_id, kv_cache_enabled)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
+            "INSERT INTO instances (id, template_id, model_id, api_key, created_at, alias, kv_cache_enabled)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
             rusqlite::params![
                 &instance.id,
                 &instance.template_id,
@@ -143,7 +144,6 @@ impl Dao for SqliteDaoImpl {
                 &instance.api_key,
                 created_at_str,
                 &instance.alias,
-                &instance.opencode_model_id,
                 instance.kv_cache_enabled as i32,
             ],
         ) {
@@ -204,22 +204,6 @@ impl Dao for SqliteDaoImpl {
         Ok(())
     }
 
-    fn set_opencode_model_id(
-        &mut self,
-        id: &str,
-        opencode_model_id: String,
-    ) -> Result<(), AppError> {
-        let changes = Self::db(self.conn.execute(
-            "UPDATE instances SET opencode_model_id = ?1 WHERE id = ?2",
-            [opencode_model_id, id.to_string()],
-        ))?;
-        if changes == 0 {
-            return Err(AppError::InstanceNotFound(id.to_string()));
-        }
-        self.refresh_instances()?;
-        Ok(())
-    }
-
     fn set_kv_cache_enabled(&mut self, id: &str, enabled: bool) -> Result<(), AppError> {
         let changes = Self::db(self.conn.execute(
             "UPDATE instances SET kv_cache_enabled = ?1 WHERE id = ?2",
@@ -263,8 +247,8 @@ impl Dao for SqliteDaoImpl {
         // Insert new instance
         let created_at_str = old_instance.created_at.to_rfc3339();
         Self::db(self.conn.execute(
-            "INSERT INTO instances (id, template_id, model_id, api_key, created_at, alias, opencode_model_id, kv_cache_enabled)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
+            "INSERT INTO instances (id, template_id, model_id, api_key, created_at, alias, kv_cache_enabled)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
             rusqlite::params![
                 new_id,
                 old_instance.template_id,
@@ -272,7 +256,6 @@ impl Dao for SqliteDaoImpl {
                 old_instance.api_key,
                 created_at_str,
                 alias,
-                old_instance.opencode_model_id,
                 old_instance.kv_cache_enabled as i32,
             ],
         ))?;
@@ -311,7 +294,6 @@ mod tests {
             api_key: "test-key".to_string(),
             created_at: chrono::Utc::now(),
             alias: "cl-mini".to_string(),
-            opencode_model_id: String::new(),
             kv_cache_enabled: false,
         };
         dao.create_instance(instance.clone()).unwrap();
@@ -330,7 +312,6 @@ mod tests {
             api_key: "key".to_string(),
             created_at: chrono::Utc::now(),
             alias: "cl-mini".to_string(),
-            opencode_model_id: String::new(),
             kv_cache_enabled: false,
         };
         dao.create_instance(instance).unwrap();
@@ -350,7 +331,6 @@ mod tests {
             api_key: "old-key".to_string(),
             created_at: chrono::Utc::now(),
             alias: "cl-mini".to_string(),
-            opencode_model_id: String::new(),
             kv_cache_enabled: false,
         };
         dao.create_instance(instance).unwrap();
@@ -389,7 +369,6 @@ mod tests {
             api_key: "old-key".to_string(),
             created_at: chrono::Utc::now(),
             alias: "cl-mini".to_string(),
-            opencode_model_id: String::new(),
             kv_cache_enabled: false,
         };
         dao.create_instance(instance).unwrap();
@@ -420,7 +399,6 @@ mod tests {
             api_key: "key".to_string(),
             created_at: chrono::Utc::now(),
             alias: "cl-mini".to_string(),
-            opencode_model_id: String::new(),
             kv_cache_enabled: false,
         };
         dao.create_instance(instance).unwrap();
@@ -446,7 +424,6 @@ mod tests {
             api_key: "key".to_string(),
             created_at: chrono::Utc::now(),
             alias: "cl-mini".to_string(),
-            opencode_model_id: String::new(),
             kv_cache_enabled: false,
         };
         dao.create_instance(instance.clone()).unwrap();
@@ -464,7 +441,6 @@ mod tests {
             api_key: "key".to_string(),
             created_at: chrono::Utc::now(),
             alias: "cl-mini".to_string(),
-            opencode_model_id: String::new(),
             kv_cache_enabled: false,
         };
         dao.create_instance(instance).unwrap();
@@ -496,7 +472,6 @@ mod tests {
             api_key: "key1".to_string(),
             created_at: chrono::Utc::now(),
             alias: "cl-mini".to_string(),
-            opencode_model_id: String::new(),
             kv_cache_enabled: false,
         };
         let instance2 = ProviderInstance {
@@ -506,7 +481,6 @@ mod tests {
             api_key: "key2".to_string(),
             created_at: chrono::Utc::now(),
             alias: "cl-mini".to_string(),
-            opencode_model_id: String::new(),
             kv_cache_enabled: false,
         };
         dao.create_instance(instance1).unwrap();
@@ -556,13 +530,97 @@ mod tests {
         ).unwrap();
         drop(conn);
 
-        // 启动新代码：旧 model_id 应被 rename 到 MiniMax-M3[1m]
+        // 启动新代码：旧 model_id 应被拉平到当前唯一档位
         let templates = register_templates();
         let dao = SqliteDaoImpl::new(&db_path, templates).unwrap();
         let instance = dao.get_instance("test-1").unwrap();
         assert_eq!(
-            instance.model_id, "MiniMax-M3[1m]",
-            "旧 model_id='MiniMax-M3' 应被自动 rename 到 'MiniMax-M3[1m]'"
+            instance.model_id, "MiniMax-M3.1-Flash[1m]",
+            "旧 model_id='MiniMax-M3' 应被自动拉平到 'MiniMax-M3.1-Flash[1m]'"
+        );
+    }
+
+    #[test]
+    fn test_migration_flattens_all_legacy_minimax_model_ids() {
+        // MiniMax 模板只剩 MiniMax-M3.1-Flash[1m] 一档，
+        // 所有历史档位的 instance 都应被拉平，避免 UI 下拉出现孤儿 model_id。
+        let temp = TempDir::new().unwrap();
+        let db_path = temp.path().join("test.db").to_string_lossy().to_string();
+        let conn = Connection::open(&db_path).unwrap();
+        conn.execute(
+            "CREATE TABLE instances (
+                id TEXT PRIMARY KEY,
+                template_id TEXT NOT NULL,
+                model_id TEXT NOT NULL,
+                api_key TEXT NOT NULL,
+                created_at TEXT NOT NULL,
+                alias TEXT NOT NULL DEFAULT '',
+                kv_cache_enabled INTEGER NOT NULL DEFAULT 0
+            )",
+            [],
+        )
+        .unwrap();
+        for (id, model_id) in [
+            ("m3", "MiniMax-M3"),
+            ("m3-1m", "MiniMax-M3[1m]"),
+            ("m27", "MiniMax-M2.7-highspeed"),
+        ] {
+            conn.execute(
+                "INSERT INTO instances (id, template_id, model_id, api_key, created_at, alias, kv_cache_enabled)
+                 VALUES (?1, 'minimax', ?2, 'key', '2024-01-01T00:00:00Z', 'cl-test', 0)",
+                rusqlite::params![id, model_id],
+            )
+            .unwrap();
+        }
+        drop(conn);
+
+        let templates = register_templates();
+        let dao = SqliteDaoImpl::new(&db_path, templates).unwrap();
+        for id in ["m3", "m3-1m", "m27"] {
+            assert_eq!(
+                dao.get_instance(id).unwrap().model_id,
+                "MiniMax-M3.1-Flash[1m]",
+                "旧 model_id 应被拉平到 'MiniMax-M3.1-Flash[1m]'"
+            );
+        }
+    }
+
+    #[test]
+    fn test_migration_drops_opencode_model_id_column() {
+        // 模拟旧 DB 含 opencode_model_id 列 —— OpenCode 集成已废弃，列应被 DROP
+        let temp = TempDir::new().unwrap();
+        let db_path = temp.path().join("test.db").to_string_lossy().to_string();
+        let conn = Connection::open(&db_path).unwrap();
+        conn.execute(
+            "CREATE TABLE instances (
+                id TEXT PRIMARY KEY,
+                template_id TEXT NOT NULL,
+                model_id TEXT NOT NULL,
+                api_key TEXT NOT NULL,
+                created_at TEXT NOT NULL,
+                alias TEXT NOT NULL DEFAULT '',
+                opencode_model_id TEXT NOT NULL DEFAULT '',
+                kv_cache_enabled INTEGER NOT NULL DEFAULT 0
+            )",
+            [],
+        )
+        .unwrap();
+        drop(conn);
+
+        let templates = register_templates();
+        let _dao = SqliteDaoImpl::new(&db_path, templates).unwrap();
+
+        let conn = Connection::open(&db_path).unwrap();
+        let columns: Vec<String> = conn
+            .prepare("SELECT name FROM pragma_table_info('instances')")
+            .unwrap()
+            .query_map([], |row| row.get(0))
+            .unwrap()
+            .collect::<Result<_, _>>()
+            .unwrap();
+        assert!(
+            !columns.contains(&"opencode_model_id".to_string()),
+            "opencode_model_id 列应在启动时被 DROP；当前列: {columns:?}"
         );
     }
 
@@ -642,8 +700,8 @@ mod tests {
         let dao1 = SqliteDaoImpl::new(&db_path, templates.clone()).unwrap();
         assert_eq!(
             dao1.get_instance("test-1").unwrap().model_id,
-            "MiniMax-M3[1m]",
-            "第一次启动后 model_id 应从 MiniMax-M3 rename 到 MiniMax-M3[1m]"
+            "MiniMax-M3.1-Flash[1m]",
+            "第一次启动后 model_id 应从 MiniMax-M3 拉平到 MiniMax-M3.1-Flash[1m]"
         );
         let columns_after_first: Vec<String> = Connection::open(&db_path)
             .unwrap()
@@ -663,8 +721,8 @@ mod tests {
         assert_eq!(dao2.list_instances().len(), 1, "第二次启动后行数应保持不变");
         assert_eq!(
             dao2.get_instance("test-1").unwrap().model_id,
-            "MiniMax-M3[1m]",
-            "第二次启动 model_id 应保持 MiniMax-M3[1m]"
+            "MiniMax-M3.1-Flash[1m]",
+            "第二次启动 model_id 应保持 MiniMax-M3.1-Flash[1m]"
         );
     }
 }

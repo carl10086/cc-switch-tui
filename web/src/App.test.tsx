@@ -10,7 +10,7 @@ afterEach(() => {
 });
 
 const SAMPLE_TEMPLATES = [
-  { id: 't1', displayName: 'T1', opencodeProviderId: 'p1', opencodeBaseUrl: 'https://x', availableModels: [], models: [] },
+  { id: 't1', displayName: 'T1', availableModels: [], models: [] },
 ];
 
 function makeFetchStub() {

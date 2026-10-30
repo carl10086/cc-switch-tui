@@ -9,7 +9,6 @@ pub mod diagnostics;
 pub mod error;
 pub mod health;
 pub mod instances;
-pub mod opencode;
 pub mod settings;
 pub mod state;
 pub mod static_fallback;
@@ -39,8 +38,6 @@ pub fn router(state: AppState) -> Router {
         .route("/api/templates", get(templates::list))
         .route("/api/aliases", get(aliases::get))
         .route("/api/aliases/apply", post(aliases::apply))
-        .route("/api/opencode-config/:id", get(opencode::get))
-        .route("/api/opencode-config/:id/apply", post(opencode::apply))
         .route("/api/config/export", get(config::export))
         .route("/api/config/import", post(config::import))
         .route("/api/settings", get(settings::get).put(settings::put))

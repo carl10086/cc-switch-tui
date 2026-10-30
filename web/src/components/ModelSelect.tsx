@@ -26,7 +26,6 @@ function inferContextFromModelId(modelId: string): string | null {
 /**
  * Model 字段的 select/input 切换组件。
  * 当 template.models 非空时显示下拉（option 显示 `name (id)`），为空时降级为 input。
- * 和 OpencodeModelSelect 形态平行。
  */
 export function ModelSelect({ models, value, onChange, placeholder }: Props) {
   if (models.length === 0) {
@@ -34,7 +33,7 @@ export function ModelSelect({ models, value, onChange, placeholder }: Props) {
       <input
         value={value}
         onChange={(e) => onChange(e.target.value)}
-        placeholder={placeholder ?? 'MiniMax-M3[1m]'}
+        placeholder={placeholder ?? 'MiniMax-M3.1-Flash[1m]'}
         className="w-full px-3 py-1.5 text-sm rounded border border-input bg-background font-mono"
       />
     );

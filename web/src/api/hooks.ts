@@ -49,25 +49,6 @@ export function useApplyAliases() {
   });
 }
 
-export function useOpencodeConfig(instanceId: string | undefined) {
-  return useQuery({
-    queryKey: ['opencode-config', instanceId],
-    queryFn: () => apiGet<Record<string, unknown>>(`/api/opencode-config/${instanceId}`),
-    enabled: !!instanceId,
-  });
-}
-
-export function useApplyOpencodeConfig() {
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: (instanceId: string) =>
-      apiPost<{ path: string }>(`/api/opencode-config/${instanceId}/apply`, {}),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['opencode-config'] });
-    },
-  });
-}
-
 // ===== Config Import/Export =====
 
 export interface ExportedConfig {
@@ -78,7 +59,6 @@ export interface ExportedConfig {
     templateId: string;
     alias: string;
     modelId: string;
-    opencodeModelId: string;
     kvCacheEnabled: boolean;
   }>;
 }
@@ -114,8 +94,6 @@ export interface Diagnostics {
   aliasesWritable: boolean;
   zshrcPath: string;
   zshrcWritable: boolean;
-  opencodeDir: string;
-  opencodeDirWritable: boolean;
   instanceCount: number;
   templateCount: number;
 }
@@ -162,14 +140,13 @@ export function useCreateInstance() {
       alias: string;
       modelId: string;
       apiKey: string;
-      opencodeModelId?: string;
       kvCacheEnabled?: boolean;
     }) => apiPost<InstanceDetail>('/api/instances', req),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['instances'] }),
   });
 }
 
-/// PATCH /api/instances/:id 改 model/apiKey/opencodeModelId/kvCacheEnabled
+/// PATCH /api/instances/:id 改 model/apiKey/kvCacheEnabled
 /// 注：alias 暂不支持通过 PATCH 修改（需要 delete + recreate）
 export function useUpdateInstance(id: string) {
   const qc = useQueryClient();
@@ -177,7 +154,6 @@ export function useUpdateInstance(id: string) {
     mutationFn: (patch: {
       modelId?: string;
       apiKey?: string;
-      opencodeModelId?: string;
       kvCacheEnabled?: boolean;
     }) => apiPatch<InstanceDetail>(`/api/instances/${id}`, patch),
     onSuccess: () => {
@@ -214,7 +190,6 @@ export interface InstanceDetail {
   alias: string;
   apiKey: string;
   modelId: string;
-  opencodeModelId: string;
   kvCacheEnabled: boolean;
   createdAt: string;
 }

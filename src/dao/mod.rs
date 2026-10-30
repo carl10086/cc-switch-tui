@@ -47,13 +47,6 @@ pub trait Dao {
         alias: String,
     ) -> Result<(), AppError>;
 
-    /// 更新实例的 OpenCode Model ID
-    fn set_opencode_model_id(
-        &mut self,
-        id: &str,
-        opencode_model_id: String,
-    ) -> Result<(), AppError>;
-
     /// 更新实例的 KV Cache 优化开关
     fn set_kv_cache_enabled(&mut self, id: &str, enabled: bool) -> Result<(), AppError>;
 }

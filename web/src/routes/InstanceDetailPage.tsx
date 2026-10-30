@@ -11,7 +11,6 @@ import {
 import { ApiErrorBanner } from '../components/ApiErrorBanner';
 import { ConfirmDialog } from '../components/ConfirmDialog';
 import { ModelSelect } from '../components/ModelSelect';
-import { OpencodeModelSelect } from '../components/OpencodeModelSelect';
 import { SecretInput } from '../components/SecretInput';
 import { useUnsavedGuard } from '../hooks/useUnsavedGuard';
 
@@ -36,7 +35,6 @@ export function InstanceDetailPage() {
       setDraft({
         modelId: instance.modelId,
         apiKey: instance.apiKey,
-        opencodeModelId: instance.opencodeModelId,
         kvCacheEnabled: instance.kvCacheEnabled,
       });
       setDirty(false);
@@ -156,14 +154,6 @@ export function InstanceDetailPage() {
           <SecretInput
             value={draft.apiKey ?? ''}
             onChange={(v) => set('apiKey', v)}
-          />
-        </Field>
-
-        <Field label="OpenCode Model ID">
-          <OpencodeModelSelect
-            models={templates?.find((t) => t.id === instance.templateId)?.opencodeModels ?? []}
-            value={draft.opencodeModelId ?? ''}
-            onChange={(v) => set('opencodeModelId', v)}
           />
         </Field>
 

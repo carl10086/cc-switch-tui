@@ -17,7 +17,6 @@ export const instanceSchema = z.object({
     ),
   modelId: z.string().min(1, 'Model is required'),
   apiKey: z.string().min(1, 'API key is required'),
-  opencodeModelId: z.string().optional(),
   kvCacheEnabled: z.boolean().default(false),
 });
 

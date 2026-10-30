@@ -14,7 +14,6 @@ export interface Instance {
   templateId: string;
   alias: string;
   modelId: string;
-  opencodeModelId: string;
   kvCacheEnabled: boolean;
 }
 
@@ -24,17 +23,13 @@ export interface Instance {
 export interface TemplateModel {
   id: string;
   name: string;
-  opencodeModelId: string;
 }
 
 // 与 Rust src/api/templates.rs::TemplateSummary 对齐
 export interface Template {
   id: string;
   displayName: string;
-  opencodeProviderId: string;
-  opencodeBaseUrl: string;
   /** @deprecated 旧字段，保留兼容；新代码用 models[].id */
   availableModels: string[];
   models: TemplateModel[];
-  opencodeModels: string[];
 }

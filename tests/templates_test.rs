@@ -43,18 +43,19 @@ async fn test_templates_returns_built_in_list() {
         body.contains("\"availableModels\""),
         "expected availableModels field, got:\n{body}"
     );
-    // minimax template 至少有一个 model
+    // minimax template 只有最新旗舰一档
     assert!(
-        body.contains("MiniMax-M3") || body.contains("M2.7"),
-        "expected at least one model, got:\n{body}"
+        body.contains("MiniMax-M3.1-Flash[1m]"),
+        "expected MiniMax-M3.1-Flash[1m] model, got:\n{body}"
     );
-    // B2 fix: models 数组 + 每项含 opencodeModelId
+    // models 数组
     assert!(
         body.contains("\"models\""),
-        "expected models array field (B2), got:\n{body}"
+        "expected models array field, got:\n{body}"
     );
+    // OpenCode 集成已废弃：响应里不应再出现任何 opencode 字段
     assert!(
-        body.contains("\"opencodeModelId\""),
-        "expected opencodeModelId field per model (B2), got:\n{body}"
+        !body.to_lowercase().contains("opencode"),
+        "expected no opencode fields in templates response, got:\n{body}"
     );
 }

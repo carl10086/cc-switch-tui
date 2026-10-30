@@ -27,7 +27,6 @@ pub struct ExportedInstance {
     pub template_id: String,
     pub alias: String,
     pub model_id: String,
-    pub opencode_model_id: String,
     pub kv_cache_enabled: bool,
 }
 
@@ -38,7 +37,6 @@ impl From<&ProviderInstance> for ExportedInstance {
             template_id: i.template_id.clone(),
             alias: i.alias.clone(),
             model_id: i.model_id.clone(),
-            opencode_model_id: i.opencode_model_id.clone(),
             kv_cache_enabled: i.kv_cache_enabled,
         }
     }
@@ -59,8 +57,6 @@ pub struct ImportedInstance {
     pub template_id: String,
     pub alias: String,
     pub model_id: String,
-    #[serde(default)]
-    pub opencode_model_id: String,
     #[serde(default)]
     pub kv_cache_enabled: bool,
     /// **导入时可选**。若没提供，导入后用户需手动补填 apiKey。
@@ -90,7 +86,6 @@ impl From<ImportedInstance> for ProviderInstance {
             model_id: i.model_id,
             api_key: i.api_key.unwrap_or_default(),
             created_at: Utc::now(),
-            opencode_model_id: i.opencode_model_id,
             kv_cache_enabled: i.kv_cache_enabled,
         }
     }

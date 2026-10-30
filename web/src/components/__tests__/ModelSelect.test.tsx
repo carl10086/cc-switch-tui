@@ -4,9 +4,9 @@ import userEvent from '@testing-library/user-event';
 import { ModelSelect } from '../ModelSelect';
 
 const MODELS = [
-  { id: 'm1', name: 'Model 1', opencodeModelId: 'm1-oc' },
-  { id: 'm2', name: 'Model 2', opencodeModelId: 'm2-oc' },
-  { id: 'm3', name: 'Model 3', opencodeModelId: 'm3-oc' },
+  { id: 'm1', name: 'Model 1' },
+  { id: 'm2', name: 'Model 2' },
+  { id: 'm3', name: 'Model 3' },
 ];
 
 describe('ModelSelect', () => {
@@ -28,7 +28,7 @@ describe('ModelSelect', () => {
     expect(options[2]).toHaveTextContent('Model 3 (m3)');
   });
 
-  it('option value equals model id (not name, not opencodeModelId)', () => {
+  it('option value equals model id (not name)', () => {
     render(<ModelSelect models={MODELS} value="m2" onChange={() => {}} />);
     const options = screen.getAllByRole('option') as HTMLOptionElement[];
     expect(options[0].value).toBe('m1');

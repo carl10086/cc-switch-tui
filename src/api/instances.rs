@@ -20,7 +20,6 @@ pub struct InstanceSummary {
     pub template_id: String,
     pub alias: String,
     pub model_id: String,
-    pub opencode_model_id: String,
     pub kv_cache_enabled: bool,
 }
 
@@ -31,7 +30,6 @@ impl From<&ProviderInstance> for InstanceSummary {
             template_id: i.template_id.clone(),
             alias: i.alias.clone(),
             model_id: i.model_id.clone(),
-            opencode_model_id: i.opencode_model_id.clone(),
             kv_cache_enabled: i.kv_cache_enabled,
         }
     }
@@ -46,7 +44,6 @@ pub struct InstanceDetail {
     pub alias: String,
     pub api_key: String,
     pub model_id: String,
-    pub opencode_model_id: String,
     pub kv_cache_enabled: bool,
     pub created_at: String,
 }
@@ -59,7 +56,6 @@ impl From<&ProviderInstance> for InstanceDetail {
             alias: i.alias.clone(),
             api_key: i.api_key.clone(),
             model_id: i.model_id.clone(),
-            opencode_model_id: i.opencode_model_id.clone(),
             kv_cache_enabled: i.kv_cache_enabled,
             created_at: i.created_at.to_rfc3339(),
         }
@@ -86,7 +82,6 @@ pub struct CreateInstanceRequest {
     pub alias: String,
     pub model_id: String,
     pub api_key: String,
-    pub opencode_model_id: Option<String>,
     pub kv_cache_enabled: Option<bool>,
 }
 
@@ -107,7 +102,6 @@ pub async fn create(
         api_key: req.api_key,
         created_at: Utc::now(),
         alias: req.alias,
-        opencode_model_id: req.opencode_model_id.unwrap_or_default(),
         kv_cache_enabled: req.kv_cache_enabled.unwrap_or(false),
     };
 
@@ -145,7 +139,7 @@ pub async fn detail(
 // ===== Patch =====
 
 /// PATCH /api/instances/:id
-/// 支持修改 modelId, apiKey, opencodeModelId, kvCacheEnabled。
+/// 支持修改 modelId, apiKey, kvCacheEnabled。
 /// alias 通过 PATCH 修改暂不支持（id 与 alias 绑定，需要 rename_instance；M1 留作 TODO）。
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -154,7 +148,6 @@ pub struct PatchInstanceRequest {
     pub alias: Option<String>,
     pub model_id: Option<String>,
     pub api_key: Option<String>,
-    pub opencode_model_id: Option<String>,
     pub kv_cache_enabled: Option<bool>,
 }
 
@@ -187,10 +180,6 @@ pub async fn patch(
             other => ApiError::internal(other.to_string()),
         })?;
 
-    if let Some(ocm) = req.opencode_model_id {
-        dao.set_opencode_model_id(&id, ocm)
-            .map_err(|e| ApiError::internal(e.to_string()))?;
-    }
     if let Some(kv) = req.kv_cache_enabled {
         dao.set_kv_cache_enabled(&id, kv)
             .map_err(|e| ApiError::internal(e.to_string()))?;
@@ -243,7 +232,6 @@ pub async fn duplicate(
         api_key: original.api_key,
         created_at: Utc::now(),
         alias: new_alias,
-        opencode_model_id: original.opencode_model_id,
         kv_cache_enabled: original.kv_cache_enabled,
     };
 

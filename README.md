@@ -10,7 +10,6 @@
 - **Shell Function 隔离** — 使用函数代替 alias，环境变量隔离更好
 - **claude 参数透传** — alias 支持传递任意参数给 claude
 - **KV Cache 优化** — 优化本地模型的 prompt cache 命中率
-- **OpenCode 支持** — 生成 OpenCode 配置文件，支持 OpenCode 模型选择
 - **兼容 CMUX** — 防止切换时丢失认证信息
 - **CC_SWITCH_ALIAS** — 注入环境变量用于 statusline 显示
 - **SQLite 持久化** — 本地持久化存储配置
@@ -112,13 +111,7 @@ pm2 startup
 
 详见 [KV Cache 配置指南](docs/claude-code-local-model-kv-cache.md)。
 
-### OpenCode 支持
-
-自动生成 OpenCode 配置文件，支持 OpenCode 模型选择。
-
-详见 [OpenCode 配置参考](docs/opencode/config-reference.md)。
-
 ## 相关文档
 
 - [KV Cache 配置指南](docs/claude-code-local-model-kv-cache.md)
-- [OpenCode 配置参考](docs/opencode/config-reference.md)
+- [架构文档](docs/codebase/ARCHITECTURE.md)
