@@ -96,6 +96,8 @@ Key characteristics:
   - Migrate legacy project-local `.cc-switch-tui/` SQLite files into the home directory on first run
 - **Key files**:
   - `src/shell.rs` — `render_aliases()` (preview), `generate_aliases()` (write), `shell_escape()`, `ensure_zshrc_source()`
+    - `write_aliases()` 用 `OpenOptions::mode(0o600)` 在 create 时定权限（文件含明文
+      API key；不能先 `fs::write` 再 chmod，中间会有 0644 的窗口期）
   - `src/port.rs` — `try_bind()` (start..start+max_attempts scan), `read_cached_port()`, `write_port_file()`, `clear_port_file()`, `wait_for_shutdown()`
   - `src/templates.rs` — `register_templates()` returning the built-in `Vec<ProviderTemplate>` (MiniMax + Kimi)
   - `src/data_migration.rs` — `default_cc_dir()` (returns `~/.cc-switch-tui`), `ensure_data_migrated()` (copies legacy project-local DB on first run)
@@ -172,6 +174,8 @@ POST /api/aliases/apply (src/api/aliases.rs::apply)
         → Write ~/.cc-switch-tui/aliases.zsh
             → Return { path: ... }
 ```
+
+`aliases.zsh` is regenerated on every startup (from the DB) as well as on `POST /api/aliases/apply`. Regenerating at startup matters because the DB `model_id` migration and the on-disk artifact are independent: without it, an upgraded binary would leave the user's `cl-*` functions exporting a retired model id until they clicked Apply.
 
 The `aliases.zsh` file contains:
 
@@ -315,8 +319,11 @@ Located in `src/trace/models.rs`. Frontend TypeScript counterparts in `web/src/a
   4. Initialize `SqliteDaoImpl` with `~/.cc-switch-tui/db.sqlite` and `TraceStore` with `~/.cc-switch-tui/traces.sqlite`
   5. Construct `AppState` (initializes broadcast channel)
   6. Bind port via `port::try_bind(DEFAULT_PORT=7480, max_attempts=100)` and write actual port to `~/.cc-switch-tui/port`
-  7. Optionally auto-open browser when `settings.auto_open_browser` is true
-  8. Serve the axum router with `graceful_shutdown` triggered by Ctrl-C / SIGTERM (`port::wait_for_shutdown` cleans up the port file)
+  7. Regenerate `~/.cc-switch-tui/aliases.zsh` from the current DB state, so a
+     template change or `model_id` migration takes effect in the user's terminal
+     immediately (without waiting for a manual Apply in the Web UI)
+  8. Optionally auto-open browser when `settings.auto_open_browser` is true
+  9. Serve the axum router with `graceful_shutdown` triggered by Ctrl-C / SIGTERM (`port::wait_for_shutdown` cleans up the port file)
 
 ### Library Entry
 

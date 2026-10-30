@@ -31,16 +31,16 @@ project: cc-switch-tui
    - provider 支持思考档位时再追加 `CLAUDE_CODE_EFFORT_LEVEL`
    - 不与现有 model 共享 HashMap（避免默认切换互相污染）
 4. 其余字段（id / name / default_env）**不动**
-6. 在 `src/shell.rs::tests` 新增单测，仿 `test_aliases_contain_minimax_m3_1_flash_model_id`：
+5. 在 `src/shell.rs::tests` 新增单测，仿 `test_aliases_contain_minimax_m3_1_flash_model_id`：
    - 构造 instance（template_id + model_id 用新档位）
    - 调 `generate_aliases()`
    - 断言 aliases.zsh 含新档位 model id 字符串
-7. RED 步：跑该单测，确认 fail（模板未改前 model id 不在输出中）
-8. GREEN 步：实现模板改动 → 跑单测 pass
-9. 跑 `cargo test --lib` 验证无回归；`cargo build` 验证编译
-10. /ys-review 5 维度审查
-11. /gc：建 `feature/{keyword}-{MMDD}` 分支 → commit → push → PR → merge
-12. /make-release：用户确认 version bump → 前置 7 项 → bump + tag + publish
+6. RED 步：跑该单测，确认 fail（模板未改前 model id 不在输出中）
+7. GREEN 步：实现模板改动 → 跑单测 pass
+8. 跑 `cargo test --lib` 验证无回归；`cargo build` 验证编译
+9. /ys-review 5 维度审查
+10. /gc：建 `feature/{keyword}-{MMDD}` 分支 → commit → push → PR → merge
+11. /make-release：用户确认 version bump → 前置 7 项 → bump + tag + publish
 
 ### 关键信息
 
@@ -86,8 +86,10 @@ gh release view v{X} --json assets,url --jq '.url, (.assets[].name)'  # 二次�
 - **窗口 env 分两个值**：`CLAUDE_CODE_AUTO_COMPACT_WINDOW`（压缩阈值）与
   `CLAUDE_CODE_MAX_CONTEXT_TOKENS`（真实窗口）不可绑成同一个值。例：MiniMax
   M3.1-Flash 真实窗口 1M，但官方推荐在 512K 处压缩 → `context_env_vars(524288, 1048576)`。
-- **不更新 ARCHITECTURE.md / CLAUDE.md**：项目惯例——这两个文档只描述抽象字段，
-  不写 model 列表。/clarify-intent 时主动确认是否需要更新。
+- **ARCHITECTURE.md 要同步，CLAUDE.md 视情况**：ARCHITECTURE.md 是项目铁律要求同步的
+  权威文档（改了分层 / 数据流 / 关键抽象 / 迁移 SQL 就要更新）；CLAUDE.md 只在
+  硬约束或 provider 配置参考变化时更新。两者都**不写 model 列表**（model 列表写在
+  `src/templates.rs` 里）。
 - **不写 intent 文档**：feature commit body + plan 文件
   `docs/ys-powers/plans/{YYYY-MM-DD}-{keyword}.md` 已足够留档。
 - **测试只 assert "contains"，不验证出现次数**：仿 M3[1m] 最小形态；测试目的

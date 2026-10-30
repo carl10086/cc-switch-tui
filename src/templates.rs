@@ -46,6 +46,12 @@ fn context_env_vars(auto_compact_window: u32, max_context_tokens: u32) -> HashMa
     .collect()
 }
 
+/// MiniMax M3.1-Flash 的上下文参数：
+/// - 真实窗口 1M（models.dev 与 MiniMax 文档均为 1,000,000）
+/// - 自动压缩阈值 512K（MiniMax 官方 Claude Code 文档的推荐值）
+const MINIMAX_AUTO_COMPACT_WINDOW: u32 = 524288;
+const MINIMAX_MAX_CONTEXT_TOKENS: u32 = 1048576;
+
 /// 注册并返回所有内置的 Provider 模板
 pub fn register_templates() -> Vec<ProviderTemplate> {
     vec![minimax_template(), kimi_template()]
@@ -73,7 +79,10 @@ fn minimax_template() -> ProviderTemplate {
     // 配置完全由 model id 决定（env_overrides 字面量），不再走 instance toggle。
     let mut env_overrides_m31 = routing_env_vars("MiniMax-M3.1-Flash[1m]");
     env_overrides_m31.insert("CLAUDE_CODE_EFFORT_LEVEL".to_string(), "max".to_string());
-    env_overrides_m31.extend(context_env_vars(524288, 1048576));
+    env_overrides_m31.extend(context_env_vars(
+        MINIMAX_AUTO_COMPACT_WINDOW,
+        MINIMAX_MAX_CONTEXT_TOKENS,
+    ));
 
     ProviderTemplate {
         id: "minimax".to_string(),

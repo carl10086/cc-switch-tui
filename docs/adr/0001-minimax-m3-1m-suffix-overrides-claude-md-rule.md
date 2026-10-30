@@ -82,3 +82,16 @@ MiniMax 官方新文档明确推荐 `MiniMax-M3[1m]` 作为 model id——这是
   （模型真实窗口 1M）+ `CLAUDE_CODE_AUTO_COMPACT_WINDOW=524288`
   （官方推荐的 512K 自动压缩阈值）。原文"显式推荐 `CLAUDE_CODE_AUTO_COMPACT_WINDOW=1000000`"
   对 M3.1-Flash 已不适用。
+- **修正本文档对 `[1m]` 后缀机制的判断**（2026-10-30 实测）：原文称"后端能正确识别
+  1M 上下文窗口的请求字段值"是**不准确的**。实测 MiniMax 的 Anthropic 兼容端点
+  （`api.minimaxi.com` 与 `api.minimax.cn` 两个域名）都**拒绝**任何带 `[1m]` 后缀的
+  model id，返回 `400 invalid params, unknown model 'MiniMax-M3[1m]' (2013)`；
+  裸名 `MiniMax-M3` / `MiniMax-M3.1-Flash` 才被接受。
+
+  真实机制是：`[1m]` 是 **Claude Code 客户端侧**的约定 —— Claude Code 识别后缀、
+  据此开启 1M 上下文窗口，并在发请求前把后缀剥掉。证据：`cl-mini -p "..."` 用
+  `ANTHROPIC_MODEL='MiniMax-M3.1-Flash[1m]'` 真实跑通了 MiniMax（M3.1-Flash
+  恒开 thinking，`output_config.effort` 默认 max）。
+
+  **结论不变**：model id 仍要带 `[1m]` 后缀（这是让 Claude Code 开启 1M 窗口的
+  开关），但理由不是"后端认这个字符串"。

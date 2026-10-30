@@ -57,22 +57,31 @@ impl SqliteDaoImpl {
         // MiniMax 模板现在只保留 MiniMax-M3.1-Flash[1m]，历史档位
         // （MiniMax-M3 / MiniMax-M3[1m] / MiniMax-M2.7-highspeed）全部拉平，
         // 避免 UI 下拉出现孤儿 model_id。
-        let _ = conn.execute(
+        if let Err(e) = conn.execute(
             "UPDATE instances SET model_id = 'MiniMax-M3.1-Flash[1m]'
              WHERE template_id = 'minimax'
                AND model_id IN ('MiniMax-M3', 'MiniMax-M3[1m]', 'MiniMax-M2.7-highspeed')",
             [],
-        );
+        ) {
+            // 迁移失败会让 instance 的 model_id 停留在已下线的档位 —— UI 下拉会出现
+            // 孤儿值，且 build_env 匹配不到 model 模板时会静默丢掉所有 env_overrides
+            // （ANTHROPIC_MODEL / 上下文窗口 / effort 全部不注入）。
+            tracing::warn!("minimax model_id migration failed: {e}");
+        }
         // DROP COLUMN context_window_enabled（SQLite ≥ 3.35 支持；列不存在时失败被忽略）
-        if columns.contains(&"context_window_enabled".to_string()) {
-            let _ = conn.execute(
+        if columns.contains(&"context_window_enabled".to_string())
+            && let Err(e) = conn.execute(
                 "ALTER TABLE instances DROP COLUMN context_window_enabled",
                 [],
-            );
+            )
+        {
+            tracing::warn!("drop column context_window_enabled failed: {e}");
         }
         // DROP COLUMN opencode_model_id —— OpenCode 集成已彻底废弃
-        if columns.contains(&"opencode_model_id".to_string()) {
-            let _ = conn.execute("ALTER TABLE instances DROP COLUMN opencode_model_id", []);
+        if columns.contains(&"opencode_model_id".to_string())
+            && let Err(e) = conn.execute("ALTER TABLE instances DROP COLUMN opencode_model_id", [])
+        {
+            tracing::warn!("drop column opencode_model_id failed: {e}");
         }
         let mut dao = Self {
             conn,

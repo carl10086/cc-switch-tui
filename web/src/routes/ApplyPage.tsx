@@ -37,7 +37,7 @@ export function ApplyPage() {
   }, []);
 
   // Apply 只写入一个文件：aliases.zsh（OpenCode 集成已废弃，不再生成 opencode 配置）
-  const totalFiles = 1;
+  const TOTAL_FILES = 1;
 
   async function handleApply() {
     setState('loading');
@@ -65,7 +65,7 @@ export function ApplyPage() {
     <section>
       <h2 className="text-2xl font-bold mb-1">Apply</h2>
       <p className="text-sm text-muted-foreground mb-4">
-        即将写入 <strong>{totalFiles}</strong> 个文件到{' '}
+        即将写入 <strong>{TOTAL_FILES}</strong> 个文件到{' '}
         <code className="px-1 py-0.5 rounded bg-muted">~/.cc-switch-tui/</code>。
         点 Apply 后 <code>source ~/.zshrc</code> 生效（<kbd className="px-1 py-0.5 rounded border border-border bg-muted text-xs">⌘</kbd>+<kbd className="px-1 py-0.5 rounded border border-border bg-muted text-xs">Enter</kbd>）。
       </p>
@@ -79,12 +79,12 @@ export function ApplyPage() {
           <div className="text-sm text-muted-foreground">
             {state === 'success' ? (
               <span className="text-green-700 dark:text-green-300 font-medium">
-                ✓ Wrote {totalFiles} files
+                ✓ Wrote {TOTAL_FILES} files
               </span>
             ) : state === 'error' ? (
               <span className="text-red-700 dark:text-red-300 font-medium">Apply failed</span>
             ) : (
-              <span>将写入 {totalFiles} 个文件</span>
+              <span>将写入 {TOTAL_FILES} 个文件</span>
             )}
           </div>
           <ApplyButton

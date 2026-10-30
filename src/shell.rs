@@ -2,7 +2,7 @@ use crate::domain::{ProviderInstance, ProviderTemplate};
 use std::collections::{HashMap, HashSet};
 use std::fs;
 use std::io::Write;
-use std::os::unix::fs::PermissionsExt;
+use std::os::unix::fs::{OpenOptionsExt, PermissionsExt};
 use std::path::{Path, PathBuf};
 
 /// 渲染 aliases.zsh 内容（不写盘）。
@@ -39,17 +39,32 @@ pub fn render_aliases(instances: &[ProviderInstance], templates: &[ProviderTempl
 /// 写入 aliases.zsh 到 dir/aliases.zsh。
 ///
 /// 文件内含明文 API key（`export ANTHROPIC_AUTH_TOKEN=...`），权限必须 600
-/// （CLAUDE.md 硬约束）。`fs::write` 对已存在的文件不会改权限，所以写完要显式设置。
+/// （CLAUDE.md 硬约束）。
+///
+/// 实现上不能先 `fs::write` 再 chmod —— 那会让明文 key 先以 umask 默认权限
+/// （通常 0644）落盘，中间存在窗口期。改为：
+/// 1. 文件已存在 → 先把权限收紧到 600，再写；
+/// 2. 文件不存在 → 用 `OpenOptions::mode(0o600)` 在 create 时直接定权限。
 pub fn write_aliases(dir: &Path, content: &str) -> std::io::Result<PathBuf> {
     fs::create_dir_all(dir)?;
     let path = dir.join("aliases.zsh");
-    fs::write(&path, content)?;
+    if path.exists() {
+        fs::set_permissions(&path, fs::Permissions::from_mode(0o600))?;
+    }
+    let mut file = fs::OpenOptions::new()
+        .write(true)
+        .create(true)
+        .truncate(true)
+        .mode(0o600)
+        .open(&path)?;
+    file.write_all(content.as_bytes())?;
+    // 兜底：truncate 已有文件时 mode 不生效，上面已收紧过；这里再确认一次。
     fs::set_permissions(&path, fs::Permissions::from_mode(0o600))?;
     Ok(path)
 }
 
 /// 生成 aliases.zsh 文件（生成 cl-* alias）。
-/// 保留向后兼容 — main.rs 启动时预生成时仍调用。
+/// main.rs 启动时预生成一次（让升级立即生效），Web UI 的 Apply 也会调用。
 pub fn generate_aliases(
     dir: &std::path::Path,
     instances: &[ProviderInstance],
