@@ -1,25 +1,16 @@
 import { useEffect, useState } from 'react';
-import {
-  useAliasesContent,
-  useApplyAliases,
-  useInstances,
-  useOpencodeConfig,
-} from '../api/hooks';
+import { useAliasesContent, useApplyAliases } from '../api/hooks';
 import { AliasesPreview } from '../components/AliasesPreview';
 import { ApiErrorBanner } from '../components/ApiErrorBanner';
 import { ArtifactCard } from '../components/ArtifactCard';
-import { OpencodeConfigPreview } from '../components/OpencodeConfigPreview';
 
 const ALIASES_PATH = '~/.cc-switch-tui/aliases.zsh';
-const OPENCODE_DIR = '~/.cc-switch-tui/opencode';
 
 type ApplyState = 'idle' | 'loading' | 'success' | 'error';
 
 export function ApplyPage() {
   const { data: aliasesData, isLoading: aliasesLoading, isError: aliasesError, error: aliasesErr } =
     useAliasesContent();
-  const { data: instances, isLoading: instancesLoading, isError: instancesError, error: instancesErr } =
-    useInstances();
   const apply = useApplyAliases();
 
   const [state, setState] = useState<ApplyState>('idle');
@@ -45,8 +36,8 @@ export function ApplyPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const instanceCount = instances?.length ?? 0;
-  const totalFiles = 1 + instanceCount;
+  // Apply 只写入一个文件：aliases.zsh（OpenCode 集成已废弃，不再生成 opencode 配置）
+  const TOTAL_FILES = 1;
 
   async function handleApply() {
     setState('loading');
@@ -61,11 +52,11 @@ export function ApplyPage() {
     }
   }
 
-  if (instancesError || aliasesError) {
+  if (aliasesError) {
     return (
       <section>
         <h2 className="text-2xl font-bold mb-4">Apply</h2>
-        <ApiErrorBanner error={instancesError ? instancesErr : aliasesErr} />
+        <ApiErrorBanner error={aliasesErr} />
       </section>
     );
   }
@@ -74,7 +65,7 @@ export function ApplyPage() {
     <section>
       <h2 className="text-2xl font-bold mb-1">Apply</h2>
       <p className="text-sm text-muted-foreground mb-4">
-        即将写入 <strong>{totalFiles}</strong> 个文件到{' '}
+        即将写入 <strong>{TOTAL_FILES}</strong> 个文件到{' '}
         <code className="px-1 py-0.5 rounded bg-muted">~/.cc-switch-tui/</code>。
         点 Apply 后 <code>source ~/.zshrc</code> 生效（<kbd className="px-1 py-0.5 rounded border border-border bg-muted text-xs">⌘</kbd>+<kbd className="px-1 py-0.5 rounded border border-border bg-muted text-xs">Enter</kbd>）。
       </p>
@@ -88,17 +79,17 @@ export function ApplyPage() {
           <div className="text-sm text-muted-foreground">
             {state === 'success' ? (
               <span className="text-green-700 dark:text-green-300 font-medium">
-                ✓ Wrote {totalFiles} files
+                ✓ Wrote {TOTAL_FILES} files
               </span>
             ) : state === 'error' ? (
               <span className="text-red-700 dark:text-red-300 font-medium">Apply failed</span>
             ) : (
-              <span>将写入 {totalFiles} 个文件</span>
+              <span>将写入 {TOTAL_FILES} 个文件</span>
             )}
           </div>
           <ApplyButton
             state={state}
-            disabled={instancesLoading || aliasesLoading}
+            disabled={aliasesLoading}
             onClick={handleApply}
           />
         </div>
@@ -136,14 +127,6 @@ export function ApplyPage() {
             <AliasesPreview content={aliasesData ?? ''} />
           )}
         </ArtifactCard>
-
-        {instancesLoading ? (
-          <div className="text-muted-foreground text-sm">Loading instances…</div>
-        ) : (
-          instances?.map((inst) => (
-            <OpencodeArtifact key={inst.id} instanceId={inst.id} alias={inst.alias} />
-          ))
-        )}
       </div>
     </section>
   );
@@ -186,26 +169,3 @@ function ApplyButton({
   );
 }
 
-function OpencodeArtifact({ instanceId, alias }: { instanceId: string; alias: string }) {
-  const { data, isLoading, isError, error } = useOpencodeConfig(instanceId);
-  const configStr = data ? JSON.stringify(data, null, 2) : '';
-  return (
-    <ArtifactCard
-      title={`${alias}.json`}
-      path={`${OPENCODE_DIR}/${alias}.json`}
-      sizeBytes={data ? new Blob([configStr]).size : undefined}
-      copyText={configStr}
-      copyLabel="Copy"
-    >
-      {isLoading ? (
-        <div className="text-muted-foreground text-sm">Loading…</div>
-      ) : isError ? (
-        <ApiErrorBanner error={error} />
-      ) : data ? (
-        <OpencodeConfigPreview config={data} />
-      ) : (
-        <div className="text-muted-foreground text-sm">No config</div>
-      )}
-    </ArtifactCard>
-  );
-}

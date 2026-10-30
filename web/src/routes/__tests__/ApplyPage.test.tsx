@@ -42,28 +42,12 @@ function renderApply(fetchStub: ReturnType<typeof makeFetchStub>) {
   );
 }
 
-const SAMPLE_INSTANCES = [
-  { id: 'minimax-cl-mini', templateId: 'minimax', alias: 'cl-mini', modelId: 'm1', opencodeModelId: '', kvCacheEnabled: false },
-  { id: 'minimax-cl-pro', templateId: 'minimax', alias: 'cl-pro', modelId: 'm2', opencodeModelId: '', kvCacheEnabled: false },
-];
-
-const SAMPLE_TEMPLATES = [
-  { id: 'minimax', displayName: 'MiniMax', opencodeProviderId: 'minimax', opencodeBaseUrl: 'https://x', availableModels: [], models: [] },
-];
-
 const SAMPLE_ALIASES = `export KIMI_API_KEY=sk-test-1234-abcdef
 export ANTHROPIC_BASE_URL=https://x
 alias cl-mini='...'`;
 
-const SAMPLE_OPENCODE_CL_MINI = { provider: { name: 'minimax' }, model: 'm1' };
-const SAMPLE_OPENCODE_CL_PRO = { provider: { name: 'minimax' }, model: 'm2' };
-
 const DEFAULT_HANDLERS = {
-  'GET /api/instances': () => SAMPLE_INSTANCES,
-  'GET /api/templates': () => SAMPLE_TEMPLATES,
   'GET /api/aliases': () => SAMPLE_ALIASES,
-  'GET /api/opencode-config/minimax-cl-mini': () => SAMPLE_OPENCODE_CL_MINI,
-  'GET /api/opencode-config/minimax-cl-pro': () => SAMPLE_OPENCODE_CL_PRO,
 };
 
 describe('ApplyPage', () => {
@@ -84,17 +68,17 @@ describe('ApplyPage', () => {
     await waitFor(() => {
       expect(screen.getByTestId('apply-all')).toHaveTextContent(/apply all/i);
     });
-    // 1 aliases + 2 opencode configs = 3 files
+    // 只有 aliases.zsh 一个文件（OpenCode 集成已废弃）
     const sticky = screen.getByTestId('apply-sticky');
-    expect(sticky.textContent).toContain('3');
+    expect(sticky.textContent).toContain('1');
   });
 
-  it('renders 3 ArtifactCards (1 aliases + 2 opencode)', async () => {
+  it('renders 1 ArtifactCard (aliases only)', async () => {
     const fetchStub = makeFetchStub(DEFAULT_HANDLERS);
     renderApply(fetchStub);
 
     await waitFor(() => {
-      expect(screen.getAllByTestId('artifact-card')).toHaveLength(3);
+      expect(screen.getAllByTestId('artifact-card')).toHaveLength(1);
     });
   });
 
@@ -106,27 +90,8 @@ describe('ApplyPage', () => {
       // aliases content (masked) is visible
       expect(document.body.textContent ?? '').toMatch(/sk-\*+/);
     });
-    // opencode JSON NOT visible (collapsed by default)
+    // 不应出现任何 opencode 配置内容
     expect(document.body.textContent ?? '').not.toContain('"provider"');
-  });
-
-  it('expanding opencode card shows JSON', async () => {
-    const fetchStub = makeFetchStub(DEFAULT_HANDLERS);
-    renderApply(fetchStub);
-
-    await waitFor(() => {
-      expect(screen.getAllByTestId('artifact-card')).toHaveLength(3);
-    });
-
-    // 点击 opencode 卡片 toggle 按钮（"cl-mini.json" 标题）
-    const cards = screen.getAllByTestId('artifact-card');
-    const clMiniCard = cards[1];
-    const toggle = clMiniCard.querySelector('button[aria-label="toggle artifact"]') as HTMLElement;
-    toggle.click();
-
-    await waitFor(() => {
-      expect(document.body.textContent ?? '').toContain('"provider"');
-    });
   });
 
   it('clicking apply transitions to loading then success', async () => {
@@ -141,7 +106,7 @@ describe('ApplyPage', () => {
 
     // 等数据加载完（卡片出现 = queries 完成 → 按钮 disabled 解除）
     await waitFor(() => {
-      expect(screen.getAllByTestId('artifact-card')).toHaveLength(3);
+      expect(screen.getByTestId('apply-all')).not.toBeDisabled();
     });
     screen.getByTestId('apply-all').click();
 
@@ -162,7 +127,7 @@ describe('ApplyPage', () => {
     renderApply(fetchStub);
 
     await waitFor(() => {
-      expect(screen.getAllByTestId('artifact-card')).toHaveLength(3);
+      expect(screen.getByTestId('apply-all')).not.toBeDisabled();
     });
     screen.getByTestId('apply-all').click();
 
@@ -183,7 +148,7 @@ describe('ApplyPage', () => {
     renderApply(fetchStub);
 
     await waitFor(() => {
-      expect(screen.getAllByTestId('artifact-card')).toHaveLength(3);
+      expect(screen.getByTestId('apply-all')).not.toBeDisabled();
     });
 
     // 不点按钮，直接 Cmd+Enter

@@ -1,20 +1,16 @@
 # cc-switch-tui
 
-cc-switch-tui 是一个本地工具，让用户在终端/浏览器界面切换多个 Claude Code 模型提供商（MiniMax / Kimi / OpenCode 等）。本上下文聚焦"shell integration"领域——工具如何把内部 provider 配置转换为用户在终端可直接调用的 shell 命令。
+cc-switch-tui 是一个本地工具，让用户在终端/浏览器界面切换多个 Claude Code 模型提供商（MiniMax / Kimi 等）。本上下文聚焦"shell integration"领域——工具如何把内部 provider 配置转换为用户在终端可直接调用的 shell 命令。
 
 ## Language
 
 **Shell integration**:
-工具生成用户机器上的 shell 制品（`~/.cc-switch-tui/aliases.zsh`、`~/.cc-switch-tui/opencode/*.json`），让用户在 terminal 直接 `cl-*` / `oc-*` / `ys-proxy` 调用 Claude Code / OpenCode / 本地代理。
+工具生成用户机器上的 shell 制品（`~/.cc-switch-tui/aliases.zsh`），让用户在 terminal 直接 `cl-*` / `ys-proxy` 调用 Claude Code / 本地代理。
 _Avoid_: shell wrapper, shell init script, shell hook
 
 **cl-* alias**:
 工具生成、以 `cl-` 为前缀的 zsh function，调用 Claude Code 直接连某个 Anthropic-compatible provider。例：`cl-mini`、`cl-km1`、`cl-km2`。
 _Avoid_: claude alias, provider alias, claude-related alias
-
-**oc-* alias**:
-工具生成、以 `oc-` 为前缀的 zsh function，调用 OpenCode CLI 通过某个 provider。例：`oc-mini`、`oc-km1`。
-_Avoid_: opencode alias
 
 **ys-proxy wrapper**:
 工具生成的 zsh function，把任意 `cl-*` 调用的请求路由到本地 cc-switch-tui 服务提供的 proxy（`http://127.0.0.1:7480/ys-proxy/{alias}/...`）。**本身是 function 不是 alias**，因为需要 `$1` 动态展开拼接 URL。
@@ -25,7 +21,7 @@ ys-proxy 通过命令前缀方式注入到子进程的特殊 env var，cl-* 在 
 _Avoid_: marker, signal, flag, trigger
 
 **Subshell isolation**:
-本项目 shell integration 的设计约束——任何 `cl-*` / `oc-*` 调用产生的 env 变更（`export`）**不允许**写入调用方父 shell。cl-* 的实现方式是 function 体包在 `(...)` 内；subshell 退出时所有 export 随之销毁。**用户自己在 `~/.zshrc` 设的同名变量（如 `MINIMAX_API_KEY`）保持不变**。
+本项目 shell integration 的设计约束——任何 `cl-*` 调用产生的 env 变更（`export`）**不允许**写入调用方父 shell。cl-* 的实现方式是 function 体包在 `(...)` 内；subshell 退出时所有 export 随之销毁。**用户自己在 `~/.zshrc` 设的同名变量（如 `MINIMAX_API_KEY`）保持不变**。
 _Avoid_: env cleanup, env reset, env sandbox
 
 **aliases.zsh**:

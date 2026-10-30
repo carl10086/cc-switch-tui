@@ -28,7 +28,7 @@ pub struct ApplyResponse {
 }
 
 /// POST /api/aliases/apply
-/// 写入 aliases.zsh + opencode 配置文件到 ~/.cc-switch-tui/
+/// 写入 aliases.zsh 到 ~/.cc-switch-tui/
 pub async fn apply(State(state): State<AppState>) -> Result<Json<ApplyResponse>, ApiError> {
     let home =
         dirs::home_dir().ok_or_else(|| ApiError::internal("could not determine home directory"))?;

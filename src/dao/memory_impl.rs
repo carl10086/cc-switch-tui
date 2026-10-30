@@ -86,19 +86,6 @@ impl Dao for MemoryDaoImpl {
         Ok(())
     }
 
-    fn set_opencode_model_id(
-        &mut self,
-        id: &str,
-        opencode_model_id: String,
-    ) -> Result<(), AppError> {
-        let instance = self
-            .instances
-            .get_mut(id)
-            .ok_or_else(|| AppError::InstanceNotFound(id.to_string()))?;
-        instance.opencode_model_id = opencode_model_id;
-        Ok(())
-    }
-
     fn set_kv_cache_enabled(&mut self, id: &str, enabled: bool) -> Result<(), AppError> {
         let instance = self
             .instances
@@ -138,7 +125,6 @@ impl Dao for MemoryDaoImpl {
             api_key: instance.api_key,
             created_at: instance.created_at,
             alias,
-            opencode_model_id: instance.opencode_model_id,
             kv_cache_enabled: instance.kv_cache_enabled,
         };
         self.instances.insert(new_id.to_string(), new_instance);

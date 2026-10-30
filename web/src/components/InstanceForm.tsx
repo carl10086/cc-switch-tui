@@ -3,7 +3,6 @@ import { ApiError } from '../api/client';
 import { useTemplates } from '../api/hooks';
 import { instanceSchema, type InstanceFormValues } from '../lib/validate';
 import { ModelSelect } from './ModelSelect';
-import { OpencodeModelSelect } from './OpencodeModelSelect';
 import { SecretInput } from './SecretInput';
 
 export function InstanceForm({
@@ -28,7 +27,6 @@ export function InstanceForm({
     alias: initial?.alias ?? '',
     modelId: initial?.modelId ?? '',
     apiKey: initial?.apiKey ?? '',
-    opencodeModelId: initial?.opencodeModelId ?? '',
     kvCacheEnabled: initial?.kvCacheEnabled ?? false,
   });
   const [errors, setErrors] = useState<Record<string, string>>({});
@@ -135,14 +133,6 @@ export function InstanceForm({
           value={values.apiKey}
           onChange={(v) => set('apiKey', v)}
           placeholder="sk-..."
-        />
-      </Field>
-
-      <Field label="OpenCode Model ID" error={errors.opencodeModelId}>
-        <OpencodeModelSelect
-          models={currentTemplate?.opencodeModels ?? []}
-          value={values.opencodeModelId ?? ''}
-          onChange={(v) => set('opencodeModelId', v)}
         />
       </Field>
 

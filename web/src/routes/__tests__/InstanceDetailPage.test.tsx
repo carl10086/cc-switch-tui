@@ -9,8 +9,7 @@ const SAMPLE_INSTANCE = {
   templateId: 'minimax',
   alias: 'cl-mini',
   apiKey: 'sk-test-1234',
-  modelId: 'MiniMax-M3',
-  opencodeModelId: 'MiniMax-M3',
+  modelId: 'MiniMax-M3.1-Flash[1m]',
   kvCacheEnabled: false,
   createdAt: '2026-06-01T00:00:00Z',
 };
@@ -19,14 +18,10 @@ const SAMPLE_TEMPLATES = [
   {
     id: 'minimax',
     displayName: 'MiniMax',
-    opencodeProviderId: 'minimax-cn',
-    opencodeBaseUrl: 'https://x',
-    availableModels: ['MiniMax-M3', 'MiniMax-M2.7-highspeed'],
+    availableModels: ['MiniMax-M3.1-Flash[1m]'],
     models: [
-      { id: 'MiniMax-M3', name: 'MiniMax M3', opencodeModelId: 'MiniMax-M3' },
-      { id: 'MiniMax-M2.7-highspeed', name: 'MiniMax M2.7 Highspeed', opencodeModelId: 'MiniMax-M2.7-highspeed' },
+      { id: 'MiniMax-M3.1-Flash[1m]', name: 'MiniMax M3.1 Flash [1m]' },
     ],
-    opencodeModels: ['MiniMax-M2.7-highspeed', 'MiniMax-M3'],
   },
 ];
 
@@ -84,41 +79,13 @@ describe('InstanceDetailPage', () => {
     renderDetail(makeFetchStub());
     await waitFor(() => {
       const selects = screen.getAllByRole('combobox');
-      // First combobox is Model
+      // 唯一的 combobox 是 Model
+      expect(selects.length).toBe(1);
       const modelSelect = selects[0] as HTMLSelectElement;
       expect(modelSelect.tagName).toBe('SELECT');
+      expect(modelSelect.value).toBe('MiniMax-M3.1-Flash[1m]');
       const options = screen.getAllByRole('option');
-      // 2 from Model + 3 from OpenCode Model ID (including "— default —") = 5
-      expect(options.length).toBeGreaterThanOrEqual(2);
+      expect(options.length).toBe(1);
     });
-  });
-
-  it('changing model does NOT sync opencodeModelId', async () => {
-    renderDetail(makeFetchStub());
-    await waitFor(() => {
-      const selects = screen.getAllByRole('combobox');
-      expect(selects.length).toBe(2);
-    });
-    const selects = screen.getAllByRole('combobox') as HTMLSelectElement[];
-    const modelSelect = selects[0];
-    const ocSelect = selects[1];
-
-    // 初始：model = M3, opencode = M3
-    expect(modelSelect.value).toBe('MiniMax-M3');
-    expect(ocSelect.value).toBe('MiniMax-M3');
-
-    // 切 model → m2.7
-    const nativeSetter = Object.getOwnPropertyDescriptor(
-      window.HTMLSelectElement.prototype,
-      'value',
-    )!.set as (this: HTMLSelectElement, v: string) => void;
-    nativeSetter.call(modelSelect, 'MiniMax-M2.7-highspeed');
-    modelSelect.dispatchEvent(new Event('change', { bubbles: true }));
-
-    // opencodeModelId 应保持不变（不会自动同步到 M2.7-highspeed）
-    await waitFor(() => {
-      expect(modelSelect.value).toBe('MiniMax-M2.7-highspeed');
-    });
-    expect(ocSelect.value).toBe('MiniMax-M3');
   });
 });

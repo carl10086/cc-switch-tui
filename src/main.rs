@@ -1,8 +1,9 @@
 use cc_switch_tui::api;
 use cc_switch_tui::api::state::AppState;
-use cc_switch_tui::dao::SqliteDaoImpl;
+use cc_switch_tui::dao::{Dao, SqliteDaoImpl};
 use cc_switch_tui::data_migration::{default_cc_dir, ensure_data_migrated};
 use cc_switch_tui::port;
+use cc_switch_tui::shell;
 use cc_switch_tui::templates::register_templates;
 use std::io;
 
@@ -61,6 +62,18 @@ async fn main() -> io::Result<()> {
     let dao = SqliteDaoImpl::new(db_path_str, templates).expect("无法初始化数据库");
     let trace_store = cc_switch_tui::trace::store::TraceStore::new(trace_path_str)
         .expect("无法初始化 trace 数据库");
+    // 启动时重建 aliases.zsh —— 让模板变更 / model_id 迁移立即生效。
+    // 否则 DB 已经迁移到新档位，但磁盘上的 aliases.zsh 仍 export 旧 model id，
+    // 用户终端里的 cl-* 要等到手动点 Apply 才切过去（等于升级没生效）。
+    {
+        let instances: Vec<_> = dao.list_instances().into_iter().cloned().collect();
+        let templates: Vec<_> = dao.get_templates().into_iter().cloned().collect();
+        match shell::generate_aliases(&cc_dir, &instances, &templates) {
+            Ok(()) => tracing::info!("regenerated aliases.zsh at startup"),
+            Err(e) => tracing::warn!("failed to regenerate aliases.zsh at startup: {e}"),
+        }
+    }
+
     let state = AppState::new(dao, trace_store);
 
     // 固定端口 7480，失败直接报错（与 ys-proxy 硬编码保持一致）

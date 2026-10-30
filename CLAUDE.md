@@ -1,7 +1,7 @@
 
 # cc-switch-tui
 
-Rust + Axum 后端 + 嵌入 React SPA 的单二进制工具，用于在终端 / Web 界面切换多个 Claude Code 模型提供商（MiniMax、Kimi、OpenCode 等）。
+Rust + Axum 后端 + 嵌入 React SPA 的单二进制工具，用于在终端 / Web 界面切换多个 Claude Code 模型提供商（MiniMax、Kimi 等）。
 
 <IMPORTANT>
 `docs/codebase/ARCHITECTURE.md` 是本项目架构的**唯一权威来源**：分层、数据流、关键抽象（`Dao` trait / `AppState` / `ApiError` / `AppError`）、入口点、错误处理策略、新代码放置规范。任何新增模块、重构或理解现有代码前必读。修改代码时同步更新 ARCHITECTURE.md。
@@ -41,7 +41,7 @@ ARCHITECTURE.md 描述"系统怎么工作"；本节规定"什么不能动"。
 - **不要绕开** `ApiError` 直接 `IntoResponse`——所有错误必须经过 `src/api/error.rs` 的统一 JSON 格式（前端 `web/src/api/client.ts::toApiError` 依赖此结构）。
 - **不要省略** `web/src/lib/curl.ts::buildCurl` 的 hop-by-hop 过滤——前端在 trace viewer 暴露给用户"Copy as curl"按钮，泄漏 `host` / `content-length` 会让复现失败。
 - **不要在** 改 `web/src/**` **后**只 `cargo run`——embed 是编译期发生的，必须 `make web-build && make build`。
-- **写含 API key 的配置文件**（opencode JSON、aliases.zsh）**权限必须 600**——`src/opencode_config.rs::write_opencode_config` 已设置 `0o600`，新增路径需同样处理。
+- **写含 API key 的配置文件**（aliases.zsh）**权限必须 600**——`src/shell.rs::write_aliases` 已设置 `0o600`，新增路径需同样处理。（OpenCode 集成已删除，原 `src/opencode_config.rs::write_opencode_config` 不再存在。）
 
 ## Provider 配置参考
 
@@ -50,7 +50,7 @@ ARCHITECTURE.md 描述"系统怎么工作"；本节规定"什么不能动"。
 **对本项目代码的硬约束**（不可妥协）:
 
 1. 上下文相关 env 必须在 provider scope（不要放 common config；不同 provider 窗口大小不同：200K vs 1M）。
-2. `model` 字段的 `[1m]` 后缀**仅在 Claude Code 终端场景下可靠**：cc-switch-tui 通过 `ANTHROPIC_MODEL` env 变量在 cl-* 函数体内注入，shell 进程不被重置。**VS Code 扩展场景下 env var 可能被 extension 重置**，需自行验证。当前 follow 官方文档使用 `MiniMax-M3[1m]`（含后缀）。
+2. `model` 字段的 `[1m]` 后缀**仅在 Claude Code 终端场景下可靠**：cc-switch-tui 通过 `ANTHROPIC_MODEL` env 变量在 cl-* 函数体内注入，shell 进程不被重置。**VS Code 扩展场景下 env var 可能被 extension 重置**，需自行验证。当前 follow 官方文档使用 `MiniMax-M3.1-Flash[1m]`（含后缀；MiniMax 模板现在只保留这一个档位，旧档位 `MiniMax-M3` / `MiniMax-M3[1m]` / `MiniMax-M2.7-highspeed` 由 DB 迁移全量拉平）。
 3. Provider 切换是 alias 级别（shell function 隔离 env），不要在进程内做 env 覆盖——`ys-proxy` wrapper 在子 shell 中重设 `ANTHROPIC_BASE_URL`，是唯一允许的代理路径。
 
 完整 env 表、已知 Issue（#46416 / #50083 / #57964 / #63471 / #63376 / #62353）保留在 `git log -p CLAUDE.md` 的 v1 历史中可查。

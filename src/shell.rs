@@ -1,11 +1,11 @@
 use crate::domain::{ProviderInstance, ProviderTemplate};
-use crate::opencode_config;
 use std::collections::{HashMap, HashSet};
 use std::fs;
 use std::io::Write;
+use std::os::unix::fs::{OpenOptionsExt, PermissionsExt};
 use std::path::{Path, PathBuf};
 
-/// 渲染 aliases.zsh 内容（不写盘，不生成 opencode 配置文件）。
+/// 渲染 aliases.zsh 内容（不写盘）。
 /// 供 Web 预览使用。
 pub fn render_aliases(instances: &[ProviderInstance], templates: &[ProviderTemplate]) -> String {
     let mut lines = vec![
@@ -25,23 +25,6 @@ pub fn render_aliases(instances: &[ProviderInstance], templates: &[ProviderTempl
         lines.push(function_def);
     }
 
-    // 包含 opencode alias 引用（不写 opencode 配置文件本身）
-    // 这里我们需要 config_paths，但因为不写盘，所以用占位符
-    // 简化：直接复用 build_opencode_aliases 但传空 paths（生成的 alias 引用本地路径）
-    let dummy_paths: HashMap<String, PathBuf> = instances
-        .iter()
-        .filter(|i| !i.alias.is_empty())
-        .map(|i| {
-            (
-                i.alias.clone(),
-                PathBuf::from(format!("~/.cc-switch-tui/opencode/{}.json", i.alias)),
-            )
-        })
-        .collect();
-    let opencode_lines =
-        opencode_config::build_opencode_aliases(instances, templates, &dummy_paths);
-    lines.extend(opencode_lines);
-
     // ys-proxy wrapper — 通过本地代理转发 Claude Code 请求
     // 用 zsh 命令前缀方式临时注入 CC_SWITCH_PROXY_URL（仅本次调用可见，不污染父 shell）；
     // cl-* 函数会在 export 自身 default 之后用该 sentinel 覆盖 ANTHROPIC_BASE_URL。
@@ -53,26 +36,41 @@ pub fn render_aliases(instances: &[ProviderInstance], templates: &[ProviderTempl
     lines.join("\n") + "\n"
 }
 
-/// 写入 aliases.zsh 到 dir/aliases.zsh（不生成 opencode 配置文件）。
+/// 写入 aliases.zsh 到 dir/aliases.zsh。
+///
+/// 文件内含明文 API key（`export ANTHROPIC_AUTH_TOKEN=...`），权限必须 600
+/// （CLAUDE.md 硬约束）。
+///
+/// 实现上不能先 `fs::write` 再 chmod —— 那会让明文 key 先以 umask 默认权限
+/// （通常 0644）落盘，中间存在窗口期。改为：
+/// 1. 文件已存在 → 先把权限收紧到 600，再写；
+/// 2. 文件不存在 → 用 `OpenOptions::mode(0o600)` 在 create 时直接定权限。
 pub fn write_aliases(dir: &Path, content: &str) -> std::io::Result<PathBuf> {
     fs::create_dir_all(dir)?;
     let path = dir.join("aliases.zsh");
-    fs::write(&path, content)?;
+    if path.exists() {
+        fs::set_permissions(&path, fs::Permissions::from_mode(0o600))?;
+    }
+    let mut file = fs::OpenOptions::new()
+        .write(true)
+        .create(true)
+        .truncate(true)
+        .mode(0o600)
+        .open(&path)?;
+    file.write_all(content.as_bytes())?;
+    // 兜底：truncate 已有文件时 mode 不生效，上面已收紧过；这里再确认一次。
+    fs::set_permissions(&path, fs::Permissions::from_mode(0o600))?;
     Ok(path)
 }
 
-/// 生成 aliases.zsh 文件（同时生成 cl-* 和 oc-* alias，**并**生成 opencode 配置文件）。
-/// 保留向后兼容 — main.rs 启动时预生成时仍调用。
+/// 生成 aliases.zsh 文件（生成 cl-* alias）。
+/// main.rs 启动时预生成一次（让升级立即生效），Web UI 的 Apply 也会调用。
 pub fn generate_aliases(
     dir: &std::path::Path,
     instances: &[ProviderInstance],
     templates: &[ProviderTemplate],
 ) -> std::io::Result<()> {
     let content = render_aliases(instances, templates);
-
-    // 同时生成 opencode 配置文件
-    let _config_paths = opencode_config::generate_opencode_configs(dir, instances, templates)?;
-
     write_aliases(dir, &content)?;
     Ok(())
 }
@@ -301,13 +299,7 @@ mod tests {
                 id: "MiniMax-M2.7-highspeed".to_string(),
                 name: "MiniMax M2.7 Highspeed".to_string(),
                 env_overrides: HashMap::new(),
-                opencode_model_id: "MiniMax-M2.7-highspeed".to_string(),
             }],
-            opencode_provider_id: "minimax-cn".to_string(),
-            opencode_npm: "@ai-sdk/anthropic".to_string(),
-            opencode_base_url: "https://api.minimaxi.com/anthropic/v1".to_string(),
-            opencode_env_var: "MINIMAX_API_KEY".to_string(),
-            opencode_models: vec!["MiniMax-M2.7-highspeed".to_string()],
         };
         let instance = ProviderInstance {
             id: "minimax-MiniMax-M2.7-highspeed-cl-mini".to_string(),
@@ -316,7 +308,6 @@ mod tests {
             api_key: "sk-test".to_string(),
             created_at: chrono::Utc::now(),
             alias: "cl-mini".to_string(),
-            opencode_model_id: "MiniMax-M2.7-highspeed".to_string(),
             kv_cache_enabled: false,
         };
         generate_aliases(temp.path(), &[instance], &[template]).unwrap();
@@ -346,13 +337,7 @@ mod tests {
                 id: "MiniMax-M2.7-highspeed".to_string(),
                 name: "MiniMax M2.7 Highspeed".to_string(),
                 env_overrides: HashMap::new(),
-                opencode_model_id: "MiniMax-M2.7-highspeed".to_string(),
             }],
-            opencode_provider_id: "minimax-cn".to_string(),
-            opencode_npm: "@ai-sdk/anthropic".to_string(),
-            opencode_base_url: "https://api.minimaxi.com/anthropic/v1".to_string(),
-            opencode_env_var: "MINIMAX_API_KEY".to_string(),
-            opencode_models: vec!["MiniMax-M2.7-highspeed".to_string()],
         };
         let instance = ProviderInstance {
             id: "minimax-MiniMax-M2.7-highspeed-cl-mini".to_string(),
@@ -361,7 +346,6 @@ mod tests {
             api_key: "sk-test".to_string(),
             created_at: chrono::Utc::now(),
             alias: "cl-mini".to_string(),
-            opencode_model_id: "MiniMax-M2.7-highspeed".to_string(),
             kv_cache_enabled: false,
         };
         generate_aliases(temp.path(), &[instance], &[template]).unwrap();
@@ -411,13 +395,7 @@ mod tests {
                 id: "qwen3-27b".to_string(),
                 name: "Qwen3 27B".to_string(),
                 env_overrides: HashMap::new(),
-                opencode_model_id: "qwen3-27b".to_string(),
             }],
-            opencode_provider_id: String::new(),
-            opencode_npm: String::new(),
-            opencode_base_url: String::new(),
-            opencode_env_var: String::new(),
-            opencode_models: vec!["qwen3-27b".to_string()],
         };
         let instance = ProviderInstance {
             id: "llama-qwen3-27b-cl-local".to_string(),
@@ -426,7 +404,6 @@ mod tests {
             api_key: "no-key".to_string(),
             created_at: chrono::Utc::now(),
             alias: "cl-local".to_string(),
-            opencode_model_id: "qwen3-27b".to_string(),
             kv_cache_enabled: true,
         };
         generate_aliases(temp.path(), &[instance], &[template]).unwrap();
@@ -438,27 +415,26 @@ mod tests {
         assert!(content.contains("command claude --exclude-dynamic-system-prompt-sections"));
     }
 
-    /// M3[1m] 跟随官方 2026 文档：model id 含 `[1m]` 后缀，env_overrides 自动注入模型路由槽位
+    /// M3.1-Flash 跟随 MiniMax 官方 2026 文档：model id 含 `[1m]` 后缀，env_overrides 自动注入模型路由槽位
     #[test]
-    fn test_aliases_contain_minimax_m3_1m_model_id() {
+    fn test_aliases_contain_minimax_m3_1_flash_model_id() {
         use crate::templates::register_templates;
         let temp = TempDir::new().unwrap();
         let templates = register_templates();
         let instance = ProviderInstance {
-            id: "minimax-MiniMax-M3[1m]-cl-m3".to_string(),
+            id: "minimax-MiniMax-M3.1-Flash[1m]-cl-m3".to_string(),
             template_id: "minimax".to_string(),
-            model_id: "MiniMax-M3[1m]".to_string(),
+            model_id: "MiniMax-M3.1-Flash[1m]".to_string(),
             api_key: "sk-test".to_string(),
             created_at: chrono::Utc::now(),
             alias: "cl-m3".to_string(),
-            opencode_model_id: "MiniMax-M3[1m]".to_string(),
             kv_cache_enabled: false,
         };
         generate_aliases(temp.path(), &[instance], &templates).unwrap();
         let content = std::fs::read_to_string(temp.path().join("aliases.zsh")).unwrap();
         assert!(
-            content.contains("MiniMax-M3[1m]"),
-            "aliases.zsh 应含 MiniMax-M3[1m] model id（跟随官方文档），实际:\n{content}"
+            content.contains("MiniMax-M3.1-Flash[1m]"),
+            "aliases.zsh 应含 MiniMax-M3.1-Flash[1m] model id（跟随官方文档），实际:\n{content}"
         );
         assert!(
             content.contains("ANTHROPIC_DEFAULT_FABLE_MODEL"),
@@ -470,60 +446,70 @@ mod tests {
         );
     }
 
-    /// M3[1m] env_overrides 硬编码 1M context 参数（官方推荐）
+    /// M3.1-Flash env_overrides：官方推荐的 512K 自动压缩阈值 + 模型真实 1M 窗口 + effort=max
     #[test]
-    fn test_aliases_m3_1m_injects_context_params() {
+    fn test_aliases_m3_1_flash_injects_context_params() {
         use crate::templates::register_templates;
         let temp = TempDir::new().unwrap();
         let templates = register_templates();
         let instance = ProviderInstance {
-            id: "minimax-MiniMax-M3[1m]-cl-m3".to_string(),
+            id: "minimax-MiniMax-M3.1-Flash[1m]-cl-m3".to_string(),
             template_id: "minimax".to_string(),
-            model_id: "MiniMax-M3[1m]".to_string(),
+            model_id: "MiniMax-M3.1-Flash[1m]".to_string(),
             api_key: "sk-test".to_string(),
             created_at: chrono::Utc::now(),
             alias: "cl-m3".to_string(),
-            opencode_model_id: "MiniMax-M3[1m]".to_string(),
             kv_cache_enabled: false,
         };
         generate_aliases(temp.path(), &[instance], &templates).unwrap();
         let content = std::fs::read_to_string(temp.path().join("aliases.zsh")).unwrap();
         assert!(
-            content.contains("CLAUDE_CODE_AUTO_COMPACT_WINDOW=1000000"),
-            "M3[1m] env_overrides 应硬编码 CLAUDE_CODE_AUTO_COMPACT_WINDOW=1000000，实际:\n{content}"
+            content.contains("CLAUDE_CODE_AUTO_COMPACT_WINDOW=524288"),
+            "M3.1-Flash env_overrides 应硬编码 CLAUDE_CODE_AUTO_COMPACT_WINDOW=524288（官方推荐 512K 阈值），实际:\n{content}"
         );
         assert!(
-            content.contains("CLAUDE_CODE_MAX_CONTEXT_TOKENS=1000000"),
-            "M3[1m] env_overrides 应硬编码 CLAUDE_CODE_MAX_CONTEXT_TOKENS=1000000，实际:\n{content}"
+            content.contains("CLAUDE_CODE_MAX_CONTEXT_TOKENS=1048576"),
+            "M3.1-Flash env_overrides 应硬编码 CLAUDE_CODE_MAX_CONTEXT_TOKENS=1048576（模型真实 1M 窗口），实际:\n{content}"
+        );
+        assert!(
+            content.contains("CLAUDE_CODE_EFFORT_LEVEL=max"),
+            "M3.1-Flash env_overrides 应硬编码 CLAUDE_CODE_EFFORT_LEVEL=max，实际:\n{content}"
         );
     }
 
-    /// MiniMax-M2.7-highspeed 为 1M context，注入 1000000 对齐窗口
+    /// aliases.zsh 内含明文 API key —— 权限必须是 600（CLAUDE.md 硬约束）
     #[test]
-    fn test_aliases_m2_7_highspeed_injects_context_params() {
+    fn test_write_aliases_sets_0600_permissions() {
         use crate::templates::register_templates;
         let temp = TempDir::new().unwrap();
         let templates = register_templates();
         let instance = ProviderInstance {
-            id: "minimax-MiniMax-M2.7-highspeed-cl-mini".to_string(),
+            id: "minimax-MiniMax-M3.1-Flash[1m]-cl-m3".to_string(),
             template_id: "minimax".to_string(),
-            model_id: "MiniMax-M2.7-highspeed".to_string(),
-            api_key: "sk-test".to_string(),
+            model_id: "MiniMax-M3.1-Flash[1m]".to_string(),
+            api_key: "sk-secret".to_string(),
             created_at: chrono::Utc::now(),
-            alias: "cl-mini".to_string(),
-            opencode_model_id: "MiniMax-M2.7-highspeed".to_string(),
+            alias: "cl-m3".to_string(),
             kv_cache_enabled: false,
         };
         generate_aliases(temp.path(), &[instance], &templates).unwrap();
-        let content = std::fs::read_to_string(temp.path().join("aliases.zsh")).unwrap();
-        assert!(
-            content.contains("CLAUDE_CODE_AUTO_COMPACT_WINDOW=1000000"),
-            "M2.7-highspeed env_overrides 应硬编码 CLAUDE_CODE_AUTO_COMPACT_WINDOW=1000000，实际:\n{content}"
-        );
-        assert!(
-            content.contains("CLAUDE_CODE_MAX_CONTEXT_TOKENS=1000000"),
-            "M2.7-highspeed env_overrides 应硬编码 CLAUDE_CODE_MAX_CONTEXT_TOKENS=1000000，实际:\n{content}"
-        );
+
+        let mode = std::fs::metadata(temp.path().join("aliases.zsh"))
+            .unwrap()
+            .permissions()
+            .mode()
+            & 0o777;
+        assert_eq!(mode, 0o600, "aliases.zsh 权限应为 600，实际 {mode:o}");
+    }
+
+    /// MiniMax 只保留唯一档位 —— 旧档位（M3[1m] / M2.7-highspeed）不应再出现在模板里
+    #[test]
+    fn test_minimax_template_has_only_current_model_tier() {
+        use crate::templates::register_templates;
+        let templates = register_templates();
+        let minimax = templates.iter().find(|t| t.id == "minimax").unwrap();
+        assert_eq!(minimax.models.len(), 1);
+        assert_eq!(minimax.models[0].id, "MiniMax-M3.1-Flash[1m]");
     }
 
     /// Kimi highspeed 档位：model id `kimi-for-coding-highspeed` 应出现在生成的 aliases.zsh 中
@@ -540,7 +526,6 @@ mod tests {
             api_key: "sk-test".to_string(),
             created_at: chrono::Utc::now(),
             alias: "cl-kimi-fast".to_string(),
-            opencode_model_id: "kimi-for-coding-highspeed".to_string(),
             kv_cache_enabled: false,
         };
         generate_aliases(temp.path(), &[instance], &templates).unwrap();
@@ -572,7 +557,6 @@ mod tests {
             api_key: "sk-test".to_string(),
             created_at: chrono::Utc::now(),
             alias: "cl-kimi".to_string(),
-            opencode_model_id: "kimi-for-coding".to_string(),
             kv_cache_enabled: false,
         };
         generate_aliases(temp.path(), &[instance], &templates).unwrap();
@@ -600,7 +584,6 @@ mod tests {
             api_key: "sk-test".to_string(),
             created_at: chrono::Utc::now(),
             alias: "cl-kimi-fast".to_string(),
-            opencode_model_id: "kimi-for-coding-highspeed".to_string(),
             kv_cache_enabled: false,
         };
         generate_aliases(temp.path(), &[instance], &templates).unwrap();
@@ -629,7 +612,6 @@ mod tests {
             api_key: "sk-test".to_string(),
             created_at: chrono::Utc::now(),
             alias: "cl-k3".to_string(),
-            opencode_model_id: "k3[1m]".to_string(),
             kv_cache_enabled: false,
         };
         generate_aliases(temp.path(), &[instance], &templates).unwrap();
@@ -665,7 +647,6 @@ mod tests {
             api_key: "sk-test".to_string(),
             created_at: chrono::Utc::now(),
             alias: "cl-m3".to_string(),
-            opencode_model_id: "MiniMax-M3[1m]".to_string(),
             kv_cache_enabled: false,
         };
         generate_aliases(temp.path(), &[instance], &templates).unwrap();
@@ -719,13 +700,7 @@ mod tests {
                 id: "MiniMax-M2.7-highspeed".to_string(),
                 name: "MiniMax M2.7 Highspeed".to_string(),
                 env_overrides: HashMap::new(),
-                opencode_model_id: "MiniMax-M2.7-highspeed".to_string(),
             }],
-            opencode_provider_id: "minimax-cn".to_string(),
-            opencode_npm: "@ai-sdk/anthropic".to_string(),
-            opencode_base_url: "https://api.minimaxi.com/anthropic/v1".to_string(),
-            opencode_env_var: "MINIMAX_API_KEY".to_string(),
-            opencode_models: vec!["MiniMax-M2.7-highspeed".to_string()],
         };
         let instance = ProviderInstance {
             id: "minimax-MiniMax-M2.7-highspeed-cl-mini".to_string(),
@@ -734,7 +709,6 @@ mod tests {
             api_key: "sk-test".to_string(),
             created_at: chrono::Utc::now(),
             alias: "cl-mini".to_string(),
-            opencode_model_id: "MiniMax-M2.7-highspeed".to_string(),
             kv_cache_enabled: false,
         };
         generate_aliases(temp.path(), &[instance], &[template]).unwrap();
@@ -789,13 +763,7 @@ mod tests {
                 id: "MiniMax-M2.7-highspeed".to_string(),
                 name: "MiniMax M2.7 Highspeed".to_string(),
                 env_overrides: HashMap::new(),
-                opencode_model_id: "MiniMax-M2.7-highspeed".to_string(),
             }],
-            opencode_provider_id: "minimax-cn".to_string(),
-            opencode_npm: "@ai-sdk/anthropic".to_string(),
-            opencode_base_url: "https://api.minimaxi.com/anthropic/v1".to_string(),
-            opencode_env_var: "MINIMAX_API_KEY".to_string(),
-            opencode_models: vec!["MiniMax-M2.7-highspeed".to_string()],
         };
         let instance = ProviderInstance {
             id: "minimax-MiniMax-M2.7-highspeed-cl-mini".to_string(),
@@ -804,7 +772,6 @@ mod tests {
             api_key: "sk-real-secret-token".to_string(),
             created_at: chrono::Utc::now(),
             alias: "cl-mini".to_string(),
-            opencode_model_id: "MiniMax-M2.7-highspeed".to_string(),
             kv_cache_enabled: false,
         };
         generate_aliases(temp.path(), &[instance], &[template]).unwrap();
@@ -923,13 +890,7 @@ mod tests {
                 id: model_id.to_string(),
                 name: model_id.to_string(),
                 env_overrides: HashMap::new(),
-                opencode_model_id: model_id.to_string(),
             }],
-            opencode_provider_id: String::new(),
-            opencode_npm: String::new(),
-            opencode_base_url: String::new(),
-            opencode_env_var: String::new(),
-            opencode_models: vec![model_id.to_string()],
         };
         let instance = ProviderInstance {
             id: format!("{template_id}-{model_id}-{alias}"),
@@ -938,7 +899,6 @@ mod tests {
             api_key: "sk-test".to_string(),
             created_at: chrono::Utc::now(),
             alias: alias.to_string(),
-            opencode_model_id: model_id.to_string(),
             kv_cache_enabled: false,
         };
         (template, instance)

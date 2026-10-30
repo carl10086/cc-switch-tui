@@ -126,10 +126,6 @@ export function SettingsPage() {
               <code className="text-xs">{diag.aliasesPath}</code>
               {diag.aliasesWritable ? <Badge ok>writable</Badge> : <Badge>NOT writable</Badge>}
             </Row>
-            <Row label="OpenCode dir">
-              <code className="text-xs">{diag.opencodeDir}</code>
-              {diag.opencodeDirWritable ? <Badge ok>writable</Badge> : <Badge>NOT writable</Badge>}
-            </Row>
             <Row label=".zshrc">
               <code className="text-xs">{diag.zshrcPath}</code>
               {diag.zshrcWritable ? <Badge ok>writable</Badge> : <Badge>NOT writable</Badge>}

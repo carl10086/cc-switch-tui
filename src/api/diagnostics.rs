@@ -16,8 +16,6 @@ pub struct Diagnostics {
     pub aliases_writable: bool,
     pub zshrc_path: String,
     pub zshrc_writable: bool,
-    pub opencode_dir: String,
-    pub opencode_dir_writable: bool,
     pub instance_count: usize,
     pub template_count: usize,
 }
@@ -30,7 +28,6 @@ pub async fn get(State(state): State<AppState>) -> Result<Json<Diagnostics>, Api
     let cc_dir = home.join(".cc-switch-tui");
     let db_path = cc_dir.join("db.sqlite");
     let aliases_path = cc_dir.join("aliases.zsh");
-    let opencode_dir = cc_dir.join("opencode");
     let zshrc = home.join(".zshrc");
 
     let dao = state.dao.lock().await;
@@ -41,7 +38,6 @@ pub async fn get(State(state): State<AppState>) -> Result<Json<Diagnostics>, Api
     let db_writable = check_writable(&db_path);
     let aliases_writable = check_writable(&aliases_path);
     let zshrc_writable = check_writable(&zshrc);
-    let opencode_dir_writable = check_dir_writable(&opencode_dir);
 
     let status = if db_writable && aliases_writable && zshrc_writable {
         "ok"
@@ -59,8 +55,6 @@ pub async fn get(State(state): State<AppState>) -> Result<Json<Diagnostics>, Api
         aliases_writable,
         zshrc_path: zshrc.to_string_lossy().into_owned(),
         zshrc_writable,
-        opencode_dir: opencode_dir.to_string_lossy().into_owned(),
-        opencode_dir_writable,
         instance_count,
         template_count,
     }))
@@ -89,20 +83,4 @@ fn check_writable(path: &std::path::Path) -> bool {
     } else {
         false
     }
-}
-
-fn check_dir_writable(path: &std::path::Path) -> bool {
-    if !path.exists() {
-        return std::fs::create_dir_all(path).is_ok();
-    }
-    std::fs::OpenOptions::new()
-        .write(true)
-        .create(true)
-        .truncate(true)
-        .open(path.join(".write_test"))
-        .map(|_| {
-            let _ = std::fs::remove_file(path.join(".write_test"));
-            true
-        })
-        .unwrap_or(false)
 }

@@ -33,7 +33,6 @@ export function InstancesTable({ instances }: { instances: Instance[] }) {
             <TableHead>Alias</TableHead>
             <TableHead>Template</TableHead>
             <TableHead>Model</TableHead>
-            <TableHead>OpenCode Model</TableHead>
             <TableHead className="text-right">Flags</TableHead>
             <TableHead className="w-12 text-right">Actions</TableHead>
           </TableRow>
@@ -52,9 +51,6 @@ export function InstancesTable({ instances }: { instances: Instance[] }) {
                 </span>
               </TableCell>
               <TableCell className="font-mono text-xs">{i.modelId}</TableCell>
-              <TableCell className="font-mono text-xs text-muted-foreground">
-                {i.opencodeModelId || <span className="italic">none</span>}
-              </TableCell>
               <TableCell className="text-right">
                 {i.kvCacheEnabled && (
                   <span
